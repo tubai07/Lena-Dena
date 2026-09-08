@@ -29,16 +29,20 @@ export async function getSession(): Promise<SessionData | null> {
   }
 }
 
-export async function setSession(data: SessionData) {
+export async function setSession(data: SessionData, rememberMe: boolean = true) {
   const cookieStore = await cookies();
   const encoded = Buffer.from(JSON.stringify(data)).toString('base64');
-  cookieStore.set(COOKIE_NAME, encoded, {
+  
+  const cookieOptions: any = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-  });
+    // If rememberMe is checked, keep login active for 365 days (1 year); otherwise 1 day
+    maxAge: rememberMe ? 60 * 60 * 24 * 365 : 60 * 60 * 24,
+  };
+
+  cookieStore.set(COOKIE_NAME, encoded, cookieOptions);
 }
 
 export async function clearSession() {

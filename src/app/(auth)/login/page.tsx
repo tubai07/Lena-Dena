@@ -1,16 +1,30 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Phone, Lock, Loader2 } from 'lucide-react';
+import { Phone, Lock, Loader2, CheckSquare, Square } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-fill remembered phone number if available
+  useEffect(() => {
+    try {
+      const savedPhone = localStorage.getItem('lena_dena_saved_phone');
+      if (savedPhone) {
+        setIdentifier(savedPhone);
+        setRememberMe(true);
+      }
+    } catch {
+      // Ignore localStorage restrictions
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,10 +34,22 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ identifier, password, rememberMe }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invalid mobile number or password');
+
+      // Persist or clear remembered phone number
+      try {
+        if (rememberMe && identifier) {
+          localStorage.setItem('lena_dena_saved_phone', identifier.trim());
+        } else {
+          localStorage.removeItem('lena_dena_saved_phone');
+        }
+      } catch {
+        // Ignore localStorage restrictions
+      }
+
       router.push(data.redirect || '/');
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -50,8 +76,6 @@ export default function LoginPage() {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-7 px-5 shadow-xl shadow-slate-200/50 rounded-3xl border border-slate-200 sm:px-8 space-y-5">
-
-
           <form onSubmit={handleLogin} className="space-y-4">
             {error && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
@@ -93,10 +117,25 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Remember Me Option */}
+            <div className="flex items-center justify-between py-0.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 text-emerald-700 rounded border-slate-300 focus:ring-emerald-600 cursor-pointer accent-emerald-700"
+                />
+                <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                  Keep me logged in
+                </span>
+              </label>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 tap-effect"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               <span>Sign In</span>

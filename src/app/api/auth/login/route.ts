@@ -5,7 +5,7 @@ import { getPhoneLookupVariants } from '@/lib/phone';
 
 export async function POST(req: Request) {
   try {
-    const { identifier, password } = await req.json();
+    const { identifier, password, rememberMe = true } = await req.json();
 
     if (!identifier) {
       return NextResponse.json({ error: 'Phone or email is required' }, { status: 400 });
@@ -56,13 +56,16 @@ export async function POST(req: Request) {
       });
     }
 
-    await setSession({
-      userId: user.id,
-      businessId: business.id,
-      userName: user.name,
-      businessName: business.name,
-      phone: user.phone || '',
-    });
+    await setSession(
+      {
+        userId: user.id,
+        businessId: business.id,
+        userName: user.name,
+        businessName: business.name,
+        phone: user.phone || '',
+      },
+      Boolean(rememberMe)
+    );
 
     return NextResponse.json({ success: true, redirect: '/' });
   } catch (err: any) {
