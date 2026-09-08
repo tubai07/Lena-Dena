@@ -4,12 +4,14 @@ import {
   toPaisa,
   toRupees,
   formatINR,
+} from '../src/lib/ledger';
+import {
   recordLedgerTransaction,
   deleteLedgerTransaction,
   updateLedgerTransaction,
   recalculateCustomerBalance,
   getBusinessDashboardSummary,
-} from '../src/lib/ledger';
+} from '../src/lib/ledger-server';
 
 describe('Lena Dena Financial Ledger Accounting Engine', () => {
   let testUser: any;

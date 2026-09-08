@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentBusiness } from '@/lib/auth';
-import { getBusinessDashboardSummary } from '@/lib/ledger';
+import { getBusinessDashboardSummary } from '@/lib/ledger-server';
 
 export async function GET(req: Request) {
   try {

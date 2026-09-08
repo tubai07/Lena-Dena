@@ -1,5 +1,6 @@
 import { db } from './db';
-import { toPaisa, recalculateCustomerBalance } from './ledger';
+import { toPaisa } from './ledger';
+import { recalculateCustomerBalance } from './ledger-server';
 
 export async function seedDemoData() {
   console.log('🌱 Seeding personal khata data matching reference screenshots...');

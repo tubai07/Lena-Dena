@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCurrentBusiness } from '@/lib/auth';
-import { toPaisa, recalculateCustomerBalance } from '@/lib/ledger';
+import { toPaisa } from '@/lib/ledger';
+import { recalculateCustomerBalance } from '@/lib/ledger-server';
 
 export async function GET(req: Request) {
   try {
