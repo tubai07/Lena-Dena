@@ -104,10 +104,10 @@ export default function SimplifiedDashboardPage() {
             <span>{business?.name ? business.name.slice(0, 1).toUpperCase() : 'T'}</span>
           </Link>
           <div className="leading-tight select-none">
-            <span className="text-xs font-semibold text-slate-500 block">
+            <span className="text-sm font-bold text-slate-700 block">
               Lena Dena App
             </span>
-            <span className="text-[10px] font-medium text-slate-400 block">
+            <span className="text-xs font-medium text-slate-400 block">
               Ver 1.0
             </span>
           </div>
