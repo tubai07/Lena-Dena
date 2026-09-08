@@ -19,36 +19,50 @@ export function SwipeableCustomerRow({
   onDeleteRequest,
 }: SwipeableCustomerRowProps) {
   const [offsetX, setOffsetX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
 
+  const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const startYRef = useRef(0);
+  const startTimeRef = useRef(0);
   const isHorizontalSwipeRef = useRef<boolean | null>(null);
   const currentOffsetRef = useRef(0);
 
   const DELETE_BTN_WIDTH = 80;
-  const FULL_SWIPE_THRESHOLD = 180;
+  const FULL_SWIPE_THRESHOLD = 160;
+
+  const setRowTransform = (x: number, animate: boolean = false) => {
+    if (!rowRef.current) return;
+    if (animate) {
+      rowRef.current.style.transition = 'transform 0.32s cubic-bezier(0.18, 0.89, 0.32, 1.05)';
+    } else {
+      rowRef.current.style.transition = 'none';
+    }
+    rowRef.current.style.transform = `translate3d(${x}px, 0, 0)`;
+  };
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     startXRef.current = e.touches[0].clientX;
     startYRef.current = e.touches[0].clientY;
+    startTimeRef.current = Date.now();
     isHorizontalSwipeRef.current = null;
-    setIsDragging(true);
+    isDraggingRef.current = true;
     currentOffsetRef.current = isOpen ? -DELETE_BTN_WIDTH : 0;
+    setRowTransform(currentOffsetRef.current, false);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const currentX = e.touches[0].clientX;
     const currentY = e.touches[0].clientY;
     const diffX = currentX - startXRef.current;
     const diffY = currentY - startYRef.current;
 
-    // Detect if horizontal or vertical scroll
+    // Disambiguate horizontal vs vertical intent
     if (isHorizontalSwipeRef.current === null) {
-      if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
+      if (Math.abs(diffX) > 6 || Math.abs(diffY) > 6) {
         isHorizontalSwipeRef.current = Math.abs(diffX) > Math.abs(diffY);
       }
     }
@@ -59,89 +73,106 @@ export function SwipeableCustomerRow({
 
     // Resistance when pulling right past 0
     if (newOffset > 0) {
-      newOffset = newOffset * 0.15;
+      newOffset = newOffset * 0.2;
     }
 
     // Resistance when pulling left past full swipe
     if (newOffset < -FULL_SWIPE_THRESHOLD) {
       const extra = newOffset + FULL_SWIPE_THRESHOLD;
-      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.2;
+      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.25;
     }
 
-    setOffsetX(newOffset);
+    setRowTransform(newOffset, false);
+    currentOffsetRef.current = newOffset;
   };
 
   const handleTouchEnd = () => {
-    setIsDragging(false);
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
 
     if (!isHorizontalSwipeRef.current) {
-      setOffsetX(isOpen ? -DELETE_BTN_WIDTH : 0);
+      setRowTransform(isOpen ? -DELETE_BTN_WIDTH : 0, true);
       return;
     }
 
+    const elapsed = Date.now() - startTimeRef.current;
+    const currentX = currentOffsetRef.current;
+    const isQuickFlick = elapsed < 250 && currentX < -30;
+
     // Full swipe trigger
-    if (offsetX < -FULL_SWIPE_THRESHOLD) {
-      setOffsetX(-DELETE_BTN_WIDTH);
+    if (currentX < -FULL_SWIPE_THRESHOLD) {
+      setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
+      setOffsetX(-DELETE_BTN_WIDTH);
       onDeleteRequest(c);
       return;
     }
 
-    // Snap open if dragged more than 40px past closed
-    if (offsetX < -40) {
-      setOffsetX(-DELETE_BTN_WIDTH);
+    // Snap open if dragged more than 40px or quick left flick
+    if (currentX < -40 || isQuickFlick) {
+      setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
+      setOffsetX(-DELETE_BTN_WIDTH);
     } else {
-      setOffsetX(0);
+      setRowTransform(0, true);
       setIsOpen(false);
+      setOffsetX(0);
     }
   };
 
-  // Mouse handlers for desktop pair-programming testing
+  // Mouse handlers for desktop testing
   const handleMouseDown = (e: React.MouseEvent) => {
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
+    startTimeRef.current = Date.now();
     isHorizontalSwipeRef.current = true;
-    setIsDragging(true);
+    isDraggingRef.current = true;
     currentOffsetRef.current = isOpen ? -DELETE_BTN_WIDTH : 0;
+    setRowTransform(currentOffsetRef.current, false);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const diffX = e.clientX - startXRef.current;
     let newOffset = currentOffsetRef.current + diffX;
 
-    if (newOffset > 0) newOffset = newOffset * 0.15;
+    if (newOffset > 0) newOffset = newOffset * 0.2;
     if (newOffset < -FULL_SWIPE_THRESHOLD) {
       const extra = newOffset + FULL_SWIPE_THRESHOLD;
-      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.2;
+      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.25;
     }
 
-    setOffsetX(newOffset);
+    setRowTransform(newOffset, false);
+    currentOffsetRef.current = newOffset;
   };
 
   const handleMouseUp = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
 
-    if (offsetX < -FULL_SWIPE_THRESHOLD) {
-      setOffsetX(-DELETE_BTN_WIDTH);
+    const currentX = currentOffsetRef.current;
+
+    if (currentX < -FULL_SWIPE_THRESHOLD) {
+      setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
+      setOffsetX(-DELETE_BTN_WIDTH);
       onDeleteRequest(c);
       return;
     }
 
-    if (offsetX < -40) {
-      setOffsetX(-DELETE_BTN_WIDTH);
+    if (currentX < -40) {
+      setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
+      setOffsetX(-DELETE_BTN_WIDTH);
     } else {
-      setOffsetX(0);
+      setRowTransform(0, true);
       setIsOpen(false);
+      setOffsetX(0);
     }
   };
 
   const handleMouseLeave = () => {
-    if (isDragging) {
+    if (isDraggingRef.current) {
       handleMouseUp();
     }
   };
@@ -167,9 +198,10 @@ export function SwipeableCustomerRow({
 
       {/* Main Row Content (Swipes Left) */}
       <div
+        ref={rowRef}
         style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)',
+          touchAction: 'pan-y',
+          willChange: 'transform',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -183,8 +215,9 @@ export function SwipeableCustomerRow({
         <Link
           href={isOpen || Math.abs(offsetX) > 5 ? '#' : `/customers/${c.id}`}
           onClick={(e) => {
-            if (isOpen || Math.abs(offsetX) > 5) {
+            if (isOpen || Math.abs(currentOffsetRef.current) > 5) {
               e.preventDefault();
+              setRowTransform(0, true);
               setOffsetX(0);
               setIsOpen(false);
             }

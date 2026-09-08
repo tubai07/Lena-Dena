@@ -31,16 +31,27 @@ export default function SimplifiedDashboardPage() {
   const [isScrolledDown, setIsScrolledDown] = useState(false);
   const lastScrollY = useRef(0);
 
-  // Scroll detection: collapse Add Person button to icon-only on scroll down
+  // Scroll detection: collapse Add Person button to icon-only smoothly on scroll down
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY > 40 && currentScrollY > lastScrollY.current) {
-        setIsScrolledDown(true);
-      } else if (currentScrollY < lastScrollY.current || currentScrollY <= 15) {
-        setIsScrolledDown(false);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          const diff = currentScrollY - lastScrollY.current;
+
+          // Hysteresis threshold: requires intentional scroll down past 50px,
+          // and expands cleanly when scrolling up (>10px) or near top (<=20px)
+          if (currentScrollY > 50 && diff > 8) {
+            setIsScrolledDown(true);
+          } else if (diff < -10 || currentScrollY <= 20) {
+            setIsScrolledDown(false);
+          }
+          lastScrollY.current = currentScrollY;
+          ticking = false;
+        });
+        ticking = true;
       }
-      lastScrollY.current = currentScrollY;
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -295,22 +306,22 @@ export default function SimplifiedDashboardPage() {
         )}
       </div>
 
-      {/* Floating Action Button: morphs to icon-only when scrolling down */}
+      {/* Floating Action Button: morphs smoothly to icon-only when scrolling down */}
       <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30">
         <button
           onClick={() => openCustomerModal()}
-          className={`pointer-events-auto flex items-center justify-center bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-all duration-300 ease-in-out tap-effect overflow-hidden cursor-pointer ${
-            isScrolledDown
-              ? 'w-14 h-14 p-0'
-              : 'px-5 py-3.5 gap-2'
+          className={`pointer-events-auto h-[52px] flex items-center bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-[width,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] tap-effect overflow-hidden cursor-pointer ${
+            isScrolledDown ? 'w-[52px]' : 'w-[146px]'
           }`}
           title="Add Person"
           aria-label="Add Person"
         >
-          <UserPlus className="w-5 h-5 stroke-[2.2px] shrink-0" />
+          <div className="w-[52px] h-[52px] flex items-center justify-center shrink-0">
+            <UserPlus className="w-5 h-5 stroke-[2.2px]" />
+          </div>
           <span
-            className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${
-              isScrolledDown ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
+            className={`whitespace-nowrap transition-[max-width,opacity,padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden font-bold pr-4 ${
+              isScrolledDown ? 'max-w-0 opacity-0 !pr-0' : 'max-w-[90px] opacity-100'
             }`}
           >
             Add Person

@@ -292,7 +292,7 @@ export default function PersonChatLedgerPage({
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col justify-between pb-36 relative">
       {/* Top Bar matching Screenshot 1 */}
-      <header className="px-4 py-3 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
+      <header className="px-4 py-3 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-40 border-b border-slate-100 shadow-xs">
         <div className="flex items-center gap-3">
           <Link href="/" className="p-1 text-slate-700 hover:text-black tap-effect">
             <ArrowLeft className="w-6 h-6" />
@@ -336,7 +336,7 @@ export default function PersonChatLedgerPage({
       </header>
 
       {/* Chat-like Transaction Timeline matching Screenshot 1 */}
-      <main className="p-4 space-y-6 flex-1 overflow-y-auto">
+      <main className="p-4 space-y-6 flex-1">
         {chronologicalTx.length === 0 ? (
           <div className="py-24 text-center text-xs text-slate-400">
             No entries in this ledger yet. Tap &ldquo;Received&rdquo; or &ldquo;Given&rdquo; below.

@@ -8,7 +8,6 @@ import {
   User,
   Phone,
   QrCode,
-  Globe,
   LogOut,
   CheckCircle,
   Loader2,
@@ -16,13 +15,10 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { useTranslation } from '@/components/common/LanguageContext';
-import { Language } from '@/lib/i18n';
 import { useApp } from '@/components/common/AppContext';
 
 export default function PersonalSettingsPage() {
   const router = useRouter();
-  const { lang, setLang } = useTranslation();
   const { business, setBusiness, refreshAppData } = useApp();
 
   // Instant pre-population from in-memory AppContext (0ms delay)
@@ -239,34 +235,6 @@ export default function PersonalSettingsPage() {
             <p className="text-center text-xs font-bold text-emerald-600">Password updated successfully!</p>
           )}
         </form>
-
-        {/* Language Selection */}
-        <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
-            <Globe className="w-4 h-4 text-emerald-700" />
-            <span>Language</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 pt-1">
-            {[
-              { code: 'en', label: 'English' },
-              { code: 'hi', label: 'हिन्दी' },
-              { code: 'bn', label: 'বাংলা' },
-            ].map((item) => (
-              <button
-                key={item.code}
-                onClick={() => setLang(item.code as Language)}
-                className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all ${
-                  lang === item.code
-                    ? 'bg-emerald-100 border-emerald-600 text-emerald-800 font-black'
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Logout */}
         <button

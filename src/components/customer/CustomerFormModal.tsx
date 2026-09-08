@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Phone, IndianRupee, Loader2 } from 'lucide-react';
-import { formatINR, toPaisa } from '@/lib/ledger';
+import { ArrowLeft, User, Phone, Loader2 } from 'lucide-react';
 import { generateEntityId, pendingCustomerCreations } from '@/lib/utils';
 
 interface CustomerFormModalProps {
@@ -20,8 +19,6 @@ export function CustomerFormModal({
 }: CustomerFormModalProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [openingBalance, setOpeningBalance] = useState('');
-  const [balanceType, setBalanceType] = useState<'OWES_ME' | 'I_OWE'>('OWES_ME');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,12 +26,9 @@ export function CustomerFormModal({
     if (initialData) {
       setName(initialData.name || '');
       setPhone(initialData.phone || '');
-      setOpeningBalance('');
     } else {
       setName('');
       setPhone('');
-      setOpeningBalance('');
-      setBalanceType('OWES_ME');
     }
     setError('');
   }, [initialData, isOpen]);
@@ -50,7 +44,6 @@ export function CustomerFormModal({
 
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim() || '9999999999';
-    const numOpening = openingBalance ? parseFloat(openingBalance) : 0;
 
     const url = initialData ? `/api/customers/${initialData.id}` : '/api/customers';
     const method = initialData ? 'PUT' : 'POST';
@@ -58,34 +51,21 @@ export function CustomerFormModal({
     const body: any = {
       name: trimmedName,
       phone: trimmedPhone,
-      ...(!initialData && {
-        openingBalance: numOpening,
-        balanceType,
-      }),
+      openingBalance: 0,
     };
 
     // For new persons: 0ms INSTANT FEEDBACK using pre-generated database ID
     if (!initialData) {
       const customerId = generateEntityId('c');
-      const openingPaisa = balanceType === 'I_OWE' ? -toPaisa(numOpening) : toPaisa(numOpening);
 
       const optimisticCustomer = {
         id: customerId,
         name: trimmedName,
         phone: trimmedPhone,
-        currentBalancePaisa: openingPaisa,
-        openingBalancePaisa: openingPaisa,
-        status: openingPaisa === 0 ? 'SETTLED' : 'ACTIVE',
-        transactions: openingPaisa !== 0 ? [{
-          id: generateEntityId('t'),
-          customerId,
-          type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
-          amountPaisa: Math.abs(openingPaisa),
-          paymentMethod: 'OTHER',
-          date: new Date().toISOString(),
-          description: 'Opening Balance',
-          createdAt: new Date().toISOString(),
-        }] : [],
+        currentBalancePaisa: 0,
+        openingBalancePaisa: 0,
+        status: 'SETTLED',
+        transactions: [],
       };
 
       // Close modal and update UI with 0ms delay!
@@ -198,56 +178,6 @@ export function CustomerFormModal({
               className="w-full text-base font-medium text-slate-900 outline-none placeholder:text-slate-400"
             />
           </div>
-
-          {/* Opening Balance (Optional) */}
-          {!initialData && (
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">Starting Balance (Optional)</span>
-                <div className="flex items-center gap-1 text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setBalanceType('OWES_ME')}
-                    className={`px-2 py-0.5 rounded-md ${
-                      balanceType === 'OWES_ME'
-                        ? 'bg-rose-100 text-rose-700'
-                        : 'text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    They owe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBalanceType('I_OWE')}
-                    className={`px-2 py-0.5 rounded-md ${
-                      balanceType === 'I_OWE'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    I owe
-                  </button>
-                </div>
-              </div>
-              <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-sm font-bold text-slate-400">₹</span>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={openingBalance}
-                  onChange={(e) => setOpeningBalance(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none"
-                />
-              </div>
-              {openingBalance && !isNaN(parseFloat(openingBalance)) && parseFloat(openingBalance) >= 1000 && (
-                <p className="text-[11px] font-bold text-slate-500 mt-1">
-                  {formatINR(parseFloat(openingBalance))}
-                </p>
-              )}
-            </div>
-          )}
 
           {/* Save Button */}
           <div className="pt-2">

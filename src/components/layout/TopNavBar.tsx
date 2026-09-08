@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Globe, Plus, Store, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Search, Plus, Store, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { GlobalSearchModal } from '../common/GlobalSearchModal';
 import { useTranslation } from '../common/LanguageContext';
-import { Language } from '@/lib/i18n';
 
 interface TopNavBarProps {
   businessName?: string;
@@ -13,7 +12,7 @@ interface TopNavBarProps {
 
 export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopNavBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
-  const { lang, setLang, t } = useTranslation();
+  const { t } = useTranslation();
 
   // Handle Cmd+K / Ctrl+K keyboard shortcut
   useEffect(() => {
@@ -98,24 +97,6 @@ export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopN
                 </button>
               </div>
             )}
-
-            {/* Language Switcher */}
-            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200/60">
-              {(['en', 'hi', 'bn'] as Language[]).map((code) => (
-                <button
-                  key={code}
-                  onClick={() => setLang(code)}
-                  className={`px-2 py-1 text-xs font-semibold rounded-lg transition-all ${
-                    lang === code
-                      ? 'bg-white text-blue-600 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                  title={code === 'en' ? 'English' : code === 'hi' ? 'हिन्दी' : 'বাংলা'}
-                >
-                  {code === 'en' ? 'EN' : code === 'hi' ? 'हि' : 'বাং'}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </header>
