@@ -49,3 +49,7 @@ next-env.d.ts
 # package-lock (avoid cross-platform npm ci optional binary conflicts in CI)
 package-lock.json
 
+# opennext & cloudflare
+.open-next
+.wrangler
+
