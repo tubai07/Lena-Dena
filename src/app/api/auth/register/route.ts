@@ -16,39 +16,46 @@ export async function POST(req: Request) {
     const cleanName = name.trim();
     const phoneVariants = getPhoneLookupVariants(phone);
 
-    // Check if phone already registered under any format
+    // Fast check if phone already registered under any format
     const existing = await db.user.findFirst({
       where: {
         OR: phoneVariants.map((p) => ({ phone: p })),
       },
+      select: { id: true },
     });
 
     if (existing) {
       return NextResponse.json({ error: 'An account with this mobile number already exists' }, { status: 400 });
     }
 
+    // Atomic single insert creating User, Business, and Settings in 1 fast query!
     const user = await db.user.create({
       data: {
         name: cleanName,
         phone: cleanPhone,
         passwordHash: password,
-      },
-    });
-
-    const business = await db.business.create({
-      data: {
-        name: `${cleanName}'s Khata`,
-        ownerId: user.id,
-        phone: cleanPhone,
-        category: 'Personal',
-        settings: {
+        businesses: {
           create: {
-            autoRemindersEnabled: true,
-            reminderFrequencyDays: 7,
+            name: `${cleanName}'s Khata`,
+            phone: cleanPhone,
+            category: 'Personal',
+            settings: {
+              create: {
+                autoRemindersEnabled: true,
+                reminderFrequencyDays: 7,
+              },
+            },
           },
         },
       },
+      include: {
+        businesses: {
+          take: 1,
+        },
+      },
     });
+
+    const business = user.businesses[0];
 
     await setSession({
       userId: user.id,
