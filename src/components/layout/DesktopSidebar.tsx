@@ -84,6 +84,7 @@ export function DesktopSidebar({ businessName = 'My Khata' }: { businessName?: s
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all group ${
                   isActive
                     ? 'bg-blue-50 text-blue-600 shadow-xs'

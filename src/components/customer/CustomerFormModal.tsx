@@ -46,18 +46,50 @@ export function CustomerFormModal({
       return;
     }
 
-    try {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim() || '9999999999';
+    const numOpening = openingBalance ? parseFloat(openingBalance) : 0;
+    const openingPaisa = Math.round(numOpening * 100) * (balanceType === 'I_OWE' ? -1 : 1);
+
+    // 0ms INSTANT OPTIMISTIC FEEDBACK FOR NEW CUSTOMERS
+    if (!initialData) {
+      const optimisticCustomer = {
+        id: `temp_${Date.now()}`,
+        name: trimmedName,
+        phone: trimmedPhone,
+        openingBalancePaisa: openingPaisa,
+        currentBalancePaisa: openingPaisa,
+        status: openingPaisa === 0 ? 'SETTLED' : 'ACTIVE',
+        transactions:
+          openingPaisa !== 0
+            ? [
+                {
+                  id: `temp_tx_${Date.now()}`,
+                  type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
+                  amountPaisa: Math.abs(openingPaisa),
+                  date: new Date().toISOString(),
+                  description: 'Opening Balance',
+                },
+              ]
+            : [],
+      };
+      onSuccess(optimisticCustomer);
+      onClose();
+    } else {
       setLoading(true);
+    }
+
+    try {
       setError('');
 
       const url = initialData ? `/api/customers/${initialData.id}` : '/api/customers';
       const method = initialData ? 'PUT' : 'POST';
 
       const body = {
-        name: name.trim(),
-        phone: phone.trim() || '9999999999', // optional fallback
+        name: trimmedName,
+        phone: trimmedPhone,
         ...(!initialData && {
-          openingBalance: openingBalance ? parseFloat(openingBalance) : 0,
+          openingBalance: numOpening,
           balanceType,
         }),
       };
@@ -74,7 +106,9 @@ export function CustomerFormModal({
       }
 
       onSuccess(data.customer || data);
-      onClose();
+      if (initialData) {
+        onClose();
+      }
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {

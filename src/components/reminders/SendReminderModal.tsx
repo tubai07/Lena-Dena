@@ -31,12 +31,33 @@ export function SendReminderModal({
 
   useEffect(() => {
     if (customer && isOpen) {
-      const defaultUpi = business?.upiId || upiAddress || '[upi address]';
-      setUpiAddress(business?.upiId || '');
+      const activeUpi = (business?.upiId || '').trim();
+      setUpiAddress(activeUpi);
+
+      // If business?.upiId isn't loaded in memory yet, fetch the profile immediately
+      if (!activeUpi) {
+        fetch('/api/settings')
+          .then((res) => res.json())
+          .then((data) => {
+            const fetchedUpi = (data?.business?.upiId || '').trim();
+            if (fetchedUpi) {
+              setUpiAddress(fetchedUpi);
+              setMessage(
+                generateReminderMessage({
+                  customerName: customer.name,
+                  amountPaisa: customer.currentBalancePaisa,
+                  upiId: fetchedUpi,
+                })
+              );
+            }
+          })
+          .catch(() => {});
+      }
+
       const generated = generateReminderMessage({
         customerName: customer.name,
         amountPaisa: customer.currentBalancePaisa,
-        upiId: defaultUpi,
+        upiId: activeUpi,
       });
       setMessage(generated);
       setCopied(false);
@@ -50,7 +71,7 @@ export function SendReminderModal({
     const updated = generateReminderMessage({
       customerName: customer.name,
       amountPaisa: customer.currentBalancePaisa,
-      upiId: newUpi.trim() || '[upi address]',
+      upiId: newUpi.trim(),
     });
     setMessage(updated);
   };

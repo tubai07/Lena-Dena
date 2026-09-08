@@ -18,8 +18,8 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Fetch business and initial customers concurrently in 1 parallel query batch
-  const [business, initialCustomers] = await Promise.all([
+  // Fetch business, initial customers, and recent activity concurrently in 1 parallel query batch
+  const [business, initialCustomers, initialTransactions] = await Promise.all([
     db.business.findUnique({
       where: { id: session.businessId },
       include: { owner: true, settings: true },
@@ -34,6 +34,16 @@ export default async function DashboardLayout({
         },
       },
     }),
+    db.transaction.findMany({
+      where: { businessId: session.businessId },
+      orderBy: { date: 'desc' },
+      include: {
+        customer: {
+          select: { id: true, name: true, phone: true, currentBalancePaisa: true },
+        },
+      },
+      take: 100,
+    }),
   ]);
 
   if (!business) {
@@ -41,7 +51,11 @@ export default async function DashboardLayout({
   }
 
   return (
-    <AppProvider initialBusiness={business} initialCustomers={initialCustomers}>
+    <AppProvider
+      initialBusiness={business}
+      initialCustomers={initialCustomers}
+      initialTransactions={initialTransactions}
+    >
       <ClientLayoutShell businessName={business.name}>
         {children}
       </ClientLayoutShell>

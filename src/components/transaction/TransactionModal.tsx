@@ -5,10 +5,8 @@ import {
   ArrowLeft,
   Calendar,
   FileText,
-  Camera,
   Check,
   Loader2,
-  Plus,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 
@@ -248,15 +246,6 @@ export function TransactionModal({
               onChange={(e) => setSelectedDate(e.target.value)}
               className="bg-white border border-slate-300 hover:border-emerald-600 focus:border-emerald-600 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 cursor-pointer outline-none shadow-2xs"
             />
-          </div>
-
-          {/* Add Bills Card */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between text-xs text-slate-700 font-semibold">
-            <div className="flex items-center gap-2.5">
-              <Camera className="w-4 h-4 text-slate-500" />
-              <span>Add Bills (Optional)</span>
-            </div>
-            <Plus className="w-4 h-4 text-emerald-600" />
           </div>
         </div>
 

@@ -89,8 +89,9 @@ export async function POST(req: Request) {
       openingPaisa = -openingPaisa;
     }
 
-    const customer = await db.$transaction(async (tx) => {
-      const newCust = await tx.customer.create({
+    if (openingPaisa === 0) {
+      // Direct single insert - 0 transaction overhead!
+      const customer = await db.customer.create({
         data: {
           businessId,
           name: name.trim(),
@@ -98,28 +99,45 @@ export async function POST(req: Request) {
           email: email?.trim() || null,
           address: address?.trim() || null,
           notes: notes?.trim() || null,
-          openingBalancePaisa: openingPaisa,
-          currentBalancePaisa: openingPaisa,
-          status: openingPaisa === 0 ? 'SETTLED' : 'ACTIVE',
+          openingBalancePaisa: 0,
+          currentBalancePaisa: 0,
+          status: 'SETTLED',
+        },
+        include: {
+          transactions: { take: 1 },
         },
       });
+      return NextResponse.json({ customer, success: true });
+    }
 
-      // If non-zero opening balance, create initial ledger transaction record
-      if (openingPaisa !== 0) {
-        await tx.transaction.create({
-          data: {
+    // Atomic insert with initial transaction in single query!
+    const customer = await db.customer.create({
+      data: {
+        businessId,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email?.trim() || null,
+        address: address?.trim() || null,
+        notes: notes?.trim() || null,
+        openingBalancePaisa: openingPaisa,
+        currentBalancePaisa: openingPaisa,
+        status: 'ACTIVE',
+        transactions: {
+          create: {
             businessId,
-            customerId: newCust.id,
             type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
             amountPaisa: Math.abs(openingPaisa),
             paymentMethod: 'OTHER',
             description: 'Opening Balance',
           },
-        });
-        await recalculateCustomerBalance(newCust.id, tx);
-      }
-
-      return newCust;
+        },
+      },
+      include: {
+        transactions: {
+          orderBy: { date: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     return NextResponse.json({ customer, success: true });

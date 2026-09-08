@@ -14,7 +14,11 @@ interface AppContextType {
   refreshAppData: () => void;
   lastUpdated: number;
   business: any;
+  setBusiness: React.Dispatch<React.SetStateAction<any>>;
   allCustomers: any[];
+  setAllCustomers: React.Dispatch<React.SetStateAction<any[]>>;
+  allTransactions: any[];
+  setAllTransactions: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -23,13 +27,16 @@ export function AppProvider({
   children,
   initialBusiness,
   initialCustomers = [],
+  initialTransactions = [],
 }: {
   children: React.ReactNode;
   initialBusiness?: any;
   initialCustomers?: any[];
+  initialTransactions?: any[];
 }) {
   const [business, setBusiness] = useState(initialBusiness || null);
   const [allCustomers, setAllCustomers] = useState<any[]>(initialCustomers || []);
+  const [allTransactions, setAllTransactions] = useState<any[]>(initialTransactions || []);
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
 
   // Modals state
@@ -59,15 +66,44 @@ export function AppProvider({
     }
   };
 
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch('/api/transactions');
+      const data = await res.json();
+      if (data.transactions) {
+        setAllTransactions(data.transactions);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchBusiness = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (data.business) {
+        setBusiness(data.business);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (!initialCustomers || initialCustomers.length === 0) {
       fetchCustomers();
+    }
+    if (!initialTransactions || initialTransactions.length === 0) {
+      fetchTransactions();
     }
   }, []);
 
   const refreshAppData = () => {
     setLastUpdated(Date.now());
     fetchCustomers();
+    fetchTransactions();
+    fetchBusiness();
   };
 
   const openTransactionModal = (customer?: any, defaultType: 'CREDIT' | 'PAYMENT' = 'PAYMENT') => {
@@ -112,6 +148,20 @@ export function AppProvider({
       );
     }
 
+    // Instant optimistic update to Activity (allTransactions)
+    if (result.transaction) {
+      setAllTransactions((prev) => {
+        // Prevent duplicate if already exists
+        const exists = prev.some((t) => t.id === result.transaction.id);
+        if (exists) return prev;
+        const txWithCustomer = {
+          ...result.transaction,
+          customer: result.customer || prev.find((t) => t.customer?.id === result.transaction.customerId)?.customer,
+        };
+        return [txWithCustomer, ...prev];
+      });
+    }
+
     refreshAppData();
     if (result.transaction.type === 'PAYMENT') {
       setPaymentSuccessData({
@@ -128,6 +178,55 @@ export function AppProvider({
     }
   };
 
+  const handleCustomerSaved = (savedCustomer: any) => {
+    if (!savedCustomer) {
+      refreshAppData();
+      return;
+    }
+
+    // Instant in-memory state update (0ms delay)
+    setAllCustomers((prev) => {
+      const existsIndex = prev.findIndex((c) => c.id === savedCustomer.id);
+      if (existsIndex >= 0) {
+        const updated = [...prev];
+        updated[existsIndex] = { ...updated[existsIndex], ...savedCustomer };
+        return updated;
+      }
+      // If temp id exists, replace it
+      const tempIndex = prev.findIndex((c) => c.id.startsWith('temp_') && c.name === savedCustomer.name);
+      if (tempIndex >= 0) {
+        const updated = [...prev];
+        updated[tempIndex] = { ...savedCustomer, transactions: savedCustomer.transactions || [] };
+        return updated;
+      }
+      return [
+        {
+          ...savedCustomer,
+          transactions: savedCustomer.transactions || [],
+        },
+        ...prev,
+      ];
+    });
+
+    // If opening balance created transactions, update allTransactions immediately
+    if (savedCustomer.transactions && savedCustomer.transactions.length > 0) {
+      setAllTransactions((prev) => {
+        const newTxs = savedCustomer.transactions.map((tx: any) => ({
+          ...tx,
+          customer: {
+            id: savedCustomer.id,
+            name: savedCustomer.name,
+            phone: savedCustomer.phone,
+            currentBalancePaisa: savedCustomer.currentBalancePaisa,
+          },
+        }));
+        return [...newTxs, ...prev];
+      });
+    }
+
+    refreshAppData();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -137,7 +236,11 @@ export function AppProvider({
         refreshAppData,
         lastUpdated,
         business,
+        setBusiness,
         allCustomers,
+        setAllCustomers,
+        allTransactions,
+        setAllTransactions,
       }}
     >
       {children}
@@ -163,7 +266,7 @@ export function AppProvider({
       <CustomerFormModal
         isOpen={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
-        onSuccess={() => refreshAppData()}
+        onSuccess={handleCustomerSaved}
         initialData={editingCustomer}
       />
 

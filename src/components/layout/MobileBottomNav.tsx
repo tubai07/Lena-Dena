@@ -32,6 +32,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className={`flex flex-col items-center py-1 px-4 rounded-xl transition-all ${
                 isActive ? 'text-emerald-700 font-bold' : 'text-slate-500 font-medium hover:text-slate-800'
               }`}

@@ -12,6 +12,7 @@ import {
   recalculateCustomerBalance,
   getBusinessDashboardSummary,
 } from '../src/lib/ledger-server';
+import { generateReminderMessage } from '../src/lib/reminders';
 
 describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () => {
   let testUser: any;
@@ -173,5 +174,35 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
     const summary = await getBusinessDashboardSummary(testBusinessA.id);
     expect(summary.totalReceivablePaisa).toBeGreaterThan(0);
     expect(summary.totalCustomers).toBeGreaterThanOrEqual(1);
+  });
+
+  it('generates short complete reminder message with UPI from profile and without please', () => {
+    // 1. With UPI ID present from user profile
+    const msgWithUpi = generateReminderMessage({
+      customerName: 'Sibu',
+      amountPaisa: toPaisa(1),
+      upiId: '9681214449@ptsbi',
+    });
+    expect(msgWithUpi).toBe('Hi Sibu, ₹1 is pending. UPI: 9681214449@ptsbi. Pay when convenient. Thank you!');
+    expect(msgWithUpi.toLowerCase()).not.toContain('please');
+
+    // 2. Without UPI ID (no placeholder like [upi address])
+    const msgNoUpi = generateReminderMessage({
+      customerName: 'Sibu',
+      amountPaisa: toPaisa(1),
+      upiId: '',
+    });
+    expect(msgNoUpi).toBe('Hi Sibu, ₹1 is pending. Pay when convenient. Thank you!');
+    expect(msgNoUpi).not.toContain('[upi address]');
+    expect(msgNoUpi.toLowerCase()).not.toContain('please');
+
+    // 3. When placeholder [upi address] is passed accidentally
+    const msgPlaceholder = generateReminderMessage({
+      customerName: 'Sibu',
+      amountPaisa: toPaisa(1),
+      upiId: '[upi address]',
+    });
+    expect(msgPlaceholder).toBe('Hi Sibu, ₹1 is pending. Pay when convenient. Thank you!');
+    expect(msgPlaceholder).not.toContain('[upi address]');
   });
 });

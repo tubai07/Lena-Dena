@@ -23,7 +23,7 @@ import { useApp } from '@/components/common/AppContext';
 export default function PersonalSettingsPage() {
   const router = useRouter();
   const { lang, setLang } = useTranslation();
-  const { business, refreshAppData } = useApp();
+  const { business, setBusiness, refreshAppData } = useApp();
 
   // Instant pre-population from in-memory AppContext (0ms delay)
   const [name, setName] = useState(business?.owner?.name || business?.name || '');
@@ -67,8 +67,12 @@ export default function PersonalSettingsPage() {
           upiId,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
         setSavedSuccess(true);
+        if (data.business && setBusiness) {
+          setBusiness(data.business);
+        }
         refreshAppData();
         setTimeout(() => setSavedSuccess(false), 2500);
       }

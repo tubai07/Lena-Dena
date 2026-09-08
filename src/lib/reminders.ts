@@ -23,14 +23,21 @@ export function generateReminderMessage(params: {
     let msg = params.customTemplate
       .replace('{customer_name}', params.customerName)
       .replace('{amount}', formattedAmount);
-    if (params.upiId) {
-      msg = msg.replace('{upi_id}', params.upiId);
+    const cleanUpi = params.upiId && params.upiId.trim() !== '[upi address]' ? params.upiId.trim() : '';
+    if (cleanUpi) {
+      msg = msg.replace('{upi_id}', cleanUpi);
+    } else {
+      msg = msg.replace(/\s*UPI(?:\s*ID)?:\s*\{upi_id\}\.?/gi, '').replace(/\{upi_id\}/gi, '');
     }
     return msg;
   }
 
-  const upiText = params.upiId ? ` UPI: ${params.upiId}.` : '';
-  return `Hi ${params.customerName}, ${formattedAmount} is pending.${upiText} Please pay when convenient. Thank you!`;
+  const cleanUpi =
+    params.upiId && params.upiId.trim() && params.upiId.trim() !== '[upi address]'
+      ? ` UPI: ${params.upiId.trim()}.`
+      : '';
+
+  return `Hi ${params.customerName}, ${formattedAmount} is pending.${cleanUpi} Pay when convenient. Thank you!`;
 }
 
 /**

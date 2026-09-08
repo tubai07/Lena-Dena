@@ -1,47 +1,50 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowDown, ArrowUp, Search, Trash2 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 import { formatDate } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
+import { useApp } from '@/components/common/AppContext';
 
 export default function ActivityPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { allTransactions, setAllTransactions, refreshAppData } = useApp();
   const [typeFilter, setTypeFilter] = useState(''); // '', PAYMENT, CREDIT
   const [deleteConfirmTx, setDeleteConfirmTx] = useState<any>(null);
 
-  const fetchTransactions = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (typeFilter) params.append('type', typeFilter);
-      const res = await fetch(`/api/transactions?${params.toString()}`);
-      const data = await res.json();
-      if (data.transactions) {
-        setTransactions(data.transactions);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Instant in-memory filtering (0ms latency!)
+  const filteredTransactions = useMemo(() => {
+    if (!typeFilter) return allTransactions;
+    return allTransactions.filter((tx) => tx.type === typeFilter);
+  }, [allTransactions, typeFilter]);
 
+  // Background sync on mount without blocking the UI
   useEffect(() => {
-    fetchTransactions();
-  }, [typeFilter]);
+    fetch('/api/transactions')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.transactions) {
+          setAllTransactions(data.transactions);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleDelete = async () => {
     if (!deleteConfirmTx) return;
+    const txId = deleteConfirmTx.id;
+    setDeleteConfirmTx(null);
+
+    // Instant optimistic removal from UI (0ms delay)
+    setAllTransactions((prev) => prev.filter((t) => t.id !== txId));
+
     try {
-      await fetch(`/api/transactions?id=${deleteConfirmTx.id}`, { method: 'DELETE' });
-      setDeleteConfirmTx(null);
-      fetchTransactions();
+      await fetch(`/api/transactions?id=${txId}`, { method: 'DELETE' });
+      refreshAppData();
     } catch (e) {
       console.error(e);
+      refreshAppData();
     }
   };
 
@@ -87,18 +90,12 @@ export default function ActivityPage() {
 
       {/* Transactions List */}
       <div className="divide-y divide-slate-100">
-        {loading ? (
-          <div className="p-4 space-y-3 animate-pulse">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-14 bg-slate-100 rounded-2xl" />
-            ))}
-          </div>
-        ) : transactions.length === 0 ? (
+        {filteredTransactions.length === 0 ? (
           <div className="py-20 text-center text-xs text-slate-400">
             No activity recorded yet.
           </div>
         ) : (
-          transactions.map((tx: any) => {
+          filteredTransactions.map((tx: any) => {
             const isReceived = tx.type === 'PAYMENT';
             return (
               <div
