@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 
 export async function GET(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -16,32 +16,33 @@ export async function GET(req: Request) {
       return NextResponse.json({ customers: [], transactions: [] });
     }
 
-    const customers = await db.customer.findMany({
-      where: {
-        businessId: business.id,
-        OR: [
-          { name: { contains: q } },
-          { phone: { contains: q } },
-          { notes: { contains: q } },
-          { address: { contains: q } },
-        ],
-      },
-      take: 8,
-    });
-
-    const transactions = await db.transaction.findMany({
-      where: {
-        businessId: business.id,
-        OR: [
-          { description: { contains: q } },
-          { billNumber: { contains: q } },
-        ],
-      },
-      include: {
-        customer: { select: { id: true, name: true } },
-      },
-      take: 8,
-    });
+    const [customers, transactions] = await Promise.all([
+      db.customer.findMany({
+        where: {
+          businessId: session.businessId,
+          OR: [
+            { name: { contains: q } },
+            { phone: { contains: q } },
+            { notes: { contains: q } },
+            { address: { contains: q } },
+          ],
+        },
+        take: 8,
+      }),
+      db.transaction.findMany({
+        where: {
+          businessId: session.businessId,
+          OR: [
+            { description: { contains: q } },
+            { billNumber: { contains: q } },
+          ],
+        },
+        include: {
+          customer: { select: { id: true, name: true } },
+        },
+        take: 8,
+      }),
+    ]);
 
     return NextResponse.json({ customers, transactions });
   } catch (err: any) {

@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const notifications = await db.notification.findMany({
-      where: { businessId: business.id },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
-
-    const unreadCount = await db.notification.count({
-      where: { businessId: business.id, isRead: false },
-    });
+    const [notifications, unreadCount] = await Promise.all([
+      db.notification.findMany({
+        where: { businessId: session.businessId },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+      db.notification.count({
+        where: { businessId: session.businessId, isRead: false },
+      }),
+    ]);
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (err: any) {
@@ -27,8 +28,8 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,7 +38,7 @@ export async function PUT(req: Request) {
 
     if (markAllAsRead) {
       await db.notification.updateMany({
-        where: { businessId: business.id, isRead: false },
+        where: { businessId: session.businessId, isRead: false },
         data: { isRead: true },
       });
       return NextResponse.json({ success: true, message: 'All notifications marked as read' });
@@ -45,7 +46,7 @@ export async function PUT(req: Request) {
 
     if (id) {
       await db.notification.updateMany({
-        where: { id, businessId: business.id },
+        where: { id, businessId: session.businessId },
         data: { isRead: true },
       });
       return NextResponse.json({ success: true, message: 'Notification marked as read' });

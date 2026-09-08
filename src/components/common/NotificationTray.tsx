@@ -39,9 +39,13 @@ export function NotificationTray() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

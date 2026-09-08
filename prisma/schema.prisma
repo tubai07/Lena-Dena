@@ -56,6 +56,10 @@ model Customer {
   reminders           Reminder[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, currentBalancePaisa])
+  @@index([businessId, phone])
 }
 
 model Transaction {
@@ -73,6 +77,10 @@ model Transaction {
   receiptNumber String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([customerId])
+  @@index([businessId, date])
 }
 
 model Reminder {
@@ -86,6 +94,9 @@ model Reminder {
   status     String   @default("SENT") // SENT, PENDING, FAILED
   sentAt     DateTime @default(now())
   createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([customerId])
 }
 
 model Notification {
@@ -98,6 +109,8 @@ model Notification {
   isRead     Boolean  @default(false)
   link       String?
   createdAt  DateTime @default(now())
+
+  @@index([businessId, isRead])
 }
 
 model BusinessSettings {

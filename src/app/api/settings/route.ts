@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const business = await db.business.findUnique({
+      where: { id: session.businessId },
+      include: { owner: true, settings: true },
+    });
 
     return NextResponse.json({ business });
   } catch (err: any) {
@@ -17,8 +22,8 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -38,7 +43,7 @@ export async function PUT(req: Request) {
 
     // Update business profile
     const updatedBusiness = await db.business.update({
-      where: { id: business.id },
+      where: { id: session.businessId },
       data: {
         ...(name && { name: name.trim() }),
         ...(category && { category }),
@@ -50,9 +55,9 @@ export async function PUT(req: Request) {
 
     // Update or create settings
     const updatedSettings = await db.businessSettings.upsert({
-      where: { businessId: business.id },
+      where: { businessId: session.businessId },
       create: {
-        businessId: business.id,
+        businessId: session.businessId,
         autoRemindersEnabled: autoRemindersEnabled ?? true,
         reminderFrequencyDays: reminderFrequencyDays ? Number(reminderFrequencyDays) : 7,
         reminderTemplate: reminderTemplate || undefined,

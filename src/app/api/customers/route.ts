@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { toPaisa } from '@/lib/ledger';
 import { recalculateCustomerBalance } from '@/lib/ledger-server';
 
 export async function GET(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
     // Build Prisma query
     const where: any = {
-      businessId: business.id,
+      businessId: session.businessId,
     };
 
     if (q) {
@@ -70,10 +70,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const businessId = session.businessId;
 
     const body = await req.json();
     const { name, phone, email, address, notes, openingBalance = 0, balanceType = 'OWES_ME' } = body;
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
     const customer = await db.$transaction(async (tx) => {
       const newCust = await tx.customer.create({
         data: {
-          businessId: business.id,
+          businessId,
           name: name.trim(),
           phone: phone.trim(),
           email: email?.trim() || null,
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
       if (openingPaisa !== 0) {
         await tx.transaction.create({
           data: {
-            businessId: business.id,
+            businessId,
             customerId: newCust.id,
             type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
             amountPaisa: Math.abs(openingPaisa),

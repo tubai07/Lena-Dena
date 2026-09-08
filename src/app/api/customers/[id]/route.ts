@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { computeLedgerRunningBalances } from '@/lib/ledger';
 
 export async function GET(
@@ -8,15 +8,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
 
     const customer = await db.customer.findFirst({
-      where: { id, businessId: business.id },
+      where: { id, businessId: session.businessId },
       include: {
         transactions: {
           orderBy: { date: 'asc' },
@@ -57,10 +57,9 @@ export async function GET(
         currentBalancePaisa: customer.currentBalancePaisa,
       },
       business: {
-        id: business.id,
-        name: business.name,
-        upiId: business.upiId,
-        phone: business.phone,
+        id: session.businessId,
+        name: session.businessName,
+        phone: session.phone,
       },
     });
   } catch (err: any) {
@@ -73,8 +72,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -83,7 +82,7 @@ export async function PUT(
     const { name, phone, email, address, notes } = body;
 
     const customer = await db.customer.updateMany({
-      where: { id, businessId: business.id },
+      where: { id, businessId: session.businessId },
       data: {
         ...(name && { name: name.trim() }),
         ...(phone && { phone: phone.trim() }),
@@ -104,15 +103,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
 
     const customer = await db.customer.findFirst({
-      where: { id, businessId: business.id },
+      where: { id, businessId: session.businessId },
     });
 
     if (!customer) {

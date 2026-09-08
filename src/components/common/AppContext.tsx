@@ -22,12 +22,14 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({
   children,
   initialBusiness,
+  initialCustomers = [],
 }: {
   children: React.ReactNode;
   initialBusiness?: any;
+  initialCustomers?: any[];
 }) {
   const [business, setBusiness] = useState(initialBusiness || null);
-  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [allCustomers, setAllCustomers] = useState<any[]>(initialCustomers || []);
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
 
   // Modals state
@@ -58,7 +60,9 @@ export function AppProvider({
   };
 
   useEffect(() => {
-    fetchCustomers();
+    if (!initialCustomers || initialCustomers.length === 0) {
+      fetchCustomers();
+    }
   }, []);
 
   const refreshAppData = () => {

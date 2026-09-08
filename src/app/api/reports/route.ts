@@ -1,59 +1,17 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { getBusinessDashboardSummary } from '@/lib/ledger-server';
 
 export async function GET(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
     const range = searchParams.get('range') || 'month'; // today, week, month, year, all
-
-    // 1. Dashboard summary numbers
-    const summary = await getBusinessDashboardSummary(business.id);
-
-    // 2. Recent activity
-    const recentTransactions = await db.transaction.findMany({
-      where: { businessId: business.id },
-      orderBy: { date: 'desc' },
-      take: 6,
-      include: {
-        customer: {
-          select: { id: true, name: true, phone: true },
-        },
-      },
-    });
-
-    // 3. Outstanding customers (You will receive)
-    const outstandingCustomers = await db.customer.findMany({
-      where: {
-        businessId: business.id,
-        currentBalancePaisa: { gt: 0 },
-      },
-      orderBy: { currentBalancePaisa: 'desc' },
-      take: 6,
-      include: {
-        transactions: {
-          orderBy: { date: 'desc' },
-          take: 1,
-        },
-      },
-    });
-
-    // Calculate days overdue based on oldest unpaid or last transaction
-    const now = new Date();
-    const formattedOutstanding = outstandingCustomers.map((c) => {
-      const lastTxDate = c.transactions[0]?.date ? new Date(c.transactions[0].date) : new Date(c.createdAt);
-      const diffDays = Math.max(1, Math.floor((now.getTime() - lastTxDate.getTime()) / (1000 * 60 * 60 * 24)));
-      return {
-        ...c,
-        daysOverdue: diffDays,
-      };
-    });
 
     // 4. Time series breakdown for charts (last 6 months or 7 days)
     const sixMonthsAgo = new Date();
@@ -61,12 +19,55 @@ export async function GET(req: Request) {
     sixMonthsAgo.setDate(1);
     sixMonthsAgo.setHours(0, 0, 0, 0);
 
-    const allTx = await db.transaction.findMany({
-      where: {
-        businessId: business.id,
-        date: { gte: sixMonthsAgo },
-      },
-      select: { type: true, amountPaisa: true, date: true },
+    // Run business profile, summary, transactions, customers, and chart history in parallel
+    const [business, summary, recentTransactions, outstandingCustomers, allTx] = await Promise.all([
+      db.business.findUnique({
+        where: { id: session.businessId },
+        include: { owner: true, settings: true },
+      }),
+      getBusinessDashboardSummary(session.businessId),
+      db.transaction.findMany({
+        where: { businessId: session.businessId },
+        orderBy: { date: 'desc' },
+        take: 6,
+        include: {
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+        },
+      }),
+      db.customer.findMany({
+        where: {
+          businessId: session.businessId,
+          currentBalancePaisa: { gt: 0 },
+        },
+        orderBy: { currentBalancePaisa: 'desc' },
+        take: 6,
+        include: {
+          transactions: {
+            orderBy: { date: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+      db.transaction.findMany({
+        where: {
+          businessId: session.businessId,
+          date: { gte: sixMonthsAgo },
+        },
+        select: { type: true, amountPaisa: true, date: true },
+      }),
+    ]);
+
+    // Calculate days overdue based on oldest unpaid or last transaction
+    const now = new Date();
+    const formattedOutstanding = outstandingCustomers.map((c) => {
+      const lastTxDate = c.transactions[0]?.date ? new Date(c.transactions[0].date) : new Date(c.createdAt);
+      const daysOverdue = Math.max(1, Math.floor((now.getTime() - lastTxDate.getTime()) / (1000 * 60 * 60 * 24)));
+      return {
+        ...c,
+        daysOverdue,
+      };
     });
 
     // Group by month
@@ -93,16 +94,16 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       business: {
-        id: business.id,
-        name: business.name,
-        category: business.category,
-        currency: business.currency,
-        currencySymbol: business.currencySymbol,
-        upiId: business.upiId,
-        phone: business.phone,
-        address: business.address,
-        ownerName: business.owner?.name,
-        settings: business.settings,
+        id: business?.id || session.businessId,
+        name: business?.name || session.businessName,
+        category: business?.category || 'Personal',
+        currency: business?.currency || 'INR',
+        currencySymbol: business?.currencySymbol || '₹',
+        upiId: business?.upiId,
+        phone: business?.phone || session.phone,
+        address: business?.address,
+        ownerName: business?.owner?.name || session.userName,
+        settings: business?.settings,
       },
       summary,
       recentTransactions,

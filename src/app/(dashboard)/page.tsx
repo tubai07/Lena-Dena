@@ -18,34 +18,16 @@ import { GlobalSearchModal } from '@/components/common/GlobalSearchModal';
 import { NotificationTray } from '@/components/common/NotificationTray';
 
 export default function SimplifiedDashboardPage() {
-  const { openCustomerModal, lastUpdated, business } = useApp();
+  const { openCustomerModal, allCustomers, lastUpdated, business } = useApp();
 
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'due' | 'advance' | 'settled'>('all');
   const [sortOption, setSortOption] = useState<'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc'>('amount_desc');
 
-  const fetchDashboardData = async () => {
-    try {
-      if (customers.length === 0) setLoading(true);
-      const res = await fetch('/api/customers?filter=all');
-      const data = await res.json();
-      if (data.customers) {
-        setCustomers(data.customers);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [lastUpdated]);
+  const customers = allCustomers;
+  const loading = false;
 
   // Apply Filter
   const filteredCustomers = customers.filter((c) => {

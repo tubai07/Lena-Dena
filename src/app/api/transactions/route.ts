@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentBusiness } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { toPaisa } from '@/lib/ledger';
 import {
   recordLedgerTransaction,
@@ -10,8 +10,8 @@ import {
 
 export async function GET(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     const dateRange = searchParams.get('dateRange'); // today, week, month, all
 
     const where: any = {
-      businessId: business.id,
+      businessId: session.businessId,
     };
 
     if (type) where.type = type;
@@ -71,8 +71,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     const txDate = date ? new Date(date) : new Date();
 
     const result = await recordLedgerTransaction({
-      businessId: business.id,
+      businessId: session.businessId,
       customerId,
       type: type as 'CREDIT' | 'PAYMENT',
       amountPaisa: toPaisa(numAmount),
@@ -113,8 +113,8 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -139,7 +139,7 @@ export async function PUT(req: Request) {
     if (description !== undefined) updateData.description = description;
     if (billNumber !== undefined) updateData.billNumber = billNumber;
 
-    const result = await updateLedgerTransaction(id, business.id, updateData);
+    const result = await updateLedgerTransaction(id, session.businessId, updateData);
 
     return NextResponse.json({
       success: true,
@@ -153,8 +153,8 @@ export async function PUT(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const business = await getCurrentBusiness();
-    if (!business) {
+    const session = await getSession();
+    if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -165,7 +165,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
     }
 
-    const result = await deleteLedgerTransaction(id, business.id);
+    const result = await deleteLedgerTransaction(id, session.businessId);
 
     return NextResponse.json({
       success: true,
