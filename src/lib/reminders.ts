@@ -14,17 +14,23 @@ export function normalizeIndianPhone(phone: string): string {
 export function generateReminderMessage(params: {
   customerName: string;
   amountPaisa: number;
+  upiId?: string | null;
   customTemplate?: string | null;
 }): string {
   const formattedAmount = formatINR(params.amountPaisa, true);
 
   if (params.customTemplate) {
-    return params.customTemplate
+    let msg = params.customTemplate
       .replace('{customer_name}', params.customerName)
       .replace('{amount}', formattedAmount);
+    if (params.upiId) {
+      msg = msg.replace('{upi_id}', params.upiId);
+    }
+    return msg;
   }
 
-  return `Hi ${params.customerName}, gentle reminder that ${formattedAmount} is pending on our khata ledger. Please clear it when convenient. Thank you!`;
+  const upiText = params.upiId ? ` UPI: ${params.upiId}.` : '';
+  return `Hi ${params.customerName}, ${formattedAmount} is pending.${upiText} Please pay when convenient. Thank you!`;
 }
 
 /**

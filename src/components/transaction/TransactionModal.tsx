@@ -32,8 +32,6 @@ interface TransactionModalProps {
   allCustomers?: CustomerOption[];
 }
 
-const PRESET_AMOUNTS = [100, 200, 500, 1000, 2000];
-
 export function TransactionModal({
   isOpen,
   onClose,
@@ -210,29 +208,6 @@ export function TransactionModal({
             />
           </div>
           {error && <p className="text-xs text-rose-600 font-bold mt-2">{error}</p>}
-
-          {/* Quick Amount Suggestion Chips */}
-          <div className="flex items-center justify-center gap-1.5 pt-3.5 flex-wrap">
-            {PRESET_AMOUNTS.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setAmountStr(preset.toString())}
-                className="px-3 py-1 text-xs font-bold rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition-all tap-effect"
-              >
-                +₹{preset}
-              </button>
-            ))}
-            {amountStr && (
-              <button
-                type="button"
-                onClick={() => setAmountStr('')}
-                className="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-95 transition-all tap-effect"
-              >
-                Clear
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Action Cards */}

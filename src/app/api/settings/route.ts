@@ -41,6 +41,23 @@ export async function PUT(req: Request) {
       preferredLanguage,
     } = body;
 
+    // Update user profile and/or change password without requiring old password
+    if (session.userId) {
+      const userUpdates: any = {};
+      if (name) userUpdates.name = name.trim();
+      if (phone) userUpdates.phone = phone.trim();
+      if (body.newPassword && body.newPassword.trim()) {
+        userUpdates.passwordHash = body.newPassword.trim();
+      }
+
+      if (Object.keys(userUpdates).length > 0) {
+        await db.user.update({
+          where: { id: session.userId },
+          data: userUpdates,
+        });
+      }
+    }
+
     // Update business profile
     const updatedBusiness = await db.business.update({
       where: { id: session.businessId },
@@ -51,6 +68,7 @@ export async function PUT(req: Request) {
         ...(phone && { phone: phone.trim() }),
         ...(address !== undefined && { address: address?.trim() || null }),
       },
+      include: { owner: true, settings: true },
     });
 
     // Update or create settings

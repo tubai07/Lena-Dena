@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const cleanIdentifier = identifier.trim();
     const phoneVariants = getPhoneLookupVariants(cleanIdentifier);
 
-    // Look for user by email or any phone format variant
+    // Fast, lightweight lookup by email or any phone format variant
     const user = await db.user.findFirst({
       where: {
         OR: [
@@ -22,9 +22,14 @@ export async function POST(req: Request) {
           ...phoneVariants.map((p) => ({ phone: p })),
         ],
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        passwordHash: true,
         businesses: {
-          include: { settings: true },
+          select: { id: true, name: true, phone: true },
+          take: 1,
         },
       },
     });

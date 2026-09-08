@@ -13,9 +13,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Pre-fill remembered phone number if available
+  // Pre-fill remembered phone number and pre-warm dashboard
   useEffect(() => {
     try {
+      router.prefetch('/');
       const savedPhone = localStorage.getItem('lena_dena_saved_phone');
       if (savedPhone) {
         setIdentifier(savedPhone);
@@ -24,7 +25,7 @@ export default function LoginPage() {
     } catch {
       // Ignore localStorage restrictions
     }
-  }, []);
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,10 +51,10 @@ export default function LoginPage() {
         // Ignore localStorage restrictions
       }
 
-      router.push(data.redirect || '/');
+      // Fast immediate browser navigation
+      window.location.href = data.redirect || '/';
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
-    } finally {
       setLoading(false);
     }
   };
