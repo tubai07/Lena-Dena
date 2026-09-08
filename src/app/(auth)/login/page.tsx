@@ -1,0 +1,153 @@
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Phone, Lock, Sparkles, Loader2 } from 'lucide-react';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [identifier, setIdentifier] = useState('9830012345');
+  const [password, setPassword] = useState('demo123');
+  const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError('');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid mobile number or password');
+      router.push(data.redirect || '/');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickDemoLogin = async () => {
+    try {
+      setDemoLoading(true);
+      setError('');
+      const res = await fetch('/api/auth/demo', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Demo login failed');
+      router.push('/');
+    } catch (err: any) {
+      setError(err.message || 'Failed to start demo');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 px-4 sm:px-6">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <div className="w-14 h-14 bg-emerald-700 text-white rounded-2xl flex items-center justify-center font-black text-xl mx-auto shadow-lg shadow-emerald-700/20">
+          LD
+        </div>
+        <h2 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">
+          Lena Dena
+        </h2>
+        <p className="mt-0.5 text-xs text-slate-500 font-medium">
+          Personal Digital Khata & Credit Ledger
+        </p>
+      </div>
+
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-7 px-5 shadow-xl shadow-slate-200/50 rounded-3xl border border-slate-200 sm:px-8 space-y-5">
+          {/* Quick 1-Click Demo Login */}
+          <button
+            type="button"
+            onClick={handleQuickDemoLogin}
+            disabled={demoLoading}
+            className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 text-emerald-800 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 tap-effect"
+          >
+            {demoLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+            )}
+            <span>1-Click Demo Login (Instant Access)</span>
+          </button>
+
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-200 w-full" />
+            <span className="bg-white px-3 text-[11px] text-slate-400 font-bold uppercase tracking-wider absolute">
+              or sign in with mobile
+            </span>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Mobile Number
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="tel"
+                  required
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="9830012345"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-600 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:border-emerald-600 outline-none"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl font-bold text-sm shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>Sign In</span>
+            </button>
+          </form>
+
+          <div className="text-center pt-1">
+            <span className="text-xs text-slate-500">Need a new account? </span>
+            <Link
+              href="/register"
+              className="text-xs font-bold text-emerald-700 hover:underline"
+            >
+              Register
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

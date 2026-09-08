@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String?    @unique
+  phone        String?    @unique
+  name         String
+  passwordHash String?
+  businesses   Business[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Business {
+  id             String            @id @default(cuid())
+  name           String
+  category       String            @default("General Store")
+  currency       String            @default("INR")
+  currencySymbol String            @default("₹")
+  upiId          String?
+  phone          String?
+  address        String?
+  ownerId        String
+  owner          User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customers      Customer[]
+  transactions   Transaction[]
+  reminders      Reminder[]
+  notifications  Notification[]
+  settings       BusinessSettings?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model Customer {
+  id                  String        @id @default(cuid())
+  businessId          String
+  business            Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name                String
+  phone               String
+  email               String?
+  address             String?
+  notes               String?
+  openingBalancePaisa Int           @default(0) // > 0: customer owes merchant; < 0: merchant owes customer
+  currentBalancePaisa Int           @default(0) // dynamic synced balance
+  status              String        @default("ACTIVE") // ACTIVE, SETTLED, INACTIVE
+  transactions        Transaction[]
+  reminders           Reminder[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type          String   // "CREDIT" (gave credit) or "PAYMENT" (received payment)
+  amountPaisa   Int      // strictly positive integer (amount in paise)
+  paymentMethod String   @default("CASH") // CASH, UPI, BANK_TRANSFER, CHEQUE, CARD, OTHER
+  date          DateTime @default(now())
+  description   String?
+  billNumber    String?
+  receiptNumber String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  channel    String   @default("WHATSAPP") // WHATSAPP, SMS, CALL
+  message    String
+  status     String   @default("SENT") // SENT, PENDING, FAILED
+  sentAt     DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  message    String
+  type       String   @default("SYSTEM") // OVERDUE, PAYMENT_RECEIVED, SYSTEM
+  isRead     Boolean  @default(false)
+  link       String?
+  createdAt  DateTime @default(now())
+}
+
+model BusinessSettings {
+  id                    String   @id @default(cuid())
+  businessId            String   @unique
+  business              Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  autoRemindersEnabled  Boolean  @default(true)
+  reminderFrequencyDays Int      @default(7)
+  reminderTemplate      String   @default("Namaste {customer_name}, this is a friendly reminder from {business_name} that {amount} is pending on your khata account. Kindly settle the payment at your convenience. UPI ID: {upi_id}. Thank you!")
+  defaultPaymentMethod  String   @default("CASH")
+  preferredLanguage     String   @default("en") // en, hi, bn
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
