@@ -17,11 +17,10 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '../common/LanguageContext';
 
-export function DesktopSidebar({ businessName = 'Tubai General Store' }: { businessName?: string }) {
+export function DesktopSidebar({ businessName = 'My Khata' }: { businessName?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation();
-  const [resetting, setResetting] = useState(false);
 
   const navItems = [
     { href: '/', label: t.dashboard, icon: LayoutDashboard },
@@ -31,21 +30,6 @@ export function DesktopSidebar({ businessName = 'Tubai General Store' }: { busin
     { href: '/reminders', label: t.reminders, icon: BellRing },
     { href: '/settings', label: t.settings, icon: Settings },
   ];
-
-  const handleResetDemo = async () => {
-    if (!confirm('Reset all demo data for Tubai General Store to initial state?')) return;
-    try {
-      setResetting(true);
-      const res = await fetch('/api/demo/reset', { method: 'POST' });
-      if (res.ok) {
-        window.location.reload();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setResetting(false);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -61,12 +45,14 @@ export function DesktopSidebar({ businessName = 'Tubai General Store' }: { busin
       {/* Brand Header */}
       <div>
         <div className="p-5 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-blue-500/20">
-            LD
-          </div>
+          <img
+            src="/app-icon.png"
+            alt="Lena Dena"
+            className="w-10 h-10 rounded-xl shadow-xs object-cover"
+          />
           <div>
             <h2 className="font-extrabold text-slate-900 tracking-tight text-lg">Lena Dena</h2>
-            <p className="text-[11px] font-medium text-slate-400">Digital Ledger App</p>
+            <p className="text-[11px] font-medium text-slate-400">Digital Khata</p>
           </div>
         </div>
 
@@ -75,12 +61,12 @@ export function DesktopSidebar({ businessName = 'Tubai General Store' }: { busin
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Store
+                Account
               </span>
               <p className="text-xs font-bold text-slate-800 truncate max-w-[170px]">{businessName}</p>
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-              LIVE
+              ACTIVE
             </span>
           </div>
         </div>
@@ -121,16 +107,6 @@ export function DesktopSidebar({ businessName = 'Tubai General Store' }: { busin
 
       {/* Bottom Actions */}
       <div className="p-4 border-t border-slate-100 space-y-2">
-        {/* Reset Demo Quick Action */}
-        <button
-          onClick={handleResetDemo}
-          disabled={resetting}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-semibold transition-colors border border-amber-200/60"
-        >
-          <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
-          <span>{resetting ? 'Resetting...' : 'Reset Demo Data'}</span>
-        </button>
-
         {/* Logout */}
         <button
           onClick={handleLogout}

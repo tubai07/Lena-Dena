@@ -12,7 +12,7 @@ interface TopNavBarProps {
   onOpenQuickAction?: (action?: 'CREDIT' | 'PAYMENT' | 'CUSTOMER') => void;
 }
 
-export function TopNavBar({ businessName = 'Tubai General Store', onOpenQuickAction }: TopNavBarProps) {
+export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopNavBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const { lang, setLang, t } = useTranslation();
 
@@ -34,12 +34,14 @@ export function TopNavBar({ businessName = 'Tubai General Store', onOpenQuickAct
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           {/* Brand & Store Name (Mobile & Tablet) */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-sm shadow-blue-500/20">
-              LD
-            </div>
+            <img
+              src="/app-icon.png"
+              alt="Lena Dena"
+              className="w-10 h-10 rounded-xl shadow-xs object-cover"
+            />
             <div>
               <div className="flex items-center gap-1.5">
-                <Store className="w-3.5 h-3.5 text-blue-600" />
+                <Store className="w-3.5 h-3.5 text-emerald-600" />
                 <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate max-w-[160px] sm:max-w-[220px]">
                   {businessName}
                 </h1>

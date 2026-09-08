@@ -40,9 +40,11 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-10 px-4 sm:px-6">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="w-14 h-14 bg-emerald-700 text-white rounded-2xl flex items-center justify-center font-black text-xl mx-auto shadow-lg shadow-emerald-700/20">
-          LD
-        </div>
+        <img
+          src="/app-icon.png"
+          alt="Lena Dena"
+          className="w-16 h-16 rounded-2xl mx-auto shadow-lg shadow-amber-500/20 object-cover"
+        />
         <h2 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">
           Create Personal Khata
         </h2>

@@ -25,7 +25,17 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found. Please register or use Demo Login.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'No account found with this mobile number. Please register first.' },
+        { status: 404 }
+      );
+    }
+
+    if (user.passwordHash && password && user.passwordHash !== password) {
+      return NextResponse.json(
+        { error: 'Incorrect password. Please check and try again.' },
+        { status: 401 }
+      );
     }
 
     // Default to first business or create one

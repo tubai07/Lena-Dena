@@ -52,11 +52,8 @@ export async function clearSession() {
  */
 export async function getCurrentBusiness() {
   const session = await getSession();
-  if (!session) {
-    const demoBusiness = await db.business.findFirst({
-      include: { owner: true, settings: true },
-    });
-    return demoBusiness;
+  if (!session?.businessId) {
+    return null;
   }
 
   const business = await db.business.findUnique({

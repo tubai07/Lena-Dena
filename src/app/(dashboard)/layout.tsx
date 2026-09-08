@@ -1,5 +1,6 @@
 import React from 'react';
-import { getCurrentBusiness } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { getCurrentBusiness, getSession } from '@/lib/auth';
 import { DesktopSidebar } from '@/components/layout/DesktopSidebar';
 import { TopNavBar } from '@/components/layout/TopNavBar';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
@@ -11,11 +12,19 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getSession();
+  if (!session?.businessId) {
+    redirect('/login');
+  }
+
   const business = await getCurrentBusiness();
+  if (!business) {
+    redirect('/login');
+  }
 
   return (
     <AppProvider initialBusiness={business}>
-      <ClientLayoutShell businessName={business?.name || 'Tubai General Store'}>
+      <ClientLayoutShell businessName={business.name}>
         {children}
       </ClientLayoutShell>
     </AppProvider>

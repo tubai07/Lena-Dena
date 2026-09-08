@@ -3,14 +3,13 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Phone, Lock, Sparkles, Loader2 } from 'lucide-react';
+import { Phone, Lock, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('9830012345');
-  const [password, setPassword] = useState('demo123');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -33,27 +32,14 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemoLogin = async () => {
-    try {
-      setDemoLoading(true);
-      setError('');
-      const res = await fetch('/api/auth/demo', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Demo login failed');
-      router.push('/');
-    } catch (err: any) {
-      setError(err.message || 'Failed to start demo');
-    } finally {
-      setDemoLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 px-4 sm:px-6">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="w-14 h-14 bg-emerald-700 text-white rounded-2xl flex items-center justify-center font-black text-xl mx-auto shadow-lg shadow-emerald-700/20">
-          LD
-        </div>
+        <img
+          src="/app-icon.png"
+          alt="Lena Dena"
+          className="w-16 h-16 rounded-2xl mx-auto shadow-lg shadow-amber-500/20 object-cover"
+        />
         <h2 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">
           Lena Dena
         </h2>
@@ -64,27 +50,7 @@ export default function LoginPage() {
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-7 px-5 shadow-xl shadow-slate-200/50 rounded-3xl border border-slate-200 sm:px-8 space-y-5">
-          {/* Quick 1-Click Demo Login */}
-          <button
-            type="button"
-            onClick={handleQuickDemoLogin}
-            disabled={demoLoading}
-            className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-300 text-emerald-800 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 tap-effect"
-          >
-            {demoLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-            )}
-            <span>1-Click Demo Login (Instant Access)</span>
-          </button>
 
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-white px-3 text-[11px] text-slate-400 font-bold uppercase tracking-wider absolute">
-              or sign in with mobile
-            </span>
-          </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             {error && (

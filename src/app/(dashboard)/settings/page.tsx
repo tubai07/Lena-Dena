@@ -9,7 +9,6 @@ import {
   Phone,
   QrCode,
   Globe,
-  RotateCcw,
   LogOut,
   CheckCircle,
   Loader2,
@@ -20,12 +19,11 @@ import { Language } from '@/lib/i18n';
 export default function PersonalSettingsPage() {
   const router = useRouter();
   const { lang, setLang } = useTranslation();
-  const [name, setName] = useState('Tubai');
-  const [phone, setPhone] = useState('9830012345');
-  const [upiId, setUpiId] = useState('tubai@okaxis');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [upiId, setUpiId] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -61,21 +59,6 @@ export default function PersonalSettingsPage() {
       console.error(e);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleResetDemo = async () => {
-    if (!confirm('Reset personal khata data to sample contacts (Raju, Tanvir, Sibu, Babu Mama, Rabbit 🐰)?')) return;
-    try {
-      setResetting(true);
-      const res = await fetch('/api/demo/reset', { method: 'POST' });
-      if (res.ok) {
-        window.location.href = '/';
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setResetting(false);
     }
   };
 
@@ -178,21 +161,7 @@ export default function PersonalSettingsPage() {
           </div>
         </div>
 
-        {/* Reset Sample Data */}
-        <div className="p-4 bg-orange-50/60 border border-orange-200 rounded-2xl flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-bold text-orange-900">Reset Demo Contacts</div>
-            <p className="text-[11px] text-orange-700">Restore Sibu, Raju, Tanvir, Rabbit 🐰 records</p>
-          </div>
-          <button
-            onClick={handleResetDemo}
-            disabled={resetting}
-            className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5"
-          >
-            <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
-            <span>Reset</span>
-          </button>
-        </div>
+
 
         {/* Logout */}
         <button

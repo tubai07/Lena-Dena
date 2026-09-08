@@ -19,8 +19,8 @@ export const metadata: Metadata = {
     'Simple digital ledger application for Indian small businesses, shopkeepers, freelancers, and service providers. Track credit, record payments, and collect faster.',
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
-    apple: '/icon-192.png',
+    icon: '/app-icon.png',
+    apple: '/app-icon.png',
   },
 };
 
