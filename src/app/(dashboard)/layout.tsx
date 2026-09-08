@@ -30,7 +30,6 @@ export default async function DashboardLayout({
       include: {
         transactions: {
           orderBy: { date: 'desc' },
-          take: 1,
         },
       },
     }),

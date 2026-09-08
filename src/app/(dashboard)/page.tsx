@@ -224,7 +224,7 @@ export default function SimplifiedDashboardPage() {
             <p className="font-semibold text-slate-600 text-sm">No accounts found</p>
             <p className="mt-1">
               {customers.length === 0
-                ? 'Your personal ledger is empty. Tap "Add Customer" to start.'
+                ? 'Your personal ledger is empty. Tap "Add Person" to start.'
                 : 'No accounts match the current filter criteria.'}
             </p>
             {isFilterActive && (
@@ -293,14 +293,14 @@ export default function SimplifiedDashboardPage() {
         )}
       </div>
 
-      {/* Floating Action Button (+ Add Customer) placed properly above bottom nav */}
+      {/* Floating Action Button (+ Add Person) placed properly above bottom nav */}
       <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30">
         <button
           onClick={() => openCustomerModal()}
           className="pointer-events-auto flex items-center gap-2 px-5 py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-all tap-effect"
         >
           <UserPlus className="w-5 h-5 stroke-[2.2px]" />
-          <span>Add Customer</span>
+          <span>Add Person</span>
         </button>
       </div>
 

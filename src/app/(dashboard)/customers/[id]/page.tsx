@@ -17,12 +17,63 @@ import {
   Download,
   Trash2,
 } from 'lucide-react';
-import { formatINR } from '@/lib/ledger';
+import { computeLedgerRunningBalances, formatINR } from '@/lib/ledger';
 import { formatDate } from '@/lib/utils';
 import { generateSmsLink } from '@/lib/reminders';
 import { useApp } from '@/components/common/AppContext';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
 import { TransactionDetailModal } from '@/components/transaction/TransactionDetailModal';
+
+function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []) {
+  if (!customer) return null;
+
+  const custTxs = customer.transactions || [];
+  const matchingGlobalTxs = (globalTransactions || []).filter(
+    (t: any) => t.customerId === customer.id || t.customer?.id === customer.id
+  );
+
+  // Merge and deduplicate by transaction id
+  const txMap = new Map();
+  for (const tx of custTxs) {
+    if (tx?.id && !txMap.has(tx.id)) {
+      txMap.set(tx.id, tx);
+    }
+  }
+  for (const tx of matchingGlobalTxs) {
+    if (tx?.id && !txMap.has(tx.id)) {
+      txMap.set(tx.id, tx);
+    }
+  }
+
+  const allMergedTxs = Array.from(txMap.values());
+
+  // Compute running balance chronologically
+  const computedChronological = computeLedgerRunningBalances(
+    customer.openingBalancePaisa || 0,
+    allMergedTxs
+  );
+
+  let totalGivenPaisa = 0;
+  let totalReceivedPaisa = 0;
+  for (const tx of allMergedTxs) {
+    if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
+    if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
+  }
+
+  return {
+    customer: {
+      ...customer,
+      // Store descending (newest first) to match API convention, since line 137 does .reverse()
+      transactions: [...computedChronological].reverse(),
+    },
+    stats: {
+      totalGivenPaisa,
+      totalReceivedPaisa,
+      netBalancePaisa: customer.currentBalancePaisa,
+      totalTransactions: allMergedTxs.length,
+    },
+  };
+}
 
 export default function PersonChatLedgerPage({
   params,
@@ -31,26 +82,10 @@ export default function PersonChatLedgerPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { allCustomers, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
+  const { allCustomers, allTransactions, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
 
   const cachedCustomer = allCustomers.find((c) => c.id === resolvedParams.id);
-  const [data, setData] = useState<any>(() => {
-    if (cachedCustomer) {
-      return {
-        customer: {
-          ...cachedCustomer,
-          transactions: cachedCustomer.transactions || [],
-        },
-        stats: {
-          totalGivenPaisa: 0,
-          totalReceivedPaisa: 0,
-          netBalancePaisa: cachedCustomer.currentBalancePaisa,
-          totalTransactions: cachedCustomer.transactions?.length || 0,
-        },
-      };
-    }
-    return null;
-  });
+  const [data, setData] = useState<any>(() => prepareCustomerLedgerData(cachedCustomer, allTransactions));
   const [loading, setLoading] = useState(!cachedCustomer);
   const [deleteConfirmCust, setDeleteConfirmCust] = useState(false);
   const [deleteConfirmTx, setDeleteConfirmTx] = useState<any>(null);
@@ -75,29 +110,29 @@ export default function PersonChatLedgerPage({
     fetchCustomerDetails();
   }, [resolvedParams.id, lastUpdated]);
 
-  // Instant optimistic timeline update when transaction is recorded
+  // Instant optimistic timeline update when transactions or customer data update
   useEffect(() => {
-    if (cachedCustomer && cachedCustomer.transactions && cachedCustomer.transactions.length > 0) {
-      setData((prev: any) => {
-        if (!prev?.customer) return prev;
-        const firstCachedTx = cachedCustomer.transactions[0];
-        const hasNewTx = firstCachedTx && !prev.customer.transactions?.some((t: any) => t.id === firstCachedTx.id);
-        if (hasNewTx || prev.customer.currentBalancePaisa !== cachedCustomer.currentBalancePaisa) {
+    if (cachedCustomer) {
+      const prepared = prepareCustomerLedgerData(cachedCustomer, allTransactions);
+      if (prepared) {
+        setData((prev: any) => {
+          if (!prev) return prepared;
           return {
             ...prev,
+            ...prepared,
             customer: {
-              ...prev.customer,
-              currentBalancePaisa: cachedCustomer.currentBalancePaisa,
-              transactions: hasNewTx
-                ? [firstCachedTx, ...(prev.customer.transactions || [])]
-                : prev.customer.transactions,
+              ...(prev.customer || {}),
+              ...prepared.customer,
+            },
+            stats: {
+              ...(prev.stats || {}),
+              ...prepared.stats,
             },
           };
-        }
-        return prev;
-      });
+        });
+      }
     }
-  }, [cachedCustomer]);
+  }, [cachedCustomer, allTransactions]);
 
   if (loading && !data) {
     return (
@@ -404,8 +439,8 @@ export default function PersonChatLedgerPage({
         onClose={() => setDeleteConfirmCust(false)}
         onConfirm={handleDeleteCustomer}
         title={`Delete ${customer.name}?`}
-        message="This will delete this contact and all their transaction history."
-        confirmText="Delete Contact"
+        message="This will delete this person and all their transaction history."
+        confirmText="Delete Person"
         isDestructive={true}
       />
 

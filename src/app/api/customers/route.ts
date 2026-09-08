@@ -57,7 +57,6 @@ export async function GET(req: Request) {
       include: {
         transactions: {
           orderBy: { date: 'desc' },
-          take: 1,
         },
       },
     });
@@ -135,7 +134,6 @@ export async function POST(req: Request) {
       include: {
         transactions: {
           orderBy: { date: 'desc' },
-          take: 1,
         },
       },
     });

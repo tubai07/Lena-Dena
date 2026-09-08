@@ -19,7 +19,7 @@ export const translations = {
     totalPayableSub: 'You will pay (Advance)',
     collectedThisMonth: 'Collected This Month',
     pendingPayments: 'Pending Payments',
-    addCustomer: 'Add Customer',
+    addCustomer: 'Add Person',
     addTransaction: 'Add Transaction',
     giveCredit: 'Give Credit',
     receivePayment: 'Receive Payment',

@@ -24,7 +24,7 @@ export function QuickActionModal({ isOpen, onClose, onSelectAction }: QuickActio
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Quick Actions</h3>
-            <p className="text-xs text-slate-500">Record a khata entry or add a customer</p>
+            <p className="text-xs text-slate-500">Record a khata entry or add a person</p>
           </div>
           <button
             onClick={onClose}
@@ -87,7 +87,7 @@ export function QuickActionModal({ isOpen, onClose, onSelectAction }: QuickActio
             </span>
           </button>
 
-          {/* Add Customer Button */}
+          {/* Add Person Button */}
           <button
             onClick={() => {
               onClose();
@@ -101,10 +101,10 @@ export function QuickActionModal({ isOpen, onClose, onSelectAction }: QuickActio
               </div>
               <div className="text-left">
                 <div className="font-bold text-slate-900 group-hover:text-blue-700 text-base">
-                  Add New Customer
+                  Add New Person
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
-                  Create a new customer khata book
+                  Create a new person khata book
                 </div>
               </div>
             </div>
