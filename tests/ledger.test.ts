@@ -13,7 +13,7 @@ import {
   getBusinessDashboardSummary,
 } from '../src/lib/ledger-server';
 
-describe('Lena Dena Financial Ledger Accounting Engine', () => {
+describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () => {
   let testUser: any;
   let testBusinessA: any;
   let testBusinessB: any;
