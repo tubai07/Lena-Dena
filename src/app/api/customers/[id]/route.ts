@@ -115,7 +115,7 @@ export async function DELETE(
     });
 
     if (!customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      return NextResponse.json({ success: true, message: 'Customer already deleted' });
     }
 
     await db.customer.delete({

@@ -83,7 +83,7 @@ export default function PersonChatLedgerPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { allCustomers, allTransactions, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
+  const { allCustomers, allTransactions, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, deleteCustomerFromApp, lastUpdated } = useApp();
 
   const cachedCustomer = allCustomers.find((c) => c.id === resolvedParams.id);
   const timelineEndRef = useRef<HTMLDivElement>(null);
@@ -241,8 +241,7 @@ export default function PersonChatLedgerPage({
 
   const handleDeleteCustomer = async () => {
     try {
-      await fetch(`/api/customers/${customer.id}`, { method: 'DELETE' });
-      refreshAppData();
+      await deleteCustomerFromApp(customer.id);
       router.push('/');
     } catch (e) {
       console.error(e);

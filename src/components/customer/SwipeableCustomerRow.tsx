@@ -30,7 +30,6 @@ export function SwipeableCustomerRow({
   const currentOffsetRef = useRef(0);
 
   const DELETE_BTN_WIDTH = 80;
-  const FULL_SWIPE_THRESHOLD = 160;
 
   const setRowTransform = (x: number, animate: boolean = false) => {
     if (!rowRef.current) return;
@@ -73,13 +72,13 @@ export function SwipeableCustomerRow({
 
     // Resistance when pulling right past 0
     if (newOffset > 0) {
-      newOffset = newOffset * 0.2;
+      newOffset = newOffset * 0.15;
     }
 
-    // Resistance when pulling left past full swipe
-    if (newOffset < -FULL_SWIPE_THRESHOLD) {
-      const extra = newOffset + FULL_SWIPE_THRESHOLD;
-      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.25;
+    // Resistance when pulling left past revealed delete button
+    if (newOffset < -DELETE_BTN_WIDTH) {
+      const extra = newOffset + DELETE_BTN_WIDTH;
+      newOffset = -DELETE_BTN_WIDTH + extra * 0.2;
     }
 
     setRowTransform(newOffset, false);
@@ -97,26 +96,19 @@ export function SwipeableCustomerRow({
 
     const elapsed = Date.now() - startTimeRef.current;
     const currentX = currentOffsetRef.current;
-    const isQuickFlick = elapsed < 250 && currentX < -30;
+    const isQuickFlick = elapsed < 250 && currentX < -25;
 
-    // Full swipe trigger
-    if (currentX < -FULL_SWIPE_THRESHOLD) {
+    // Snap open to reveal delete button if dragged left past -35px or quick left flick
+    if (currentX < -35 || isQuickFlick) {
       setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
       setOffsetX(-DELETE_BTN_WIDTH);
-      onDeleteRequest(c);
-      return;
-    }
-
-    // Snap open if dragged more than 40px or quick left flick
-    if (currentX < -40 || isQuickFlick) {
-      setRowTransform(-DELETE_BTN_WIDTH, true);
-      setIsOpen(true);
-      setOffsetX(-DELETE_BTN_WIDTH);
+      currentOffsetRef.current = -DELETE_BTN_WIDTH;
     } else {
       setRowTransform(0, true);
       setIsOpen(false);
       setOffsetX(0);
+      currentOffsetRef.current = 0;
     }
   };
 
@@ -136,10 +128,10 @@ export function SwipeableCustomerRow({
     const diffX = e.clientX - startXRef.current;
     let newOffset = currentOffsetRef.current + diffX;
 
-    if (newOffset > 0) newOffset = newOffset * 0.2;
-    if (newOffset < -FULL_SWIPE_THRESHOLD) {
-      const extra = newOffset + FULL_SWIPE_THRESHOLD;
-      newOffset = -FULL_SWIPE_THRESHOLD + extra * 0.25;
+    if (newOffset > 0) newOffset = newOffset * 0.15;
+    if (newOffset < -DELETE_BTN_WIDTH) {
+      const extra = newOffset + DELETE_BTN_WIDTH;
+      newOffset = -DELETE_BTN_WIDTH + extra * 0.2;
     }
 
     setRowTransform(newOffset, false);
@@ -152,22 +144,17 @@ export function SwipeableCustomerRow({
 
     const currentX = currentOffsetRef.current;
 
-    if (currentX < -FULL_SWIPE_THRESHOLD) {
+    // Snap open to reveal delete button if dragged left past -35px
+    if (currentX < -35) {
       setRowTransform(-DELETE_BTN_WIDTH, true);
       setIsOpen(true);
       setOffsetX(-DELETE_BTN_WIDTH);
-      onDeleteRequest(c);
-      return;
-    }
-
-    if (currentX < -40) {
-      setRowTransform(-DELETE_BTN_WIDTH, true);
-      setIsOpen(true);
-      setOffsetX(-DELETE_BTN_WIDTH);
+      currentOffsetRef.current = -DELETE_BTN_WIDTH;
     } else {
       setRowTransform(0, true);
       setIsOpen(false);
       setOffsetX(0);
+      currentOffsetRef.current = 0;
     }
   };
 
@@ -187,9 +174,10 @@ export function SwipeableCustomerRow({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onDeleteRequest(c);
         }}
-        className="absolute right-0 top-0 bottom-0 w-[80px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex flex-col items-center justify-center gap-1 z-0 transition-colors cursor-pointer"
+        className="absolute right-0 top-0 bottom-0 w-[80px] bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white flex flex-col items-center justify-center gap-1 z-0 transition-colors cursor-pointer tap-effect"
         aria-label={`Delete ${c.name}`}
       >
         <Trash2 className="w-5 h-5 stroke-[2.2px]" />
@@ -213,12 +201,14 @@ export function SwipeableCustomerRow({
         className="relative bg-white z-10"
       >
         <Link
-          href={isOpen || Math.abs(offsetX) > 5 ? '#' : `/customers/${c.id}`}
+          href={isOpen || Math.abs(currentOffsetRef.current) > 5 ? '#' : `/customers/${c.id}`}
           onClick={(e) => {
             if (isOpen || Math.abs(currentOffsetRef.current) > 5) {
               e.preventDefault();
+              e.stopPropagation();
               setRowTransform(0, true);
               setOffsetX(0);
+              currentOffsetRef.current = 0;
               setIsOpen(false);
             }
           }}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { QuickActionModal } from '../layout/QuickActionModal';
 import { TransactionModal } from '../transaction/TransactionModal';
 import { PaymentSuccessModal } from '../transaction/PaymentSuccessModal';
@@ -19,6 +19,7 @@ interface AppContextType {
   setAllCustomers: React.Dispatch<React.SetStateAction<any[]>>;
   allTransactions: any[];
   setAllTransactions: React.Dispatch<React.SetStateAction<any[]>>;
+  deleteCustomerFromApp: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -38,6 +39,7 @@ export function AppProvider({
   const [allCustomers, setAllCustomers] = useState<any[]>(initialCustomers || []);
   const [allTransactions, setAllTransactions] = useState<any[]>(initialTransactions || []);
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const deletedCustomerIdsRef = useRef<Set<string>>(new Set());
 
   // Modals state
   const [quickActionOpen, setQuickActionOpen] = useState(false);
@@ -59,10 +61,28 @@ export function AppProvider({
       const res = await fetch('/api/customers?filter=all');
       const data = await res.json();
       if (data.customers) {
-        setAllCustomers(data.customers);
+        setAllCustomers(
+          data.customers.filter((c: any) => !deletedCustomerIdsRef.current.has(c.id))
+        );
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const deleteCustomerFromApp = async (id: string) => {
+    // 1. Immediately register in deleted IDs set (prevents race-condition resurrections forever)
+    deletedCustomerIdsRef.current.add(id);
+
+    // 2. Instant optimistic removal from UI (0ms delay)
+    setAllCustomers((prev) => prev.filter((c) => c.id !== id));
+    setAllTransactions((prev) => prev.filter((t) => t.customerId !== id && t.customer?.id !== id));
+
+    // 3. Persist deletion on server
+    try {
+      await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Failed to delete customer on server:', e);
     }
   };
 
@@ -273,6 +293,7 @@ export function AppProvider({
         setAllCustomers,
         allTransactions,
         setAllTransactions,
+        deleteCustomerFromApp,
       }}
     >
       {children}

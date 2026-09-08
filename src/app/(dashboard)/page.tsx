@@ -19,7 +19,7 @@ import { SwipeableCustomerRow } from '@/components/customer/SwipeableCustomerRow
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
 
 export default function SimplifiedDashboardPage() {
-  const { openCustomerModal, allCustomers, setAllCustomers, setAllTransactions, refreshAppData, lastUpdated, business } = useApp();
+  const { openCustomerModal, allCustomers, deleteCustomerFromApp, business } = useApp();
 
   const [showBalance, setShowBalance] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -40,11 +40,12 @@ export default function SimplifiedDashboardPage() {
           const currentScrollY = window.scrollY;
           const diff = currentScrollY - lastScrollY.current;
 
-          // Hysteresis threshold: requires intentional scroll down past 50px,
-          // and expands cleanly when scrolling up (>10px) or near top (<=20px)
-          if (currentScrollY > 50 && diff > 8) {
+          // Natural scroll behavior:
+          // Scroll down past 35px -> collapse smoothly
+          // Scroll up or near top (<= 15px) -> expand smoothly
+          if (currentScrollY > 35 && diff > 1) {
             setIsScrolledDown(true);
-          } else if (diff < -10 || currentScrollY <= 20) {
+          } else if (diff < -2 || currentScrollY <= 15) {
             setIsScrolledDown(false);
           }
           lastScrollY.current = currentScrollY;
@@ -63,17 +64,11 @@ export default function SimplifiedDashboardPage() {
     const target = deleteCustomerTarget;
     setDeleteCustomerTarget(null);
 
-    // Instant optimistic removal from UI (0ms delay)
-    setAllCustomers((prev) => prev.filter((c) => c.id !== target.id));
-    setAllTransactions((prev) => prev.filter((t) => t.customerId !== target.id && t.customer?.id !== target.id));
-
+    setDeletingCustomer(true);
     try {
-      setDeletingCustomer(true);
-      await fetch(`/api/customers/${target.id}`, { method: 'DELETE' });
-      refreshAppData();
+      await deleteCustomerFromApp(target.id);
     } catch (e) {
       console.error('Failed to delete customer:', e);
-      refreshAppData();
     } finally {
       setDeletingCustomer(false);
     }
@@ -306,11 +301,11 @@ export default function SimplifiedDashboardPage() {
         )}
       </div>
 
-      {/* Floating Action Button: morphs smoothly to icon-only when scrolling down */}
-      <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30">
+      {/* Floating Action Button: smooth animated morphing */}
+      <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
         <button
           onClick={() => openCustomerModal()}
-          className={`pointer-events-auto h-[52px] flex items-center bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-[width,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] tap-effect overflow-hidden cursor-pointer ${
+          className={`pointer-events-auto fab-add-person flex items-center bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/30 overflow-hidden cursor-pointer ${
             isScrolledDown ? 'w-[52px]' : 'w-[146px]'
           }`}
           title="Add Person"
@@ -320,7 +315,7 @@ export default function SimplifiedDashboardPage() {
             <UserPlus className="w-5 h-5 stroke-[2.2px]" />
           </div>
           <span
-            className={`whitespace-nowrap transition-[max-width,opacity,padding] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden font-bold pr-4 ${
+            className={`whitespace-nowrap fab-text-wrapper overflow-hidden font-bold pr-4 ${
               isScrolledDown ? 'max-w-0 opacity-0 !pr-0' : 'max-w-[90px] opacity-100'
             }`}
           >
