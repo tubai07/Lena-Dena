@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     const businessId = session.businessId;
 
     const body = await req.json();
-    const { name, phone, email, address, notes, openingBalance = 0, balanceType = 'OWES_ME' } = body;
+    const { id, name, phone, email, address, notes, openingBalance = 0, balanceType = 'OWES_ME' } = body;
 
     if (!name || !phone) {
       return NextResponse.json({ error: 'Customer name and phone number are required' }, { status: 400 });
@@ -92,6 +92,7 @@ export async function POST(req: Request) {
       // Direct single insert - 0 transaction overhead!
       const customer = await db.customer.create({
         data: {
+          ...(id ? { id } : {}),
           businessId,
           name: name.trim(),
           phone: phone.trim(),
@@ -112,6 +113,7 @@ export async function POST(req: Request) {
     // Atomic insert with initial transaction in single query!
     const customer = await db.customer.create({
       data: {
+        ...(id ? { id } : {}),
         businessId,
         name: name.trim(),
         phone: phone.trim(),

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Phone, IndianRupee, Loader2 } from 'lucide-react';
-import { formatINR } from '@/lib/ledger';
+import { formatINR, toPaisa } from '@/lib/ledger';
+import { generateEntityId, pendingCustomerCreations } from '@/lib/utils';
 
 interface CustomerFormModalProps {
   isOpen: boolean;
@@ -51,22 +52,72 @@ export function CustomerFormModal({
     const trimmedPhone = phone.trim() || '9999999999';
     const numOpening = openingBalance ? parseFloat(openingBalance) : 0;
 
+    const url = initialData ? `/api/customers/${initialData.id}` : '/api/customers';
+    const method = initialData ? 'PUT' : 'POST';
+
+    const body: any = {
+      name: trimmedName,
+      phone: trimmedPhone,
+      ...(!initialData && {
+        openingBalance: numOpening,
+        balanceType,
+      }),
+    };
+
+    // For new persons: 0ms INSTANT FEEDBACK using pre-generated database ID
+    if (!initialData) {
+      const customerId = generateEntityId('c');
+      const openingPaisa = balanceType === 'I_OWE' ? -toPaisa(numOpening) : toPaisa(numOpening);
+
+      const optimisticCustomer = {
+        id: customerId,
+        name: trimmedName,
+        phone: trimmedPhone,
+        currentBalancePaisa: openingPaisa,
+        openingBalancePaisa: openingPaisa,
+        status: openingPaisa === 0 ? 'SETTLED' : 'ACTIVE',
+        transactions: openingPaisa !== 0 ? [{
+          id: generateEntityId('t'),
+          customerId,
+          type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
+          amountPaisa: Math.abs(openingPaisa),
+          paymentMethod: 'OTHER',
+          date: new Date().toISOString(),
+          description: 'Opening Balance',
+          createdAt: new Date().toISOString(),
+        }] : [],
+      };
+
+      // Close modal and update UI with 0ms delay!
+      onSuccess(optimisticCustomer);
+      onClose();
+
+      // Background server creation with the EXACT persistent ID
+      const creationPromise = fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, id: customerId }),
+      })
+        .then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save contact');
+          return data;
+        })
+        .catch((err) => {
+          console.error('Background customer sync failed:', err);
+        })
+        .finally(() => {
+          pendingCustomerCreations.delete(customerId);
+        });
+
+      pendingCustomerCreations.set(customerId, creationPromise);
+      return;
+    }
+
+    // For edits, await the PUT request
     try {
       setLoading(true);
       setError('');
-
-      const url = initialData ? `/api/customers/${initialData.id}` : '/api/customers';
-      const method = initialData ? 'PUT' : 'POST';
-
-      const body = {
-        name: trimmedName,
-        phone: trimmedPhone,
-        ...(!initialData && {
-          openingBalance: numOpening,
-          balanceType,
-        }),
-      };
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },

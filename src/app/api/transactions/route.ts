@@ -169,7 +169,8 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Transaction deleted and balance recalculated',
+      transaction: result.transaction,
+      message: 'Transaction cancelled and balance recalculated',
       newBalancePaisa: result.newBalancePaisa,
     });
   } catch (err: any) {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   Share2,
@@ -15,15 +15,58 @@ import {
 import { formatINR } from '@/lib/ledger';
 import { useApp } from '@/components/common/AppContext';
 import { GlobalSearchModal } from '@/components/common/GlobalSearchModal';
+import { SwipeableCustomerRow } from '@/components/customer/SwipeableCustomerRow';
+import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
 
 export default function SimplifiedDashboardPage() {
-  const { openCustomerModal, allCustomers, lastUpdated, business } = useApp();
+  const { openCustomerModal, allCustomers, setAllCustomers, setAllTransactions, refreshAppData, lastUpdated, business } = useApp();
 
   const [showBalance, setShowBalance] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'due' | 'advance' | 'settled'>('all');
   const [sortOption, setSortOption] = useState<'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc'>('amount_desc');
+  const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<any>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState(false);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
+  const lastScrollY = useRef(0);
+
+  // Scroll detection: collapse Add Person button to icon-only on scroll down
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > 40 && currentScrollY > lastScrollY.current) {
+        setIsScrolledDown(true);
+      } else if (currentScrollY < lastScrollY.current || currentScrollY <= 15) {
+        setIsScrolledDown(false);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleDeleteCustomer = async () => {
+    if (!deleteCustomerTarget) return;
+    const target = deleteCustomerTarget;
+    setDeleteCustomerTarget(null);
+
+    // Instant optimistic removal from UI (0ms delay)
+    setAllCustomers((prev) => prev.filter((c) => c.id !== target.id));
+    setAllTransactions((prev) => prev.filter((t) => t.customerId !== target.id && t.customer?.id !== target.id));
+
+    try {
+      setDeletingCustomer(true);
+      await fetch(`/api/customers/${target.id}`, { method: 'DELETE' });
+      refreshAppData();
+    } catch (e) {
+      console.error('Failed to delete customer:', e);
+      refreshAppData();
+    } finally {
+      setDeletingCustomer(false);
+    }
+  };
 
   const customers = allCustomers;
   const loading = false;
@@ -240,67 +283,38 @@ export default function SimplifiedDashboardPage() {
             )}
           </div>
         ) : (
-          filteredCustomers.map((c) => {
-            const isDue = c.currentBalancePaisa > 0;
-            const isSettled = c.currentBalancePaisa === 0;
-
-            return (
-              <Link
-                key={c.id}
-                href={`/customers/${c.id}`}
-                className="px-4 py-3.5 flex items-center justify-between hover:bg-slate-50/90 transition-colors group tap-effect"
-              >
-                {/* Avatar & Contact Details */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-12 h-12 rounded-full font-bold flex items-center justify-center text-base shrink-0 ${getAvatarBg(
-                      c.name
-                    )}`}
-                  >
-                    {c.name.includes('🐰') ? '🐰' : c.name.slice(0, 1).toUpperCase()}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="font-bold text-slate-900 text-sm sm:text-base group-hover:text-emerald-700 transition-colors truncate">
-                      {c.name}
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5 truncate">
-                      <span className="truncate">{getSubtext(c)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Amount Due on Right */}
-                <div className="text-right shrink-0 pl-3">
-                  <div
-                    className={`text-base font-black ${
-                      isDue
-                        ? 'text-orange-600'
-                        : isSettled
-                        ? 'text-emerald-600'
-                        : 'text-emerald-700'
-                    }`}
-                  >
-                    {formatINR(c.currentBalancePaisa, true)}
-                  </div>
-                  <span className="text-[11px] font-bold text-slate-400 block">
-                    {isSettled ? 'Settled' : isDue ? 'Due' : 'Advance'}
-                  </span>
-                </div>
-              </Link>
-            );
-          })
+          filteredCustomers.map((c) => (
+            <SwipeableCustomerRow
+              key={c.id}
+              customer={c}
+              getAvatarBg={getAvatarBg}
+              getSubtext={getSubtext}
+              onDeleteRequest={(cust) => setDeleteCustomerTarget(cust)}
+            />
+          ))
         )}
       </div>
 
-      {/* Floating Action Button (+ Add Person) placed properly above bottom nav */}
+      {/* Floating Action Button: morphs to icon-only when scrolling down */}
       <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30">
         <button
           onClick={() => openCustomerModal()}
-          className="pointer-events-auto flex items-center gap-2 px-5 py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-all tap-effect"
+          className={`pointer-events-auto flex items-center justify-center bg-emerald-700 hover:bg-emerald-800 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-900/25 active:scale-95 transition-all duration-300 ease-in-out tap-effect overflow-hidden cursor-pointer ${
+            isScrolledDown
+              ? 'w-14 h-14 p-0'
+              : 'px-5 py-3.5 gap-2'
+          }`}
+          title="Add Person"
+          aria-label="Add Person"
         >
-          <UserPlus className="w-5 h-5 stroke-[2.2px]" />
-          <span>Add Person</span>
+          <UserPlus className="w-5 h-5 stroke-[2.2px] shrink-0" />
+          <span
+            className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${
+              isScrolledDown ? 'max-w-0 opacity-0' : 'max-w-[120px] opacity-100'
+            }`}
+          >
+            Add Person
+          </span>
         </button>
       </div>
 
@@ -421,6 +435,18 @@ export default function SimplifiedDashboardPage() {
 
       {/* Global Search Dialog */}
       <GlobalSearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      {/* Delete Customer Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={!!deleteCustomerTarget}
+        onClose={() => setDeleteCustomerTarget(null)}
+        onConfirm={handleDeleteCustomer}
+        title={`Delete ${deleteCustomerTarget?.name}?`}
+        message={`Are you sure you want to delete ${deleteCustomerTarget?.name} and all their transaction records? This action cannot be undone.`}
+        confirmText="Delete Person"
+        loading={deletingCustomer}
+        isDestructive={true}
+      />
     </div>
   );
 }

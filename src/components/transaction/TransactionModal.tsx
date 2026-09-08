@@ -9,6 +9,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
+import { pendingCustomerCreations } from '@/lib/utils';
 
 interface CustomerOption {
   id: string;
@@ -128,12 +129,23 @@ export function TransactionModal({
       }
     }
 
+    const finalCustomerId = targetCustomerId || customer.id;
+
+    // If customer record is actively being created in background, await it so foreign key is present
+    if (pendingCustomerCreations.has(finalCustomerId)) {
+      try {
+        await pendingCustomerCreations.get(finalCustomerId);
+      } catch (e) {
+        console.error('Pending customer creation wait error:', e);
+      }
+    }
+
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId: targetCustomerId || customer.id,
+          customerId: finalCustomerId,
           type,
           amount: numAmount,
           paymentMethod: 'UPI',

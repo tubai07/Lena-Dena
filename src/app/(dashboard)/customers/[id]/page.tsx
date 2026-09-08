@@ -18,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { computeLedgerRunningBalances, formatINR } from '@/lib/ledger';
-import { formatDate } from '@/lib/utils';
+import { formatDate, pendingCustomerCreations } from '@/lib/utils';
 import { generateSmsLink } from '@/lib/reminders';
 import { useApp } from '@/components/common/AppContext';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
@@ -56,8 +56,10 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
   let totalGivenPaisa = 0;
   let totalReceivedPaisa = 0;
   for (const tx of allMergedTxs) {
-    if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
-    if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
+    if (!tx.isDeleted) {
+      if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
+      if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
+    }
   }
 
   return {
@@ -103,6 +105,14 @@ export default function PersonChatLedgerPage({
 
   const fetchCustomerDetails = async () => {
     try {
+      if (pendingCustomerCreations.has(resolvedParams.id)) {
+        try {
+          await pendingCustomerCreations.get(resolvedParams.id);
+        } catch (e) {
+          console.error('Pending customer creation wait error:', e);
+        }
+      }
+
       if (!data) setLoading(true);
       const res = await fetch(`/api/customers/${resolvedParams.id}`);
       const json = await res.json();
@@ -241,13 +251,36 @@ export default function PersonChatLedgerPage({
 
   const handleDeleteTransaction = async () => {
     if (!deleteConfirmTx) return;
+    const txId = deleteConfirmTx.id;
+    setDeleteConfirmTx(null);
+
+    // Instant optimistic strike-through and balance recalculation (0ms)
+    setData((prev: any) => {
+      if (!prev?.customer?.transactions) return prev;
+      const updatedTxs = prev.customer.transactions.map((t: any) =>
+        t.id === txId ? { ...t, isDeleted: true } : t
+      );
+      const withBalances = computeLedgerRunningBalances(
+        prev.customer.openingBalancePaisa || 0,
+        updatedTxs
+      );
+      return {
+        ...prev,
+        customer: {
+          ...prev.customer,
+          transactions: withBalances,
+        },
+      };
+    });
+
     try {
-      await fetch(`/api/transactions?id=${deleteConfirmTx.id}`, { method: 'DELETE' });
-      setDeleteConfirmTx(null);
+      await fetch(`/api/transactions?id=${txId}`, { method: 'DELETE' });
       fetchCustomerDetails();
       refreshAppData();
     } catch (e) {
       console.error(e);
+      fetchCustomerDetails();
+      refreshAppData();
     }
   };
 
@@ -330,45 +363,67 @@ export default function PersonChatLedgerPage({
                 <div
                   className={`flex flex-col ${
                     isReceived ? 'items-start' : 'items-end'
-                  } group`}
+                  } group ${tx.isDeleted ? 'opacity-65' : ''}`}
                 >
                   {/* Bubble Card */}
                   <div
                     onClick={() => setSelectedTxForDetail(tx)}
-                    className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs max-w-[82%] cursor-pointer hover:border-slate-300 tap-effect"
+                    className={`border rounded-2xl p-3.5 shadow-xs max-w-[82%] cursor-pointer tap-effect transition-all ${
+                      tx.isDeleted
+                        ? 'bg-slate-100/90 border-slate-300'
+                        : 'bg-white border-slate-200/90 hover:border-slate-300'
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-lg sm:text-xl font-black flex items-center gap-1 ${
-                          isReceived ? 'text-emerald-700' : 'text-orange-600'
+                          tx.isDeleted
+                            ? 'text-slate-400 line-through'
+                            : isReceived
+                            ? 'text-emerald-700'
+                            : 'text-orange-600'
                         }`}
                       >
                         {isReceived ? (
-                          <ArrowDown className="w-5 h-5 stroke-[3px]" />
+                          <ArrowDown className={`w-5 h-5 stroke-[3px] ${tx.isDeleted ? 'text-slate-400' : ''}`} />
                         ) : (
-                          <ArrowUp className="w-5 h-5 stroke-[3px]" />
+                          <ArrowUp className={`w-5 h-5 stroke-[3px] ${tx.isDeleted ? 'text-slate-400' : ''}`} />
                         )}
-                        {formatINR(tx.amountPaisa, true)}
+                        <span className={tx.isDeleted ? 'line-through' : ''}>
+                          {formatINR(tx.amountPaisa, true)}
+                        </span>
                       </span>
 
                       <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
                         {formatTime(tx.date)}
                       </span>
 
-                      <Check className="w-4 h-4 text-slate-400 stroke-[2.5px]" />
+                      {tx.isDeleted ? (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
+                          Cancelled
+                        </span>
+                      ) : (
+                        <Check className="w-4 h-4 text-slate-400 stroke-[2.5px]" />
+                      )}
                     </div>
 
                     {tx.description && (
-                      <div className="text-sm text-slate-700 font-medium mt-1">
+                      <div
+                        className={`text-sm font-medium mt-1 ${
+                          tx.isDeleted ? 'text-slate-400 line-through' : 'text-slate-700'
+                        }`}
+                      >
                         {tx.description}
                       </div>
                     )}
                   </div>
 
-                  {/* Running Due Balance under Bubble matching Screenshot 1 */}
-                  <div className="text-xs text-slate-500 font-semibold px-2 mt-0.5">
-                    {formatINR(tx.runningBalancePaisa, true)} Due
-                  </div>
+                  {/* Running Due Balance under Bubble (hidden if cancelled) */}
+                  {!tx.isDeleted && (
+                    <div className="text-xs text-slate-500 font-semibold px-2 mt-0.5">
+                      {formatINR(tx.runningBalancePaisa, true)} Due
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -463,14 +518,14 @@ export default function PersonChatLedgerPage({
         </div>
       </div>
 
-      {/* Confirmation for Deleting Transaction */}
+      {/* Confirmation for Cancelling/Deleting Transaction */}
       <ConfirmationDialog
         isOpen={!!deleteConfirmTx}
         onClose={() => setDeleteConfirmTx(null)}
         onConfirm={handleDeleteTransaction}
-        title="Delete this transaction?"
-        message="Deleting this transaction will adjust the running balance for this contact."
-        confirmText="Delete"
+        title="Cancel this transaction?"
+        message="This entry will be struck through and greyed out, and its amount will be removed from the running balance."
+        confirmText="Cancel Entry"
         isDestructive={true}
       />
 

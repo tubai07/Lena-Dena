@@ -36,8 +36,10 @@ export default function ActivityPage() {
     const txId = deleteConfirmTx.id;
     setDeleteConfirmTx(null);
 
-    // Instant optimistic removal from UI (0ms delay)
-    setAllTransactions((prev) => prev.filter((t) => t.id !== txId));
+    // Instant optimistic strike-through (0ms delay)
+    setAllTransactions((prev) =>
+      prev.map((t) => (t.id === txId ? { ...t, isDeleted: true } : t))
+    );
 
     try {
       await fetch(`/api/transactions?id=${txId}`, { method: 'DELETE' });
@@ -100,12 +102,18 @@ export default function ActivityPage() {
             return (
               <div
                 key={tx.id}
-                className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                className={`px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                  tx.isDeleted ? 'bg-slate-50/70 opacity-65' : ''
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                      isReceived ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-700'
+                      tx.isDeleted
+                        ? 'bg-slate-200 text-slate-400'
+                        : isReceived
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-orange-100 text-orange-700'
                     }`}
                   >
                     {isReceived ? (
@@ -118,12 +126,23 @@ export default function ActivityPage() {
                   <div className="min-w-0">
                     <Link
                       href={`/customers/${tx.customer?.id}`}
-                      className="font-bold text-sm text-slate-900 hover:text-emerald-700 transition-colors truncate block"
+                      className={`font-bold text-sm truncate block ${
+                        tx.isDeleted
+                          ? 'text-slate-400 line-through'
+                          : 'text-slate-900 hover:text-emerald-700'
+                      }`}
                     >
                       {tx.customer?.name}
                     </Link>
-                    <div className="text-xs text-slate-400 mt-0.5 truncate">
-                      {formatDate(tx.date)} {tx.description ? `• ${tx.description}` : ''}
+                    <div className="text-xs text-slate-400 mt-0.5 truncate flex items-center gap-1.5">
+                      <span className={tx.isDeleted ? 'line-through' : ''}>
+                        {formatDate(tx.date)} {tx.description ? `• ${tx.description}` : ''}
+                      </span>
+                      {tx.isDeleted && (
+                        <span className="text-[10px] font-bold text-rose-500 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                          Cancelled
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -131,20 +150,26 @@ export default function ActivityPage() {
                 <div className="flex items-center gap-3 pl-2 shrink-0">
                   <span
                     className={`text-sm font-black ${
-                      isReceived ? 'text-emerald-700' : 'text-orange-600'
+                      tx.isDeleted
+                        ? 'text-slate-400 line-through'
+                        : isReceived
+                        ? 'text-emerald-700'
+                        : 'text-orange-600'
                     }`}
                   >
                     {isReceived ? '↓ ' : '↑ '}
                     {formatINR(tx.amountPaisa, true)}
                   </span>
 
-                  <button
-                    onClick={() => setDeleteConfirmTx(tx)}
-                    className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {!tx.isDeleted && (
+                    <button
+                      onClick={() => setDeleteConfirmTx(tx)}
+                      className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg tap-effect cursor-pointer"
+                      title="Cancel transaction"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -152,13 +177,14 @@ export default function ActivityPage() {
         )}
       </div>
 
+      {/* Delete / Cancel Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={!!deleteConfirmTx}
         onClose={() => setDeleteConfirmTx(null)}
         onConfirm={handleDelete}
-        title="Delete transaction?"
-        message="This will adjust the contact's running balance."
-        confirmText="Delete"
+        title="Cancel this transaction?"
+        message="This entry will be struck through and greyed out, and its amount will be removed from customer balances."
+        confirmText="Cancel Entry"
         isDestructive={true}
       />
     </div>

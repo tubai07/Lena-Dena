@@ -194,30 +194,40 @@ export function TransactionDetailModal({
               <div className="inline-flex items-center justify-center gap-2">
                 <span
                   className={`text-4xl sm:text-5xl font-black ${
-                    isPayment ? 'text-emerald-700' : 'text-orange-600'
+                    transaction.isDeleted
+                      ? 'text-slate-400 line-through'
+                      : isPayment
+                      ? 'text-emerald-700'
+                      : 'text-orange-600'
                   }`}
                 >
                   {formatINR(transaction.amountPaisa, true)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAmountInputStr((transaction.amountPaisa / 100).toString());
-                    setEditingAmount(true);
-                  }}
-                  className="p-1 hover:opacity-80 tap-effect"
-                  title="Edit amount"
-                >
-                  <Edit2
-                    className={`w-6 h-6 stroke-[2.5px] ${
-                      isPayment ? 'text-emerald-700' : 'text-orange-600'
-                    }`}
-                  />
-                </button>
+                {!transaction.isDeleted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmountInputStr((transaction.amountPaisa / 100).toString());
+                      setEditingAmount(true);
+                    }}
+                    className="p-1 hover:opacity-80 tap-effect"
+                    title="Edit amount"
+                  >
+                    <Edit2
+                      className={`w-6 h-6 stroke-[2.5px] ${
+                        isPayment ? 'text-emerald-700' : 'text-orange-600'
+                      }`}
+                    />
+                  </button>
+                )}
               </div>
             )}
             <span className="block text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">
-              {isPayment ? 'Payment Received (Jama)' : 'Credit Given (Udhar)'}
+              {transaction.isDeleted
+                ? 'Cancelled Entry (Excluded from balance)'
+                : isPayment
+                ? 'Payment Received (Jama)'
+                : 'Credit Given (Udhar)'}
             </span>
           </div>
 
@@ -283,26 +293,32 @@ export function TransactionDetailModal({
             </div>
           </div>
 
-          {/* Delete Card matching Screenshot */}
-          <button
-            type="button"
-            onClick={() => setDeleteConfirm(true)}
-            className="w-full bg-slate-50 border border-slate-200/80 hover:bg-rose-50 hover:border-rose-200 rounded-2xl p-3.5 flex items-center gap-3 text-xs font-bold text-rose-600 tap-effect transition-colors"
-          >
-            <Trash2 className="w-5 h-5 text-rose-600" />
-            <span>Delete</span>
-          </button>
+          {/* Delete / Cancel Entry Card */}
+          {transaction.isDeleted ? (
+            <div className="w-full bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-center justify-center gap-2 text-xs font-bold text-rose-700">
+              <span>This entry was cancelled (struck through in ledger)</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(true)}
+              className="w-full bg-slate-50 border border-slate-200/80 hover:bg-rose-50 hover:border-rose-200 rounded-2xl p-3.5 flex items-center gap-3 text-xs font-bold text-rose-600 tap-effect transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-5 h-5 text-rose-600" />
+              <span>Cancel Entry (Strike through)</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete / Cancel Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={deleteConfirm}
         onClose={() => setDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title="Delete this transaction?"
-        message="Deleting this entry will adjust the running balance for this contact."
-        confirmText="Delete Transaction"
+        title="Cancel this transaction?"
+        message="This entry will be struck through and greyed out in the ledger, and its amount will be removed from customer balances."
+        confirmText="Cancel Entry"
         loading={deleting}
         isDestructive={true}
       />

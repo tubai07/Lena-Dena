@@ -37,3 +37,16 @@ export function getInitials(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
+
+/**
+ * Pre-generates collision-resistant CUID-format IDs on the client
+ * so entities can be rendered instantly (0ms) without waiting for server response.
+ */
+export function generateEntityId(prefix: string = 'c'): string {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+  return `${prefix}${timestamp}${randomPart}`.substring(0, 25);
+}
+
+// Global in-flight tracking map to coordinate optimistic creation with subsequent actions
+export const pendingCustomerCreations = new Map<string, Promise<any>>();

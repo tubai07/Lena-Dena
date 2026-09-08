@@ -43,16 +43,19 @@ export function formatINRShort(amount: number, isPaisa: boolean = false): string
 /**
  * Computes running balances for a customer's ledger view in chronological order.
  */
-export function computeLedgerRunningBalances(
-  openingBalancePaisa: number,
-  transactions: Array<{
+export function computeLedgerRunningBalances<
+  T extends {
     id: string;
     type: string;
     amountPaisa: number;
     date: Date | string;
+    isDeleted?: boolean;
     [key: string]: any;
-  }>
-) {
+  }
+>(
+  openingBalancePaisa: number,
+  transactions: T[]
+): (T & { runningBalancePaisa: number })[] {
   // Sort ascending by date with deterministic secondary tiebreakers
   const sorted = [...transactions].sort((a, b) => {
     const timeA = new Date(a.date).getTime();
@@ -66,10 +69,13 @@ export function computeLedgerRunningBalances(
 
   let currentPaisa = openingBalancePaisa;
   return sorted.map((tx) => {
-    if (tx.type === 'CREDIT') {
-      currentPaisa += tx.amountPaisa;
-    } else if (tx.type === 'PAYMENT') {
-      currentPaisa -= tx.amountPaisa;
+    // If a transaction was deleted / cancelled, it is struck through and does NOT affect balance
+    if (!tx.isDeleted) {
+      if (tx.type === 'CREDIT') {
+        currentPaisa += tx.amountPaisa;
+      } else if (tx.type === 'PAYMENT') {
+        currentPaisa -= tx.amountPaisa;
+      }
     }
     return {
       ...tx,

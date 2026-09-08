@@ -4,6 +4,7 @@ import {
   toPaisa,
   toRupees,
   formatINR,
+  computeLedgerRunningBalances,
 } from '../src/lib/ledger';
 import {
   recordLedgerTransaction,
@@ -239,5 +240,49 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
 
     expect(txPayment.newBalancePaisa).toBe(4000000000); // ₹4 Crores remaining
     expect(formatINR(txPayment.newBalancePaisa, true)).toBe('₹4,00,00,000');
+  });
+
+  it('soft-deletes (cancels) a transaction instead of purging, striking through and excluding from balance', async () => {
+    const cust = await db.customer.create({
+      data: {
+        businessId: testBusinessA.id,
+        name: 'Soft Delete Test',
+        phone: '9777666555',
+        openingBalancePaisa: 0,
+        currentBalancePaisa: 0,
+      },
+    });
+
+    const tx1 = await recordLedgerTransaction({
+      businessId: testBusinessA.id,
+      customerId: cust.id,
+      type: 'CREDIT',
+      amountPaisa: toPaisa(1000),
+    });
+
+    const tx2 = await recordLedgerTransaction({
+      businessId: testBusinessA.id,
+      customerId: cust.id,
+      type: 'CREDIT',
+      amountPaisa: toPaisa(500),
+    });
+
+    expect(tx2.newBalancePaisa).toBe(toPaisa(1500));
+
+    // Delete tx2 -> should soft delete and recalculate balance to 1000
+    const delResult = await deleteLedgerTransaction(tx2.transaction.id, testBusinessA.id);
+    expect(delResult.newBalancePaisa).toBe(toPaisa(1000));
+    expect(delResult.transaction.isDeleted).toBe(true);
+
+    // Verify tx2 still exists in DB with isDeleted: true
+    const tx2InDb = await db.transaction.findUnique({ where: { id: tx2.transaction.id } });
+    expect(tx2InDb).not.toBeNull();
+    expect(tx2InDb?.isDeleted).toBe(true);
+
+    // Verify running balances calculation strikes it through and doesn't affect running balance
+    const running = computeLedgerRunningBalances(0, [tx1.transaction, delResult.transaction]);
+    expect(running[0].runningBalancePaisa).toBe(toPaisa(1000));
+    expect(running[1].isDeleted).toBe(true);
+    expect(running[1].runningBalancePaisa).toBe(toPaisa(1000)); // Unchanged!
   });
 });

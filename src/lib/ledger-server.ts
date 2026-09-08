@@ -19,9 +19,9 @@ export async function recalculateCustomerBalance(
     throw new Error(`Customer with ID ${customerId} not found`);
   }
 
-  // Aggregate credits and payments
+  // Aggregate credits and payments excluding cancelled/deleted entries
   const transactions = await client.transaction.findMany({
-    where: { customerId },
+    where: { customerId, isDeleted: false },
     select: { type: true, amountPaisa: true },
   });
 
@@ -114,7 +114,7 @@ export async function recordLedgerTransaction(data: {
 }
 
 /**
- * Deletes a transaction and recalculates the balance.
+ * Soft deletes / cancels a transaction (strike-through & greyed out) and recalculates the balance.
  */
 export async function deleteLedgerTransaction(transactionId: string, businessId: string) {
   return await db.$transaction(async (tx) => {
@@ -126,12 +126,16 @@ export async function deleteLedgerTransaction(transactionId: string, businessId:
       throw new Error('Transaction not found');
     }
 
-    await tx.transaction.delete({
+    const updated = await tx.transaction.update({
       where: { id: transactionId },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
     });
 
     const newBalancePaisa = await recalculateCustomerBalance(transaction.customerId, tx);
-    return { customerId: transaction.customerId, newBalancePaisa };
+    return { customerId: transaction.customerId, newBalancePaisa, transaction: updated };
   });
 }
 
