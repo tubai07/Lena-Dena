@@ -31,10 +31,27 @@ export default function PersonChatLedgerPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
+  const { allCustomers, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
 
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedCustomer = allCustomers.find((c) => c.id === resolvedParams.id);
+  const [data, setData] = useState<any>(() => {
+    if (cachedCustomer) {
+      return {
+        customer: {
+          ...cachedCustomer,
+          transactions: cachedCustomer.transactions || [],
+        },
+        stats: {
+          totalGivenPaisa: 0,
+          totalReceivedPaisa: 0,
+          netBalancePaisa: cachedCustomer.currentBalancePaisa,
+          totalTransactions: cachedCustomer.transactions?.length || 0,
+        },
+      };
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(!cachedCustomer);
   const [deleteConfirmCust, setDeleteConfirmCust] = useState(false);
   const [deleteConfirmTx, setDeleteConfirmTx] = useState<any>(null);
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<any>(null);
@@ -93,7 +110,7 @@ export default function PersonChatLedgerPage({
 
   // Group transactions by date for centered date pills
   // Re-order ascending for chronological chat flow (oldest at top, newest at bottom)
-  const chronologicalTx = [...customer.transactions].reverse();
+  const chronologicalTx = [...(customer.transactions || [])].reverse();
 
   // Export CSV
   const handleExportCSV = () => {

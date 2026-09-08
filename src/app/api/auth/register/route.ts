@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { setSession } from '@/lib/auth';
+import { normalizePhone, getPhoneLookupVariants } from '@/lib/phone';
 
 export async function POST(req: Request) {
   try {
@@ -10,12 +11,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Name, mobile number, and password are required' }, { status: 400 });
     }
 
-    const cleanPhone = phone.trim();
+    const normalized = normalizePhone(phone);
+    const cleanPhone = normalized || phone.trim();
     const cleanName = name.trim();
+    const phoneVariants = getPhoneLookupVariants(phone);
 
-    // Check if phone already registered
+    // Check if phone already registered under any format
     const existing = await db.user.findFirst({
-      where: { phone: cleanPhone },
+      where: {
+        OR: phoneVariants.map((p) => ({ phone: p })),
+      },
     });
 
     if (existing) {

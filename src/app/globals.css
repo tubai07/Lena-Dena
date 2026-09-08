@@ -94,21 +94,3 @@ body {
 .tap-effect:active {
   transform: scale(0.96);
 }
-
-/* Keypad styling */
-.keypad-button {
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  border-radius: 1rem;
-  background-color: #f1f5f9;
-  color: #1e293b;
-  transition: all 0.08s ease;
-}
-.keypad-button:active {
-  background-color: #cbd5e1;
-  transform: scale(0.94);
-}

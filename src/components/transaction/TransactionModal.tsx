@@ -7,9 +7,7 @@ import {
   FileText,
   Camera,
   Check,
-  Delete,
   Loader2,
-  ChevronRight,
   Plus,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
@@ -34,6 +32,8 @@ interface TransactionModalProps {
   allCustomers?: CustomerOption[];
 }
 
+const PRESET_AMOUNTS = [100, 200, 500, 1000, 2000];
+
 export function TransactionModal({
   isOpen,
   onClose,
@@ -43,7 +43,7 @@ export function TransactionModal({
   allCustomers = [],
 }: TransactionModalProps) {
   const [type, setType] = useState<'CREDIT' | 'PAYMENT'>(defaultType);
-  const [amountStr, setAmountStr] = useState('200');
+  const [amountStr, setAmountStr] = useState('');
   const [note, setNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -65,24 +65,15 @@ export function TransactionModal({
       setError('');
       setTimeout(() => {
         amountInputRef.current?.focus();
-      }, 100);
+      }, 50);
     }
   }, [isOpen, defaultType]);
-
-  const handleKeyPress = (char: string) => {
-    if (char === 'backspace') {
-      setAmountStr((prev) => prev.slice(0, -1));
-      return;
-    }
-    if (char === '.' && amountStr.includes('.')) return;
-    if (amountStr.length >= 8) return;
-    setAmountStr((prev) => prev + char);
-  };
 
   const handleConfirm = async () => {
     const numAmount = parseFloat(amountStr);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Please enter an amount greater than 0');
+      amountInputRef.current?.focus();
       return;
     }
 
@@ -122,48 +113,19 @@ export function TransactionModal({
     }
   };
 
-  // Physical Computer Keyboard support
+  // Keyboard shortcut listener for Enter and Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If user is currently typing in the amount input itself, let native input handle it
-      if (document.activeElement === amountInputRef.current) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleConfirm();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          onClose();
-        }
-        return;
-      }
-
-      // If user is typing in notes or date, don't intercept digits
-      if (
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement
-      ) {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-        return;
-      }
-
-      if (e.key >= '0' && e.key <= '9') {
-        e.preventDefault();
-        handleKeyPress(e.key);
-      } else if (e.key === '.') {
-        e.preventDefault();
-        handleKeyPress('.');
-      } else if (e.key === 'Backspace') {
-        e.preventDefault();
-        handleKeyPress('backspace');
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        handleConfirm();
-      } else if (e.key === 'Escape') {
+      if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+      } else if (e.key === 'Enter') {
+        // Only confirm on Enter if not typing a multiline note
+        if (document.activeElement?.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          handleConfirm();
+        }
       }
     };
 
@@ -176,14 +138,16 @@ export function TransactionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] animate-slide-up"
+        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Header matching Screenshot 4 */}
+        {/* Top Header */}
         <div className="px-4 py-3 flex items-center justify-between border-b border-slate-100">
           <button
+            type="button"
             onClick={onClose}
             className="p-2 text-slate-700 hover:text-black rounded-full hover:bg-slate-100 tap-effect"
+            aria-label="Back"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
@@ -206,7 +170,7 @@ export function TransactionModal({
         </div>
 
         {/* Transaction Type Indicator */}
-        <div className="px-5 pt-3 flex items-center justify-center">
+        <div className="px-5 pt-3.5 flex items-center justify-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-colors bg-slate-50 border-slate-200">
             <span
               className={`w-2 h-2 rounded-full ${
@@ -219,10 +183,10 @@ export function TransactionModal({
           </div>
         </div>
 
-        {/* Big Amount Display with Input */}
-        <div className="py-4 text-center">
-          <div className="inline-flex items-baseline justify-center border-b-2 border-orange-600 pb-1 px-4 min-w-[140px]">
-            <span className="text-2xl font-bold text-orange-600 mr-1.5">₹</span>
+        {/* Big Amount Input - Direct Typing */}
+        <div className="py-5 text-center px-4">
+          <div className="inline-flex items-baseline justify-center border-b-2 border-orange-600 pb-1 px-4 min-w-[160px]">
+            <span className="text-3xl font-bold text-orange-600 mr-2 select-none">₹</span>
             <input
               ref={amountInputRef}
               type="text"
@@ -231,19 +195,48 @@ export function TransactionModal({
               value={amountStr}
               onChange={(e) => {
                 const val = e.target.value;
-                if (/^[0-9]*\.?[0-9]*$/.test(val) && val.length <= 8) {
+                if (/^[0-9]*\.?[0-9]*$/.test(val) && val.length <= 9) {
                   setAmountStr(val);
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleConfirm();
+                }
+              }}
               placeholder="0"
-              className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight bg-transparent text-center outline-none w-40 sm:w-48 placeholder:text-slate-300"
+              className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight bg-transparent text-center outline-none w-44 sm:w-52 placeholder:text-slate-300"
             />
           </div>
           {error && <p className="text-xs text-rose-600 font-bold mt-2">{error}</p>}
+
+          {/* Quick Amount Suggestion Chips */}
+          <div className="flex items-center justify-center gap-1.5 pt-3.5 flex-wrap">
+            {PRESET_AMOUNTS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setAmountStr(preset.toString())}
+                className="px-3 py-1 text-xs font-bold rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 transition-all tap-effect"
+              >
+                +₹{preset}
+              </button>
+            ))}
+            {amountStr && (
+              <button
+                type="button"
+                onClick={() => setAmountStr('')}
+                className="px-2.5 py-1 text-xs font-bold rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 active:scale-95 transition-all tap-effect"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Action Cards matching Screenshot 4 */}
-        <div className="px-5 space-y-2 pb-3">
+        {/* Action Cards */}
+        <div className="px-5 space-y-2.5 pb-4">
           {/* Notes Card */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs transition-colors">
             {showNoteInput ? (
@@ -259,10 +252,10 @@ export function TransactionModal({
               <button
                 type="button"
                 onClick={() => setShowNoteInput(true)}
-                className="w-full flex items-center gap-2.5 text-slate-700 font-semibold"
+                className="w-full flex items-center gap-2.5 text-slate-700 font-semibold text-left"
               >
-                <FileText className="w-4 h-4 text-slate-500" />
-                <span>{note ? note : 'Add Notes'}</span>
+                <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                <span className="truncate">{note ? note : 'Add Notes'}</span>
               </button>
             )}
           </div>
@@ -292,13 +285,13 @@ export function TransactionModal({
           </div>
         </div>
 
-        {/* Confirm Button */}
-        <div className="px-5 pb-3">
+        {/* Big Clean Confirm Button */}
+        <div className="px-5 pb-6 sm:pb-5">
           <button
             type="button"
             onClick={handleConfirm}
             disabled={loading || !amountStr || parseFloat(amountStr) <= 0}
-            className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl font-bold text-base shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl font-bold text-base shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 tap-effect"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -309,38 +302,6 @@ export function TransactionModal({
               </>
             )}
           </button>
-        </div>
-
-        {/* In-App Tactile Numeric Keypad matching Screenshot 4 */}
-        <div className="p-3 bg-slate-100/80 border-t border-slate-200 grid grid-cols-4 gap-2">
-          {/* Row 1 */}
-          <button onClick={() => handleKeyPress('1')} className="keypad-button">1</button>
-          <button onClick={() => handleKeyPress('2')} className="keypad-button">2</button>
-          <button onClick={() => handleKeyPress('3')} className="keypad-button">3</button>
-          <button
-            onClick={() => handleKeyPress('backspace')}
-            className="keypad-button bg-rose-50 text-rose-700 hover:bg-rose-100"
-          >
-            <Delete className="w-5 h-5" />
-          </button>
-
-          {/* Row 2 */}
-          <button onClick={() => handleKeyPress('4')} className="keypad-button">4</button>
-          <button onClick={() => handleKeyPress('5')} className="keypad-button">5</button>
-          <button onClick={() => handleKeyPress('6')} className="keypad-button">6</button>
-          <button onClick={() => handleKeyPress('*')} className="keypad-button text-slate-500">&times;</button>
-
-          {/* Row 3 */}
-          <button onClick={() => handleKeyPress('7')} className="keypad-button">7</button>
-          <button onClick={() => handleKeyPress('8')} className="keypad-button">8</button>
-          <button onClick={() => handleKeyPress('9')} className="keypad-button">9</button>
-          <button onClick={() => handleKeyPress('-')} className="keypad-button text-slate-500">&minus;</button>
-
-          {/* Row 4 */}
-          <button onClick={() => handleKeyPress('.')} className="keypad-button">.</button>
-          <button onClick={() => handleKeyPress('0')} className="keypad-button">0</button>
-          <button onClick={handleConfirm} className="keypad-button bg-emerald-100 text-emerald-800 font-black">=</button>
-          <button onClick={() => handleKeyPress('+')} className="keypad-button text-slate-500">+</button>
         </div>
       </div>
     </div>

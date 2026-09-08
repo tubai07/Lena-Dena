@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Share2,
@@ -29,36 +29,42 @@ export default function SimplifiedDashboardPage() {
   const customers = allCustomers;
   const loading = false;
 
-  // Apply Filter
-  const filteredCustomers = customers.filter((c) => {
-    if (filterType === 'due') return c.currentBalancePaisa > 0;
-    if (filterType === 'advance') return c.currentBalancePaisa < 0;
-    if (filterType === 'settled') return c.currentBalancePaisa === 0;
-    return true;
-  });
+  // Memoize Filter & Sort
+  const filteredCustomers = useMemo(() => {
+    const list = customers.filter((c) => {
+      if (filterType === 'due') return c.currentBalancePaisa > 0;
+      if (filterType === 'advance') return c.currentBalancePaisa < 0;
+      if (filterType === 'settled') return c.currentBalancePaisa === 0;
+      return true;
+    });
 
-  // Apply Sorting
-  filteredCustomers.sort((a, b) => {
-    if (sortOption === 'amount_desc') {
-      return Math.abs(b.currentBalancePaisa) - Math.abs(a.currentBalancePaisa);
-    }
-    if (sortOption === 'amount_asc') {
-      return Math.abs(a.currentBalancePaisa) - Math.abs(b.currentBalancePaisa);
-    }
-    if (sortOption === 'name_asc') {
-      return a.name.localeCompare(b.name);
-    }
-    if (sortOption === 'name_desc') {
-      return b.name.localeCompare(a.name);
-    }
-    return 0;
-  });
+    list.sort((a, b) => {
+      if (sortOption === 'amount_desc') {
+        return Math.abs(b.currentBalancePaisa) - Math.abs(a.currentBalancePaisa);
+      }
+      if (sortOption === 'amount_asc') {
+        return Math.abs(a.currentBalancePaisa) - Math.abs(b.currentBalancePaisa);
+      }
+      if (sortOption === 'name_asc') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortOption === 'name_desc') {
+        return b.name.localeCompare(a.name);
+      }
+      return 0;
+    });
 
-  // Calculate Net Balance
-  let netBalancePaisa = 0;
-  for (const c of customers) {
-    netBalancePaisa += c.currentBalancePaisa;
-  }
+    return list;
+  }, [customers, filterType, sortOption]);
+
+  // Memoize Net Balance
+  const netBalancePaisa = useMemo(() => {
+    let sum = 0;
+    for (const c of customers) {
+      sum += c.currentBalancePaisa;
+    }
+    return sum;
+  }, [customers]);
 
   const isPositive = netBalancePaisa >= 0;
   const isFilterActive = filterType !== 'all' || sortOption !== 'amount_desc';

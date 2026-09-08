@@ -95,16 +95,33 @@ export function AppProvider({
   };
 
   const handleTransactionSuccess = (result: any) => {
+    // Instant optimistic in-memory balance update
+    if (result.newBalancePaisa !== undefined && (result.customer?.id || result.transaction?.customerId)) {
+      const targetId = result.customer?.id || result.transaction?.customerId;
+      setAllCustomers((prev) =>
+        prev.map((c) => {
+          if (c.id === targetId) {
+            return {
+              ...c,
+              currentBalancePaisa: result.newBalancePaisa,
+              transactions: [result.transaction, ...(c.transactions || [])],
+            };
+          }
+          return c;
+        })
+      );
+    }
+
     refreshAppData();
     if (result.transaction.type === 'PAYMENT') {
       setPaymentSuccessData({
         customerName: result.customer?.name || 'Customer',
         phone: result.customer?.phone || '',
-        businessName: business?.name || 'Tubai General Store',
+        businessName: business?.name || 'Lena Dena',
         amountPaidPaisa: result.amountPaidPaisa || result.transaction.amountPaisa,
         oldBalancePaisa: result.oldBalancePaisa || 0,
         newBalancePaisa: result.newBalancePaisa,
-        paymentMethod: result.paymentMethod || 'CASH',
+        paymentMethod: result.paymentMethod || 'UPI',
         billNumber: result.transaction.billNumber,
       });
       setPaymentSuccessOpen(true);

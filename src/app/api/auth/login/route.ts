@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { setSession } from '@/lib/auth';
+import { getPhoneLookupVariants } from '@/lib/phone';
 
 export async function POST(req: Request) {
   try {
@@ -11,11 +12,15 @@ export async function POST(req: Request) {
     }
 
     const cleanIdentifier = identifier.trim();
+    const phoneVariants = getPhoneLookupVariants(cleanIdentifier);
 
-    // Look for user by email or phone
+    // Look for user by email or any phone format variant
     const user = await db.user.findFirst({
       where: {
-        OR: [{ email: cleanIdentifier }, { phone: cleanIdentifier }],
+        OR: [
+          { email: cleanIdentifier.toLowerCase() },
+          ...phoneVariants.map((p) => ({ phone: p })),
+        ],
       },
       include: {
         businesses: {
