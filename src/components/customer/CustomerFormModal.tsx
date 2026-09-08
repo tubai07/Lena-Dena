@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Phone, IndianRupee, Loader2 } from 'lucide-react';
+import { formatINR } from '@/lib/ledger';
 
 interface CustomerFormModalProps {
   isOpen: boolean;
@@ -49,37 +50,9 @@ export function CustomerFormModal({
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim() || '9999999999';
     const numOpening = openingBalance ? parseFloat(openingBalance) : 0;
-    const openingPaisa = Math.round(numOpening * 100) * (balanceType === 'I_OWE' ? -1 : 1);
-
-    // 0ms INSTANT OPTIMISTIC FEEDBACK FOR NEW CUSTOMERS
-    if (!initialData) {
-      const optimisticCustomer = {
-        id: `temp_${Date.now()}`,
-        name: trimmedName,
-        phone: trimmedPhone,
-        openingBalancePaisa: openingPaisa,
-        currentBalancePaisa: openingPaisa,
-        status: openingPaisa === 0 ? 'SETTLED' : 'ACTIVE',
-        transactions:
-          openingPaisa !== 0
-            ? [
-                {
-                  id: `temp_tx_${Date.now()}`,
-                  type: openingPaisa > 0 ? 'CREDIT' : 'PAYMENT',
-                  amountPaisa: Math.abs(openingPaisa),
-                  date: new Date().toISOString(),
-                  description: 'Opening Balance',
-                },
-              ]
-            : [],
-      };
-      onSuccess(optimisticCustomer);
-      onClose();
-    } else {
-      setLoading(true);
-    }
 
     try {
+      setLoading(true);
       setError('');
 
       const url = initialData ? `/api/customers/${initialData.id}` : '/api/customers';
@@ -106,9 +79,7 @@ export function CustomerFormModal({
       }
 
       onSuccess(data.customer || data);
-      if (initialData) {
-        onClose();
-      }
+      onClose();
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -219,6 +190,11 @@ export function CustomerFormModal({
                   className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none"
                 />
               </div>
+              {openingBalance && !isNaN(parseFloat(openingBalance)) && parseFloat(openingBalance) >= 1000 && (
+                <p className="text-[11px] font-bold text-slate-500 mt-1">
+                  {formatINR(parseFloat(openingBalance))}
+                </p>
+              )}
             </div>
           )}
 

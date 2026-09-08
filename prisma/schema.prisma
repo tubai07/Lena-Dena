@@ -49,8 +49,8 @@ model Customer {
   email               String?
   address             String?
   notes               String?
-  openingBalancePaisa Int           @default(0) // > 0: customer owes merchant; < 0: merchant owes customer
-  currentBalancePaisa Int           @default(0) // dynamic synced balance
+  openingBalancePaisa Float         @default(0) // > 0: customer owes merchant; < 0: merchant owes customer
+  currentBalancePaisa Float         @default(0) // dynamic synced balance
   status              String        @default("ACTIVE") // ACTIVE, SETTLED, INACTIVE
   transactions        Transaction[]
   reminders           Reminder[]
@@ -69,7 +69,7 @@ model Transaction {
   customerId    String
   customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   type          String   // "CREDIT" (gave credit) or "PAYMENT" (received payment)
-  amountPaisa   Int      // strictly positive integer (amount in paise)
+  amountPaisa   Float    // strictly positive amount in paise (supports high value numbers)
   paymentMethod String   @default("CASH") // CASH, UPI, BANK_TRANSFER, CHEQUE, CARD, OTHER
   date          DateTime @default(now())
   description   String?

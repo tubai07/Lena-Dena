@@ -117,12 +117,23 @@ export function TransactionModal({
 
     onClose();
 
+    // Resolve target customer ID in case it's a temp ID or outdated
+    let targetCustomerId = customer.id;
+    if (targetCustomerId?.startsWith('temp_') && allCustomers?.length) {
+      const matched = allCustomers.find(
+        (c) => !c.id.startsWith('temp_') && (c.name === customer.name || (customer.phone && c.phone === customer.phone))
+      );
+      if (matched) {
+        targetCustomerId = matched.id;
+      }
+    }
+
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId: customer.id,
+          customerId: targetCustomerId || customer.id,
           type,
           amount: numAmount,
           paymentMethod: 'UPI',
@@ -139,10 +150,14 @@ export function TransactionModal({
       onSuccess({
         transaction: data.transaction,
         newBalancePaisa: data.newBalancePaisa,
-        customer,
+        customer: {
+          ...customer,
+          id: targetCustomerId || customer.id,
+        },
       });
     } catch (err: any) {
-      console.error(err);
+      console.error('Error saving transaction:', err);
+      alert(err.message || 'Failed to record transaction. Please try again.');
     }
   };
 
@@ -221,7 +236,7 @@ export function TransactionModal({
 
         {/* Big Amount Input - Direct Typing */}
         <div className="py-5 text-center px-4">
-          <div className="inline-flex items-baseline justify-center border-b-2 border-orange-600 pb-1 px-4 min-w-[160px]">
+          <div className="inline-flex items-baseline justify-center border-b-2 border-orange-600 pb-1 px-4 max-w-full">
             <span className="text-3xl font-bold text-orange-600 mr-2 select-none">₹</span>
             <input
               ref={amountInputRef}
@@ -231,7 +246,7 @@ export function TransactionModal({
               value={amountStr}
               onChange={(e) => {
                 const val = e.target.value;
-                if (/^[0-9]*\.?[0-9]*$/.test(val) && val.length <= 9) {
+                if (/^[0-9]*\.?[0-9]*$/.test(val) && val.length <= 14) {
                   setAmountStr(val);
                 }
               }}
@@ -242,9 +257,20 @@ export function TransactionModal({
                 }
               }}
               placeholder="0"
-              className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight bg-transparent text-center outline-none w-44 sm:w-52 placeholder:text-slate-300"
+              className={`${
+                amountStr.length > 8
+                  ? 'text-2xl sm:text-3xl'
+                  : amountStr.length > 5
+                  ? 'text-3xl sm:text-4xl'
+                  : 'text-4xl sm:text-5xl'
+              } font-black text-slate-900 tracking-tight bg-transparent text-center outline-none w-full max-w-[280px] placeholder:text-slate-300`}
             />
           </div>
+          {amountStr && !isNaN(parseFloat(amountStr)) && parseFloat(amountStr) >= 1000 && (
+            <p className="text-xs font-bold text-slate-500 mt-1.5 animate-in fade-in duration-150">
+              {formatINR(parseFloat(amountStr))}
+            </p>
+          )}
           {error && <p className="text-xs text-rose-600 font-bold mt-2">{error}</p>}
         </div>
 

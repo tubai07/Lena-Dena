@@ -45,29 +45,17 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
     }
   }
 
-  const allTxs = Array.from(txMap.values());
-  const realTxs = allTxs.filter((t: any) => !t.id?.startsWith('temp_tx_'));
-  const filteredTxs = allTxs.filter((t: any) => {
-    if (!t.id?.startsWith('temp_tx_')) return true;
-    // Discard temp transaction once a matching real transaction has arrived
-    const hasRealMatch = realTxs.some(
-      (real) =>
-        real.type === t.type &&
-        real.amountPaisa === t.amountPaisa &&
-        Math.abs(new Date(real.date).getTime() - new Date(t.date).getTime()) < 60000
-    );
-    return !hasRealMatch;
-  });
+  const allMergedTxs = Array.from(txMap.values());
 
   // Compute running balance chronologically (ascending)
   const computedChronological = computeLedgerRunningBalances(
     customer.openingBalancePaisa || 0,
-    filteredTxs
+    allMergedTxs
   );
 
   let totalGivenPaisa = 0;
   let totalReceivedPaisa = 0;
-  for (const tx of filteredTxs) {
+  for (const tx of allMergedTxs) {
     if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
     if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
   }
@@ -81,7 +69,7 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
       totalGivenPaisa,
       totalReceivedPaisa,
       netBalancePaisa: customer.currentBalancePaisa,
-      totalTransactions: filteredTxs.length,
+      totalTransactions: allMergedTxs.length,
     },
   };
 }
@@ -103,54 +91,38 @@ export default function PersonChatLedgerPage({
   const [deleteConfirmTx, setDeleteConfirmTx] = useState<any>(null);
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<any>(null);
 
+  // Auto-redirect if URL has a temp ID that has been resolved to a real ID
+  useEffect(() => {
+    if (resolvedParams.id.startsWith('temp_')) {
+      const realCust = allCustomers.find((c) => !c.id.startsWith('temp_') && c.name === cachedCustomer?.name);
+      if (realCust) {
+        router.replace(`/customers/${realCust.id}`);
+      }
+    }
+  }, [resolvedParams.id, allCustomers, cachedCustomer, router]);
+
   const fetchCustomerDetails = async () => {
     try {
       if (!data) setLoading(true);
       const res = await fetch(`/api/customers/${resolvedParams.id}`);
       const json = await res.json();
       if (json.customer) {
-        setData((prev: any) => {
-          // If previous state had pending temp transactions not yet committed in DB, preserve them!
-          const prevTempTxs = (prev?.customer?.transactions || []).filter((t: any) =>
-            t.id?.startsWith('temp_tx_')
-          );
-          if (prevTempTxs.length > 0) {
-            const combinedTxs = [...(json.customer.transactions || [])];
-            for (const tempTx of prevTempTxs) {
-              const alreadyCommitted = combinedTxs.some(
-                (realTx) =>
-                  realTx.type === tempTx.type &&
-                  realTx.amountPaisa === tempTx.amountPaisa &&
-                  Math.abs(new Date(realTx.date).getTime() - new Date(tempTx.date).getTime()) < 60000
-              );
-              if (!alreadyCommitted) {
-                combinedTxs.push(tempTx);
-              }
-            }
-            const withBalances = computeLedgerRunningBalances(
-              json.customer.openingBalancePaisa || 0,
-              combinedTxs
-            );
-            return {
-              ...json,
-              customer: {
-                ...json.customer,
-                transactions: withBalances,
-              },
-            };
-          }
-          const withBalances = computeLedgerRunningBalances(
-            json.customer.openingBalancePaisa || 0,
-            json.customer.transactions || []
-          );
-          return {
+        const prepared = prepareCustomerLedgerData(json.customer, allTransactions);
+        if (prepared) {
+          setData((prev: any) => ({
+            ...(prev || {}),
             ...json,
+            ...prepared,
             customer: {
-              ...json.customer,
-              transactions: withBalances,
+              ...(json.customer || {}),
+              ...prepared.customer,
             },
-          };
-        });
+            stats: {
+              ...(json.stats || {}),
+              ...prepared.stats,
+            },
+          }));
+        }
       }
     } catch (e) {
       console.error(e);

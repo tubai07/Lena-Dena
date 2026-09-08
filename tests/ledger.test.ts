@@ -205,4 +205,39 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
     expect(msgPlaceholder).toBe('Hi Sibu, ₹1 is pending. Pay when convenient. Thank you!');
     expect(msgPlaceholder).not.toContain('[upi address]');
   });
+
+  it('supports high value transactions and balances (e.g. 5 Crores and 100 Crores) without integer overflow', async () => {
+    // ₹5 Crores = 50,000,000 INR = 5,000,000,000 paise (exceeds 32-bit int limit of 2,147,483,647)
+    const highValCust = await db.customer.create({
+      data: {
+        businessId: testBusinessA.id,
+        name: 'Enterprise Client',
+        phone: '9888777666',
+        openingBalancePaisa: toPaisa(10000000), // ₹1 Crore
+        currentBalancePaisa: toPaisa(10000000),
+      },
+    });
+
+    const txHigh = await recordLedgerTransaction({
+      businessId: testBusinessA.id,
+      customerId: highValCust.id,
+      type: 'CREDIT',
+      amountPaisa: toPaisa(50000000), // ₹5 Crores
+    });
+
+    expect(txHigh.transaction.amountPaisa).toBe(5000000000);
+    expect(txHigh.newBalancePaisa).toBe(6000000000); // ₹6 Crores total
+    expect(formatINR(txHigh.newBalancePaisa, true)).toBe('₹6,00,00,000');
+
+    // Partial payment of ₹2 Crores
+    const txPayment = await recordLedgerTransaction({
+      businessId: testBusinessA.id,
+      customerId: highValCust.id,
+      type: 'PAYMENT',
+      amountPaisa: toPaisa(20000000), // ₹2 Crores
+    });
+
+    expect(txPayment.newBalancePaisa).toBe(4000000000); // ₹4 Crores remaining
+    expect(formatINR(txPayment.newBalancePaisa, true)).toBe('₹4,00,00,000');
+  });
 });
