@@ -80,6 +80,8 @@ export default function SimplifiedDashboardPage() {
   // Memoize Filter & Sort
   const filteredCustomers = useMemo(() => {
     const list = customers.filter((c) => {
+      // Newly created optimistic customer always passes filter so they are never hidden
+      if (c.isOptimistic) return true;
       if (filterType === 'due') return c.currentBalancePaisa > 0;
       if (filterType === 'advance') return c.currentBalancePaisa < 0;
       if (filterType === 'settled') return c.currentBalancePaisa === 0;
@@ -87,11 +89,19 @@ export default function SimplifiedDashboardPage() {
     });
 
     list.sort((a, b) => {
+      // Prioritize freshly added persons at the very top of the list
+      if (a.isOptimistic && !b.isOptimistic) return -1;
+      if (!a.isOptimistic && b.isOptimistic) return 1;
+
       if (sortOption === 'amount_desc') {
-        return Math.abs(b.currentBalancePaisa) - Math.abs(a.currentBalancePaisa);
+        const diff = Math.abs(b.currentBalancePaisa) - Math.abs(a.currentBalancePaisa);
+        if (diff !== 0) return diff;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       }
       if (sortOption === 'amount_asc') {
-        return Math.abs(a.currentBalancePaisa) - Math.abs(b.currentBalancePaisa);
+        const diff = Math.abs(a.currentBalancePaisa) - Math.abs(b.currentBalancePaisa);
+        if (diff !== 0) return diff;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       }
       if (sortOption === 'name_asc') {
         return a.name.localeCompare(b.name);

@@ -6,6 +6,7 @@ import { TransactionModal } from '../transaction/TransactionModal';
 import { PaymentSuccessModal } from '../transaction/PaymentSuccessModal';
 import { CustomerFormModal } from '../customer/CustomerFormModal';
 import { SendReminderModal } from '../reminders/SendReminderModal';
+import { pendingCustomerCreations } from '@/lib/utils';
 
 interface AppContextType {
   openTransactionModal: (customer?: any, defaultType?: 'CREDIT' | 'PAYMENT') => void;
@@ -61,9 +62,15 @@ export function AppProvider({
       const res = await fetch('/api/customers?filter=all');
       const data = await res.json();
       if (data.customers) {
-        setAllCustomers(
-          data.customers.filter((c: any) => !deletedCustomerIdsRef.current.has(c.id))
-        );
+        setAllCustomers((prev) => {
+          const serverCustomers = data.customers.filter((c: any) => !deletedCustomerIdsRef.current.has(c.id));
+          const serverIds = new Set(serverCustomers.map((c: any) => c.id));
+          // CRITICAL: Preserve any optimistic / in-flight customers that haven't yet been returned by the DB query
+          const pendingOptimistic = prev.filter(
+            (c) => (pendingCustomerCreations.has(c.id) || c.isOptimistic) && !serverIds.has(c.id) && !deletedCustomerIdsRef.current.has(c.id)
+          );
+          return [...pendingOptimistic, ...serverCustomers];
+        });
       }
     } catch (e) {
       console.error(e);
@@ -276,7 +283,10 @@ export function AppProvider({
       });
     }
 
-    refreshAppData();
+    // Only trigger background refresh if customer is confirmed saved in DB (not in-flight optimistic)
+    if (!savedCustomer.isOptimistic) {
+      refreshAppData();
+    }
   };
 
   return (

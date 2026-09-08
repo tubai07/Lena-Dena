@@ -66,6 +66,8 @@ export function CustomerFormModal({
         openingBalancePaisa: 0,
         status: 'SETTLED',
         transactions: [],
+        createdAt: new Date().toISOString(),
+        isOptimistic: true,
       };
 
       // Close modal and update UI with 0ms delay!
@@ -81,6 +83,9 @@ export function CustomerFormModal({
         .then(async (res) => {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Failed to save contact');
+          if (data.customer) {
+            onSuccess({ ...data.customer, isOptimistic: false });
+          }
           return data;
         })
         .catch((err) => {

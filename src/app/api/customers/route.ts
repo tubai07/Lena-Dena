@@ -40,15 +40,15 @@ export async function GET(req: Request) {
     // Build orderBy
     let orderBy: any = {};
     if (sort === 'highest_balance') {
-      orderBy = { currentBalancePaisa: 'desc' };
+      orderBy = [{ currentBalancePaisa: 'desc' }, { createdAt: 'desc' }];
     } else if (sort === 'name') {
-      orderBy = { name: 'asc' };
+      orderBy = [{ name: 'asc' }, { createdAt: 'desc' }];
     } else if (sort === 'recently_active') {
-      orderBy = { updatedAt: 'desc' };
+      orderBy = [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
     } else if (sort === 'oldest_due') {
-      orderBy = { createdAt: 'asc' };
+      orderBy = [{ createdAt: 'asc' }];
     } else {
-      orderBy = { currentBalancePaisa: 'desc' };
+      orderBy = [{ currentBalancePaisa: 'desc' }, { createdAt: 'desc' }];
     }
 
     const customers = await db.customer.findMany({
