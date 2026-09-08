@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
-  Image as ImageIcon,
   FileText,
   Check,
   Calendar,
@@ -53,14 +52,6 @@ export function TransactionDetailModal({
       ' ' +
       d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
     );
-  };
-
-  const formatDateOnly = (dateStr: string | Date) => {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
   };
 
   const handleDelete = async () => {
@@ -230,15 +221,6 @@ export function TransactionDetailModal({
             </span>
           </div>
 
-          {/* Add Bills Card matching Screenshot */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer tap-effect">
-            <div className="flex items-center gap-3">
-              <ImageIcon className="w-5 h-5 text-emerald-800" />
-              <span>Add Bills</span>
-            </div>
-            <Plus className="w-4 h-4 text-emerald-700" />
-          </div>
-
           {/* Add Note Card matching Screenshot */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs font-semibold text-slate-700">
             {editingNote ? (
@@ -298,12 +280,6 @@ export function TransactionDetailModal({
             <div className="p-3.5 flex items-center gap-3 text-xs font-semibold text-slate-700">
               <Calendar className="w-5 h-5 text-emerald-800" />
               <span>Added on {formatDateTime(transaction.createdAt || transaction.date)}</span>
-            </div>
-
-            {/* Billed on Date */}
-            <div className="p-3.5 flex items-center gap-3 text-xs font-semibold text-slate-700">
-              <Calendar className="w-5 h-5 text-emerald-800" />
-              <span>Billed on {formatDateOnly(transaction.date)}</span>
             </div>
           </div>
 

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Globe, Plus, Store, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
-import { NotificationTray } from '../common/NotificationTray';
 import { GlobalSearchModal } from '../common/GlobalSearchModal';
 import { useTranslation } from '../common/LanguageContext';
 import { Language } from '@/lib/i18n';
@@ -117,9 +116,6 @@ export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopN
                 </button>
               ))}
             </div>
-
-            {/* Notifications Tray */}
-            <NotificationTray />
           </div>
         </div>
       </header>

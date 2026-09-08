@@ -73,10 +73,43 @@ export function TransactionModal({
       return;
     }
 
-    try {
-      setLoading(true);
-      setError('');
+    const amountPaisa = Math.round(numAmount * 100);
+    const balanceDelta = type === 'CREDIT' ? amountPaisa : -amountPaisa;
+    const optimisticBalancePaisa = (customer.currentBalancePaisa || 0) + balanceDelta;
+    const txDate = selectedDate ? new Date(selectedDate) : new Date();
+    const txDescription = note.trim() || (type === 'CREDIT' ? 'Given' : 'Received');
 
+    // 0ms INSTANT OPTIMISTIC FEEDBACK
+    const optimisticTx = {
+      id: `temp_tx_${Date.now()}`,
+      businessId: customer.businessId || '',
+      customerId: customer.id,
+      type,
+      amountPaisa,
+      paymentMethod: 'UPI',
+      date: txDate.toISOString(),
+      description: txDescription,
+      createdAt: new Date().toISOString(),
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        currentBalancePaisa: optimisticBalancePaisa,
+      },
+    };
+
+    onSuccess({
+      transaction: optimisticTx,
+      newBalancePaisa: optimisticBalancePaisa,
+      customer: {
+        ...customer,
+        currentBalancePaisa: optimisticBalancePaisa,
+      },
+    });
+
+    onClose();
+
+    try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,8 +118,8 @@ export function TransactionModal({
           type,
           amount: numAmount,
           paymentMethod: 'UPI',
-          date: selectedDate ? new Date(selectedDate) : undefined,
-          description: note || (type === 'CREDIT' ? 'Given' : 'Received'),
+          date: txDate,
+          description: txDescription,
         }),
       });
 
@@ -100,12 +133,8 @@ export function TransactionModal({
         newBalancePaisa: data.newBalancePaisa,
         customer,
       });
-
-      onClose();
     } catch (err: any) {
-      setError(err.message || 'Error recording transaction');
-    } finally {
-      setLoading(false);
+      console.error(err);
     }
   };
 

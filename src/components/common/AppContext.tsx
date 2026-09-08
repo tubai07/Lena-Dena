@@ -137,10 +137,25 @@ export function AppProvider({
       setAllCustomers((prev) =>
         prev.map((c) => {
           if (c.id === targetId) {
+            const existingTxs = c.transactions || [];
+            let newTxs: any[];
+            if (result.transaction.id.startsWith('temp_tx_')) {
+              newTxs = [result.transaction, ...existingTxs];
+            } else {
+              const tempIndex = existingTxs.findIndex((t: any) => t.id.startsWith('temp_tx_'));
+              if (tempIndex >= 0) {
+                newTxs = [...existingTxs];
+                newTxs[tempIndex] = result.transaction;
+              } else if (!existingTxs.some((t: any) => t.id === result.transaction.id)) {
+                newTxs = [result.transaction, ...existingTxs];
+              } else {
+                newTxs = existingTxs;
+              }
+            }
             return {
               ...c,
               currentBalancePaisa: result.newBalancePaisa,
-              transactions: [result.transaction, ...(c.transactions || [])],
+              transactions: newTxs,
             };
           }
           return c;
@@ -151,13 +166,22 @@ export function AppProvider({
     // Instant optimistic update to Activity (allTransactions)
     if (result.transaction) {
       setAllTransactions((prev) => {
-        // Prevent duplicate if already exists
-        const exists = prev.some((t) => t.id === result.transaction.id);
-        if (exists) return prev;
         const txWithCustomer = {
           ...result.transaction,
           customer: result.customer || prev.find((t) => t.customer?.id === result.transaction.customerId)?.customer,
         };
+        if (result.transaction.id.startsWith('temp_tx_')) {
+          return [txWithCustomer, ...prev];
+        }
+        const tempIndex = prev.findIndex((t) => t.id.startsWith('temp_tx_'));
+        if (tempIndex >= 0) {
+          const updated = [...prev];
+          updated[tempIndex] = txWithCustomer;
+          return updated;
+        }
+        if (prev.some((t) => t.id === result.transaction.id)) {
+          return prev;
+        }
         return [txWithCustomer, ...prev];
       });
     }

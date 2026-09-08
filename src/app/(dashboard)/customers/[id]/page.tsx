@@ -75,6 +75,30 @@ export default function PersonChatLedgerPage({
     fetchCustomerDetails();
   }, [resolvedParams.id, lastUpdated]);
 
+  // Instant optimistic timeline update when transaction is recorded
+  useEffect(() => {
+    if (cachedCustomer && cachedCustomer.transactions && cachedCustomer.transactions.length > 0) {
+      setData((prev: any) => {
+        if (!prev?.customer) return prev;
+        const firstCachedTx = cachedCustomer.transactions[0];
+        const hasNewTx = firstCachedTx && !prev.customer.transactions?.some((t: any) => t.id === firstCachedTx.id);
+        if (hasNewTx || prev.customer.currentBalancePaisa !== cachedCustomer.currentBalancePaisa) {
+          return {
+            ...prev,
+            customer: {
+              ...prev.customer,
+              currentBalancePaisa: cachedCustomer.currentBalancePaisa,
+              transactions: hasNewTx
+                ? [firstCachedTx, ...(prev.customer.transactions || [])]
+                : prev.customer.transactions,
+            },
+          };
+        }
+        return prev;
+      });
+    }
+  }, [cachedCustomer]);
+
   if (loading && !data) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-white p-4 space-y-4 animate-pulse">

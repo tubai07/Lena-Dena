@@ -15,7 +15,6 @@ import {
 import { formatINR } from '@/lib/ledger';
 import { useApp } from '@/components/common/AppContext';
 import { GlobalSearchModal } from '@/components/common/GlobalSearchModal';
-import { NotificationTray } from '@/components/common/NotificationTray';
 
 export default function SimplifiedDashboardPage() {
   const { openCustomerModal, allCustomers, lastUpdated, business } = useApp();
@@ -95,16 +94,26 @@ export default function SimplifiedDashboardPage() {
     <div className="max-w-md mx-auto min-h-screen bg-white pb-32 relative">
       {/* Top Header matching Screenshot 2 */}
       <header className="px-4 py-3 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
-        {/* Profile Avatar -> Clickable Link to Settings */}
-        <Link
-          href="/settings"
-          className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 text-white font-bold flex items-center justify-center text-sm shadow-xs border border-white hover:opacity-90 active:scale-95 transition-all tap-effect"
-          title="Account & Settings"
-        >
-          <span>{business?.name ? business.name.slice(0, 1).toUpperCase() : 'T'}</span>
-        </Link>
+        {/* Profile Avatar & App Version */}
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/settings"
+            className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 text-white font-bold flex items-center justify-center text-sm shadow-xs border border-white hover:opacity-90 active:scale-95 transition-all tap-effect shrink-0"
+            title="Account & Settings"
+          >
+            <span>{business?.name ? business.name.slice(0, 1).toUpperCase() : 'T'}</span>
+          </Link>
+          <div className="leading-tight select-none">
+            <span className="text-xs font-semibold text-slate-500 block">
+              Lena Dena App
+            </span>
+            <span className="text-[10px] font-medium text-slate-400 block">
+              Ver 1.0
+            </span>
+          </div>
+        </div>
 
-        {/* Right Header Icons: Share, Notifications, Search */}
+        {/* Right Header Icons: Share, Search */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
@@ -117,8 +126,6 @@ export default function SimplifiedDashboardPage() {
           >
             <Share2 className="w-4 h-4" />
           </button>
-
-          <NotificationTray />
 
           <button
             onClick={() => setSearchOpen(true)}
