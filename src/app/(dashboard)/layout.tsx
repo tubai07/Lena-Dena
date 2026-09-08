@@ -29,13 +29,13 @@ export default async function DashboardLayout({
       orderBy: { currentBalancePaisa: 'desc' },
       include: {
         transactions: {
-          orderBy: { date: 'desc' },
+          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
         },
       },
     }),
     db.transaction.findMany({
       where: { businessId: session.businessId },
-      orderBy: { date: 'desc' },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       include: {
         customer: {
           select: { id: true, name: true, phone: true, currentBalancePaisa: true },

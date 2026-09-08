@@ -53,10 +53,16 @@ export function computeLedgerRunningBalances(
     [key: string]: any;
   }>
 ) {
-  // Sort ascending by date
-  const sorted = [...transactions].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  // Sort ascending by date with deterministic secondary tiebreakers
+  const sorted = [...transactions].sort((a, b) => {
+    const timeA = new Date(a.date).getTime();
+    const timeB = new Date(b.date).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    const createA = new Date(a.createdAt || a.date).getTime();
+    const createB = new Date(b.createdAt || b.date).getTime();
+    if (createA !== createB) return createA - createB;
+    return (a.id || '').localeCompare(b.id || '');
+  });
 
   let currentPaisa = openingBalancePaisa;
   return sorted.map((tx) => {

@@ -131,6 +131,8 @@ export function AppProvider({
   };
 
   const handleTransactionSuccess = (result: any) => {
+    const isTemp = Boolean(result.transaction?.id?.startsWith('temp_tx_'));
+
     // Instant optimistic in-memory balance update
     if (result.newBalancePaisa !== undefined && (result.customer?.id || result.transaction?.customerId)) {
       const targetId = result.customer?.id || result.transaction?.customerId;
@@ -139,10 +141,10 @@ export function AppProvider({
           if (c.id === targetId) {
             const existingTxs = c.transactions || [];
             let newTxs: any[];
-            if (result.transaction.id.startsWith('temp_tx_')) {
+            if (isTemp) {
               newTxs = [result.transaction, ...existingTxs];
             } else {
-              const tempIndex = existingTxs.findIndex((t: any) => t.id.startsWith('temp_tx_'));
+              const tempIndex = existingTxs.findIndex((t: any) => t.id?.startsWith('temp_tx_'));
               if (tempIndex >= 0) {
                 newTxs = [...existingTxs];
                 newTxs[tempIndex] = result.transaction;
@@ -170,10 +172,10 @@ export function AppProvider({
           ...result.transaction,
           customer: result.customer || prev.find((t) => t.customer?.id === result.transaction.customerId)?.customer,
         };
-        if (result.transaction.id.startsWith('temp_tx_')) {
+        if (isTemp) {
           return [txWithCustomer, ...prev];
         }
-        const tempIndex = prev.findIndex((t) => t.id.startsWith('temp_tx_'));
+        const tempIndex = prev.findIndex((t) => t.id?.startsWith('temp_tx_'));
         if (tempIndex >= 0) {
           const updated = [...prev];
           updated[tempIndex] = txWithCustomer;
@@ -186,8 +188,14 @@ export function AppProvider({
       });
     }
 
-    refreshAppData();
-    if (result.transaction.type === 'PAYMENT') {
+    // CRITICAL: Only trigger background sync when the transaction is actually persisted in DB.
+    // Triggering refreshAppData while POST is in-flight causes a race condition where stale DB data
+    // overwrites the optimistic state, making transactions disappear and bounce up and down.
+    if (!isTemp) {
+      refreshAppData();
+    }
+
+    if (result.transaction.type === 'PAYMENT' && isTemp) {
       setPaymentSuccessData({
         customerName: result.customer?.name || 'Customer',
         phone: result.customer?.phone || '',

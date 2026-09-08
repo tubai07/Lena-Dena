@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useRef, useMemo, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -45,17 +45,29 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
     }
   }
 
-  const allMergedTxs = Array.from(txMap.values());
+  const allTxs = Array.from(txMap.values());
+  const realTxs = allTxs.filter((t: any) => !t.id?.startsWith('temp_tx_'));
+  const filteredTxs = allTxs.filter((t: any) => {
+    if (!t.id?.startsWith('temp_tx_')) return true;
+    // Discard temp transaction once a matching real transaction has arrived
+    const hasRealMatch = realTxs.some(
+      (real) =>
+        real.type === t.type &&
+        real.amountPaisa === t.amountPaisa &&
+        Math.abs(new Date(real.date).getTime() - new Date(t.date).getTime()) < 60000
+    );
+    return !hasRealMatch;
+  });
 
-  // Compute running balance chronologically
+  // Compute running balance chronologically (ascending)
   const computedChronological = computeLedgerRunningBalances(
     customer.openingBalancePaisa || 0,
-    allMergedTxs
+    filteredTxs
   );
 
   let totalGivenPaisa = 0;
   let totalReceivedPaisa = 0;
-  for (const tx of allMergedTxs) {
+  for (const tx of filteredTxs) {
     if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
     if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
   }
@@ -63,14 +75,13 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
   return {
     customer: {
       ...customer,
-      // Store descending (newest first) to match API convention, since line 137 does .reverse()
-      transactions: [...computedChronological].reverse(),
+      transactions: computedChronological,
     },
     stats: {
       totalGivenPaisa,
       totalReceivedPaisa,
       netBalancePaisa: customer.currentBalancePaisa,
-      totalTransactions: allMergedTxs.length,
+      totalTransactions: filteredTxs.length,
     },
   };
 }
@@ -85,6 +96,7 @@ export default function PersonChatLedgerPage({
   const { allCustomers, allTransactions, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, lastUpdated } = useApp();
 
   const cachedCustomer = allCustomers.find((c) => c.id === resolvedParams.id);
+  const timelineEndRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<any>(() => prepareCustomerLedgerData(cachedCustomer, allTransactions));
   const [loading, setLoading] = useState(!cachedCustomer);
   const [deleteConfirmCust, setDeleteConfirmCust] = useState(false);
@@ -97,7 +109,48 @@ export default function PersonChatLedgerPage({
       const res = await fetch(`/api/customers/${resolvedParams.id}`);
       const json = await res.json();
       if (json.customer) {
-        setData(json);
+        setData((prev: any) => {
+          // If previous state had pending temp transactions not yet committed in DB, preserve them!
+          const prevTempTxs = (prev?.customer?.transactions || []).filter((t: any) =>
+            t.id?.startsWith('temp_tx_')
+          );
+          if (prevTempTxs.length > 0) {
+            const combinedTxs = [...(json.customer.transactions || [])];
+            for (const tempTx of prevTempTxs) {
+              const alreadyCommitted = combinedTxs.some(
+                (realTx) =>
+                  realTx.type === tempTx.type &&
+                  realTx.amountPaisa === tempTx.amountPaisa &&
+                  Math.abs(new Date(realTx.date).getTime() - new Date(tempTx.date).getTime()) < 60000
+              );
+              if (!alreadyCommitted) {
+                combinedTxs.push(tempTx);
+              }
+            }
+            const withBalances = computeLedgerRunningBalances(
+              json.customer.openingBalancePaisa || 0,
+              combinedTxs
+            );
+            return {
+              ...json,
+              customer: {
+                ...json.customer,
+                transactions: withBalances,
+              },
+            };
+          }
+          const withBalances = computeLedgerRunningBalances(
+            json.customer.openingBalancePaisa || 0,
+            json.customer.transactions || []
+          );
+          return {
+            ...json,
+            customer: {
+              ...json.customer,
+              transactions: withBalances,
+            },
+          };
+        });
       }
     } catch (e) {
       console.error(e);
@@ -168,8 +221,23 @@ export default function PersonChatLedgerPage({
   };
 
   // Group transactions by date for centered date pills
-  // Re-order ascending for chronological chat flow (oldest at top, newest at bottom)
-  const chronologicalTx = [...(customer.transactions || [])].reverse();
+  // Deterministic chronological sorting: oldest at top, newest at bottom
+  const chronologicalTx = useMemo(() => {
+    return [...(customer.transactions || [])].sort((a: any, b: any) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      const createA = new Date(a.createdAt || a.date).getTime();
+      const createB = new Date(b.createdAt || b.date).getTime();
+      if (createA !== createB) return createA - createB;
+      return (a.id || '').localeCompare(b.id || '');
+    });
+  }, [customer.transactions]);
+
+  // Smooth scroll to latest transaction at bottom when entries change
+  useEffect(() => {
+    timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chronologicalTx.length]);
 
   // Export CSV
   const handleExportCSV = () => {
@@ -334,6 +402,7 @@ export default function PersonChatLedgerPage({
             );
           })
         )}
+        <div ref={timelineEndRef} />
       </main>
 
       {/* Sticky Bottom Action & Balance Tray matching Screenshot 1 */}

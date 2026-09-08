@@ -19,7 +19,7 @@ export async function GET(
       where: { id, businessId: session.businessId },
       include: {
         transactions: {
-          orderBy: { date: 'asc' },
+          orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
         },
         reminders: {
           orderBy: { createdAt: 'desc' },

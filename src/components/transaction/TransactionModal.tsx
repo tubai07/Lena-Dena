@@ -76,7 +76,15 @@ export function TransactionModal({
     const amountPaisa = Math.round(numAmount * 100);
     const balanceDelta = type === 'CREDIT' ? amountPaisa : -amountPaisa;
     const optimisticBalancePaisa = (customer.currentBalancePaisa || 0) + balanceDelta;
-    const txDate = selectedDate ? new Date(selectedDate) : new Date();
+    const now = new Date();
+    let txDate = now;
+    if (selectedDate) {
+      const todayStr = now.toISOString().split('T')[0];
+      if (selectedDate !== todayStr) {
+        const [y, m, d] = selectedDate.split('-').map(Number);
+        txDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      }
+    }
     const txDescription = note.trim() || (type === 'CREDIT' ? 'Given' : 'Received');
 
     // 0ms INSTANT OPTIMISTIC FEEDBACK
@@ -89,7 +97,7 @@ export function TransactionModal({
       paymentMethod: 'UPI',
       date: txDate.toISOString(),
       description: txDescription,
-      createdAt: new Date().toISOString(),
+      createdAt: now.toISOString(),
       customer: {
         id: customer.id,
         name: customer.name,
