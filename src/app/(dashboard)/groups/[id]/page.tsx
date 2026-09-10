@@ -9,6 +9,11 @@ import {
   Copy,
   Check,
   Receipt,
+  ReceiptText,
+  ChevronDown,
+  ChevronUp,
+  Fuel,
+  Wine,
   Scale,
   Users,
   Smartphone,
@@ -24,6 +29,7 @@ import {
   ShoppingBag,
   Activity,
   Pencil,
+  Sparkles,
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -205,6 +211,9 @@ export default function GroupDetailPage({
   const [newMemberName, setNewMemberName] = useState('');
   const [addingMember, setAddingMember] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [isStandingExpanded, setIsStandingExpanded] = useState(true);
+  const [isScrolledDown, setIsScrolledDown] = useState(false);
+  const lastScrollY = useRef(0);
 
   // Tracking deleted items so polling never revives them
   const deletedExpenseIdsRef = useRef<Set<string>>(new Set());
@@ -305,6 +314,20 @@ export default function GroupDetailPage({
       document.removeEventListener('visibilitychange', handleSync);
     };
   }, [id]);
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > 60 && currentScrollY > lastScrollY.current) {
+        setIsScrolledDown(true);
+      } else if (currentScrollY < lastScrollY.current || currentScrollY <= 40) {
+        setIsScrolledDown(false);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const handleCopyCode = () => {
     if (!group) return;
@@ -629,24 +652,112 @@ export default function GroupDetailPage({
     ? group.simplifiedTransfers
     : group.directTransfers;
 
-  function getCategoryBadge(cat?: string) {
-    switch (cat) {
-      case 'Food':
-        return { icon: Utensils, bg: 'bg-amber-50 text-amber-600' };
-      case 'Transport':
-        return { icon: Car, bg: 'bg-blue-50 text-blue-600' };
-      case 'Groceries':
-        return { icon: ShoppingCart, bg: 'bg-emerald-50 text-emerald-600' };
-      case 'Drinks':
-        return { icon: Coffee, bg: 'bg-rose-50 text-rose-600' };
-      case 'Stay':
-        return { icon: Hotel, bg: 'bg-purple-50 text-purple-600' };
-      case 'Shopping':
-        return { icon: ShoppingBag, bg: 'bg-indigo-50 text-indigo-600' };
-      default:
-        return { icon: Receipt, bg: 'bg-slate-100 text-slate-700' };
+  // Calculate what the current user lent or borrowed for an expense
+  const getExpenseUserShare = (exp: Expense, currentMemberId?: string) => {
+    const myPaid = exp.payers?.find((p) => p.memberId === currentMemberId)?.amountPaisa || 0;
+    const mySplit = exp.splits?.find((s) => s.memberId === currentMemberId)?.amountPaisa || 0;
+    const diff = myPaid - mySplit;
+
+    if (myPaid === 0 && mySplit === 0) {
+      return {
+        status: 'not involved',
+        color: 'text-slate-500',
+        amountColor: 'text-slate-500',
+        amountText: '0.00',
+      };
     }
-  }
+
+    if (diff > 0) {
+      return {
+        status: 'you lent',
+        color: 'text-emerald-400',
+        amountColor: 'text-emerald-400',
+        amountText: (diff / 100).toFixed(2),
+      };
+    }
+
+    if (diff < 0) {
+      return {
+        status: 'you borrowed',
+        color: 'text-orange-400',
+        amountColor: 'text-orange-400',
+        amountText: (Math.abs(diff) / 100).toFixed(2),
+      };
+    }
+
+    return {
+      status: 'no debt',
+      color: 'text-slate-400',
+      amountColor: 'text-slate-400',
+      amountText: '0.00',
+    };
+  };
+
+  // Settlement user share calculation
+  const getSettlementUserShare = (st: Settlement, currentMemberId?: string) => {
+    const amount = (st.amountPaisa / 100).toFixed(2);
+    if (st.payerId === currentMemberId) {
+      return {
+        status: 'you paid',
+        color: 'text-emerald-400',
+        amountColor: 'text-emerald-400',
+        amountText: amount,
+      };
+    }
+    if (st.receiverId === currentMemberId) {
+      return {
+        status: 'paid to you',
+        color: 'text-emerald-400',
+        amountColor: 'text-emerald-400',
+        amountText: amount,
+      };
+    }
+    return {
+      status: 'settled',
+      color: 'text-slate-400',
+      amountColor: 'text-slate-400',
+      amountText: amount,
+    };
+  };
+
+  // Human-friendly subtitle for expenses matching Screenshot 1
+  const getExpenseSubtitle = (exp: Expense, currentMemberId?: string) => {
+    const payers = exp.payers || [];
+    if (payers.length === 1) {
+      const p = payers[0];
+      const isMe = p.memberId === currentMemberId;
+      const name = isMe ? 'You' : p.member?.name || 'Someone';
+      return `${name} paid ₹${(p.amountPaisa / 100).toFixed(2)}`;
+    }
+    if (payers.length > 1) {
+      return `${payers.length} people paid ₹${(exp.totalAmountPaisa / 100).toFixed(2)}`;
+    }
+    return `Total ₹${(exp.totalAmountPaisa / 100).toFixed(2)}`;
+  };
+
+  // Category Icon helper matching Screenshot 1 (Fuel, Food, Drinks, etc.)
+  const getExpenseItemIcon = (category?: string, description?: string) => {
+    const text = `${category || ''} ${description || ''}`.toLowerCase();
+    if (text.includes('fuel') || text.includes('petrol') || text.includes('diesel') || text.includes('gas')) {
+      return Fuel;
+    }
+    if (text.includes('drink') || text.includes('wine') || text.includes('beer') || text.includes('alcohol') || text.includes('bar')) {
+      return Wine;
+    }
+    if (text.includes('food') || text.includes('dinner') || text.includes('lunch') || text.includes('breakfast') || text.includes('meal') || text.includes('restaurant') || text.includes('chakna')) {
+      return Utensils;
+    }
+    if (text.includes('coffee') || text.includes('cafe') || text.includes('tea')) {
+      return Coffee;
+    }
+    if (text.includes('grocery') || text.includes('market') || text.includes('supermarket')) {
+      return ShoppingCart;
+    }
+    if (text.includes('cab') || text.includes('taxi') || text.includes('uber') || text.includes('auto') || text.includes('transport')) {
+      return Car;
+    }
+    return ReceiptText;
+  };
 
   const activityItems = useMemo(() => {
     if (!group) return [];
@@ -696,44 +807,140 @@ export default function GroupDetailPage({
     });
   }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
 
-  return (
-    <div className="w-full pb-28">
-      {/* Top Header */}
-      <header className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Link
-              href="/groups"
-              className="p-1 -ml-1 rounded-xl text-slate-400 hover:text-slate-700 transition-colors shrink-0"
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
+  // Group activity by Month Year (e.g. "October 2024", "September 2026") matching Screenshot 1
+  const groupedActivity = useMemo(() => {
+    const groups: { monthYear: string; items: typeof activityItems }[] = [];
+    const map = new Map<string, typeof activityItems>();
 
-            {/* Group Category Icon with Interactive Picker */}
+    activityItems.forEach((item) => {
+      const key = item.date.toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+      });
+      if (!map.has(key)) {
+        map.set(key, []);
+        groups.push({ monthYear: key, items: map.get(key)! });
+      }
+      map.get(key)!.push(item);
+    });
+
+    return groups;
+  }, [activityItems]);
+
+  // Overall standing calculations using the user's plain language dictionary:
+  // "You are owed $45" -> "3 people need to pay you back $45"
+  const peopleOwingMe = displayedTransfers.filter((t) => t.toId === ownerMember?.id);
+  const peopleIOwe = displayedTransfers.filter((t) => t.fromId === ownerMember?.id);
+
+  let standingSentenceNode: React.ReactNode;
+  if (userBalance > 0) {
+    const count = peopleOwingMe.length;
+    const countLabel = count === 1 ? '1 person needs' : `${count} people need`;
+    standingSentenceNode = (
+      <span>
+        {countLabel} to pay you back{' '}
+        <span className="text-emerald-400 font-extrabold">
+          ₹{(userBalance / 100).toFixed(2)}
+        </span>{' '}
+        overall
+      </span>
+    );
+  } else if (userBalance < 0) {
+    standingSentenceNode = (
+      <span>
+        You need to pay back{' '}
+        <span className="text-orange-400 font-extrabold">
+          ₹{(Math.abs(userBalance) / 100).toFixed(2)}
+        </span>{' '}
+        overall
+      </span>
+    );
+  } else {
+    standingSentenceNode = (
+      <span className="text-slate-300">
+        You are all squared away overall
+      </span>
+    );
+  }
+
+  // Sub-breakdown items matching Screenshot 1 ("Togo owes you ₹501.18", "Mantu owes you ₹501.17")
+  const subBalances = useMemo(() => {
+    if (userBalance > 0) {
+      return peopleOwingMe.map((t) => ({
+        text: (
+          <span>
+            {t.fromName} owes you{' '}
+            <span className="text-emerald-400 font-bold">
+              ₹{(t.amountPaisa / 100).toFixed(2)}
+            </span>
+          </span>
+        ),
+      }));
+    }
+    if (userBalance < 0) {
+      return peopleIOwe.map((t) => ({
+        text: (
+          <span>
+            You owe {t.toName}{' '}
+            <span className="text-orange-400 font-bold">
+              ₹{(t.amountPaisa / 100).toFixed(2)}
+            </span>
+          </span>
+        ),
+      }));
+    }
+    return [];
+  }, [userBalance, peopleOwingMe, peopleIOwe]);
+
+  const displayedSubBalances = subBalances.slice(0, 2);
+  const remainingCount = Math.max(0, subBalances.length - displayedSubBalances.length);
+
+  return (
+    <div className="w-full min-h-screen bg-[#141416] text-white select-none pb-28 relative">
+      {/* Group Header Banner with Emerald Gradient Pattern matching Screenshot 1 */}
+      <div className="relative bg-gradient-to-b from-teal-700 via-emerald-700 to-emerald-800 text-white px-4 pt-4 pb-5 overflow-hidden">
+        {/* Decorative geometric overlay matching Screenshot 1 */}
+        <div className="absolute inset-0 pointer-events-none opacity-15">
+          <div className="absolute -top-12 -right-8 w-44 h-44 rounded-3xl bg-white/20 rotate-12" />
+          <div className="absolute top-10 left-1/3 w-36 h-8 rounded-full bg-white/30 -rotate-6" />
+          <div className="absolute bottom-2 right-12 w-28 h-6 rounded-full bg-white/25 -rotate-6" />
+          <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
+        </div>
+
+        {/* Top Navigation Row: Back Button on left (NO SETTING BUTTON AT THE TOP per user constraint) */}
+        <div className="relative z-10 flex items-center justify-between">
+          <Link
+            href="/groups"
+            className="w-10 h-10 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors"
+            aria-label="Back to Groups"
+          >
+            <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
+          </Link>
+
+          {/* Theme Category Icon with interactive selector */}
+          <div className="relative">
             {(() => {
               const catInfo = getGroupCategoryInfo(group.category);
               const GroupCatIcon = catInfo.icon;
               return (
-                <div className="relative shrink-0">
+                <>
                   <button
                     type="button"
                     onClick={() => setShowIconPicker(!showIconPicker)}
-                    className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-2xs border cursor-pointer hover:scale-105 active:scale-95 ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}
-                    title="Change Group Icon"
+                    className="w-10 h-10 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors cursor-pointer"
+                    title="Change Group Theme"
                   >
                     <GroupCatIcon className="w-5 h-5" />
                   </button>
 
-                  {/* Icon Picker Popover */}
                   {showIconPicker && (
-                    <div className="absolute left-0 top-12 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2.5 z-40 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95">
-                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
-                        <span className="text-[11px] font-bold text-slate-800">Select Group Theme</span>
+                    <div className="absolute right-0 top-12 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2.5 z-50 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95">
+                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1">
+                        <span className="text-[11px] font-bold text-white">Select Group Theme</span>
                         <button
                           type="button"
                           onClick={() => setShowIconPicker(false)}
-                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                          className="text-slate-400 hover:text-white cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -747,13 +954,15 @@ export default function GroupDetailPage({
                             type="button"
                             onClick={() => handleUpdateCategory(cat.id)}
                             className={`p-1.5 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                              isSelected ? 'ring-2 ring-emerald-600 bg-emerald-50/50 shadow-2xs' : 'hover:bg-slate-50'
+                              isSelected
+                                ? 'ring-2 ring-emerald-500 bg-emerald-950/60 shadow-2xs'
+                                : 'hover:bg-slate-800'
                             }`}
                           >
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
                               <Icon className="w-3.5 h-3.5" />
                             </div>
-                            <span className="text-[9px] font-bold text-slate-800 truncate w-full text-center">
+                            <span className="text-[9px] font-bold text-slate-200 truncate w-full text-center">
                               {cat.id}
                             </span>
                           </button>
@@ -761,336 +970,346 @@ export default function GroupDetailPage({
                       })}
                     </div>
                   )}
-                </div>
+                </>
               );
             })()}
-
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight truncate">
-                {group.name}
-              </h1>
-
-              {/* Join Code */}
-              <button
-                onClick={handleCopyCode}
-                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                title="Tap to copy code"
-              >
-                <span>Code: <span className="font-mono font-bold text-slate-700">{group.joinCode}</span></span>
-                {copiedCode ? (
-                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" /> Copied
-                  </span>
-                ) : (
-                  <Copy className="w-3 h-3 opacity-50" />
-                )}
-              </button>
-            </div>
           </div>
+        </div>
 
-          {/* Action Buttons matching Ledger */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => {
-                setSettlePreload({});
-                setIsSettleOpen(true);
-              }}
-              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-              <span>Settle</span>
-            </button>
+        {/* Large Title & People Pill matching Screenshot 1 */}
+        <div className="relative z-10 mt-4 space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight truncate">
+            {group.name}
+          </h1>
 
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 backdrop-blur-md text-white/90 text-xs font-bold">
+              <Users className="w-3.5 h-3.5" />
+              <span>{group.members.length} people</span>
+            </div>
+
+            {/* Tap to copy code pill */}
             <button
-              onClick={() => {
-                setEditingExpense(null);
-                setIsAddExpenseOpen(true);
-              }}
-              className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+              type="button"
+              onClick={handleCopyCode}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
+              title="Tap to copy invite code"
             >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Bill</span>
+              <span>Code: <span className="font-mono font-bold text-white">{group.joinCode}</span></span>
+              {copiedCode ? (
+                <span className="text-emerald-300 font-bold flex items-center gap-0.5 text-[11px]">
+                  <Check className="w-3 h-3 stroke-[3]" /> Copied
+                </span>
+              ) : (
+                <Copy className="w-3 h-3 opacity-60" />
+              )}
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Main Content Area */}
-      <div className="px-4 pt-3.5 space-y-4">
-        {/* Net Balance Summary Card matching Screenshot 2 (Ledger) */}
-        <div className="p-4 sm:p-5 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="grid grid-cols-2 gap-4 divide-x divide-slate-200/60">
-            {/* Left: Your Standing */}
-            <div className="space-y-0.5">
-              <span className="text-xs font-bold text-slate-500 block">
-                Your Balance
-              </span>
-              <div
-                className={`text-2xl sm:text-3xl font-black tracking-tight ${
-                  userBalance > 0
-                    ? 'text-emerald-700'
-                    : userBalance < 0
-                    ? 'text-orange-600'
-                    : 'text-slate-800'
-                }`}
-              >
-                {userBalance > 0
-                  ? `+₹${(userBalance / 100).toFixed(2)}`
-                  : userBalance < 0
-                  ? `-₹${(Math.abs(userBalance) / 100).toFixed(2)}`
-                  : '₹0.00'}
-              </div>
-              <span className="text-[11px] font-bold text-slate-400 block">
-                {userBalance > 0
-                  ? 'You Get'
-                  : userBalance < 0
-                  ? 'You Give'
-                  : 'All Settled'}
-              </span>
-            </div>
-
-            {/* Right: Total Spend */}
-            <div className="pl-4 sm:pl-5 space-y-0.5">
-              <span className="text-xs font-bold text-slate-500 block">
-                Total Spend
-              </span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                ₹{(group.totalSpendPaisa / 100).toFixed(2)}
-              </div>
-              <span className="text-[11px] font-bold text-slate-400 block">
-                {group.members.length} Members
-              </span>
-            </div>
+      {/* Overall Standing & Action Pills matching Screenshot 1 */}
+      <div className="bg-[#18181b] border-b border-slate-800/80 px-4 py-4 text-white">
+        {/* Collapsible Standing Sentence */}
+        <button
+          type="button"
+          onClick={() => setIsStandingExpanded(!isStandingExpanded)}
+          className="w-full flex items-center justify-between gap-2 text-left cursor-pointer group"
+        >
+          <div className="text-base sm:text-lg font-bold text-slate-100">
+            {standingSentenceNode}
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200/80 gap-6 pt-1">
-          {[
-            { key: 'activity', label: `Activity (${group.expenses.length + group.settlements.length})` },
-            { key: 'balances', label: `Balances (${displayedTransfers.length})` },
-            { key: 'members', label: `Members (${group.members.length})` },
-          ].map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
-                className={`pb-2.5 text-sm transition-all cursor-pointer ${
-                  isActive
-                    ? 'border-b-2 border-emerald-700 text-emerald-800 font-bold'
-                    : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-semibold'
-                }`}
-              >
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* TAB 1: ACTIVITY LIST */}
-        {activeTab === 'activity' && (
-          <div className="space-y-3 pt-1">
-            {/* Search & Filter Bar */}
-            <div className="space-y-2.5">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search activity by name, description, amount..."
-                  value={activitySearch}
-                  onChange={(e) => setActivitySearch(e.target.value)}
-                  className="w-full pl-9.5 pr-8 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-emerald-600 placeholder:text-slate-400 transition-colors"
-                />
-                {activitySearch && (
-                  <button
-                    onClick={() => setActivitySearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Filter Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                {[
-                  { id: 'all', label: `All (${group.expenses.length + group.settlements.length})` },
-                  { id: 'expenses', label: `Expenses (${group.expenses.length})` },
-                  { id: 'settlements', label: `Settlements (${group.settlements.length})` },
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setActivityFilter(f.id as any)}
-                    className={`px-3 py-1 rounded-full text-xs transition-all shrink-0 cursor-pointer ${
-                      activityFilter === f.id
-                        ? 'bg-slate-800 text-white font-bold'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* List items */}
-            {loading && activityItems.length === 0 ? (
-              <div className="space-y-2.5 pt-1 animate-pulse">
-                <div className="h-16 bg-slate-50 rounded-2xl"></div>
-                <div className="h-16 bg-slate-50 rounded-2xl"></div>
-              </div>
-            ) : activityItems.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-100 text-center space-y-2 shadow-2xs">
-                <Receipt className="w-9 h-9 text-slate-300 mx-auto" />
-                <h4 className="font-normal text-slate-800 text-sm">
-                  {activitySearch ? 'No matching activity found' : 'No activity yet'}
-                </h4>
-                <p className="text-xs text-slate-400 font-normal">
-                  {activitySearch ? 'Try a different search query.' : "Tap '+ Bill' above to record your first expense."}
-                </p>
-              </div>
+          <div className="w-7 h-7 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400 group-hover:text-white shrink-0 transition-colors">
+            {isStandingExpanded ? (
+              <ChevronUp className="w-4 h-4 stroke-[2.5]" />
             ) : (
-              activityItems.map((item) => {
-                const dateStr = item.date.toLocaleDateString('en-IN', {
-                  month: 'short',
-                  day: 'numeric',
-                });
+              <ChevronDown className="w-4 h-4 stroke-[2.5]" />
+            )}
+          </div>
+        </button>
 
-                if (item.type === 'EXPENSE') {
-                  const badge = getCategoryBadge(item.category);
-                  const CategoryIcon = badge.icon;
-                  const totalRupees = item.totalAmountPaisa / 100;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-11 h-11 rounded-2xl ${badge.bg} flex items-center justify-center shrink-0 shadow-2xs`}>
-                          <CategoryIcon className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-base font-bold text-slate-900 truncate leading-snug">
-                            {item.title}
-                          </h4>
-                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
-                            Paid by <span className="font-bold text-slate-700">{item.payerNames}</span> • {dateStr}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <div className="text-right">
-                          <span className="text-base sm:text-lg font-black text-slate-900 block">
-                            ₹{totalRupees.toFixed(2)}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-400 capitalize">
-                            {item.raw.splitType.toLowerCase()}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setEditingExpense(item.raw);
-                            setIsAddExpenseOpen(true);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Edit Expense"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteExpense(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete Expense"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                } else {
-                  // Settlement Item with bold Ledger typography
-                  const totalRupees = item.totalAmountPaisa / 100;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
-                          <CheckCircle2 className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-base font-bold text-slate-900 truncate">
-                            {item.title}
-                          </h4>
-                          <p className="text-xs font-semibold text-slate-500 truncate mt-0.5">
-                            Settlement • {dateStr}
-                            {item.paymentMethod ? ` • via ${item.paymentMethod}` : ''}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <div className="text-right">
-                          <span className="text-base sm:text-lg font-black text-emerald-700 block">
-                            ₹{totalRupees.toFixed(2)}
-                          </span>
-                          <span className="text-xs font-bold text-emerald-600">
-                            Settled
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => handleDeleteSettlement(item.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Delete Settlement"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-              })
+        {/* Expanded Breakdown with left line matching Screenshot 1 */}
+        {isStandingExpanded && subBalances.length > 0 && (
+          <div className="mt-3 pl-3 border-l-2 border-slate-700/80 space-y-1 text-xs sm:text-sm">
+            {displayedSubBalances.map((b, idx) => (
+              <div key={idx} className="text-slate-300 font-medium">
+                {b.text}
+              </div>
+            ))}
+            {remainingCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('balances')}
+                className="text-xs text-slate-400 hover:text-slate-200 font-semibold pt-0.5 cursor-pointer block"
+              >
+                Plus {remainingCount} more balances
+              </button>
             )}
           </div>
         )}
 
-        {/* TAB 2: BALANCES & SETTLE UP */}
-        {activeTab === 'balances' && (
-          <div className="space-y-3.5 pt-1">
-            {/* Simplify Debts Toggle */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between">
-              <div>
-                <span className="text-base font-normal text-slate-900 block">Simplify Debts</span>
-                <span className="text-xs font-normal text-slate-400 block mt-0.5">
-                  {group.simplifyDebts ? 'Minimizes total payments between group' : 'Exact pairwise debts'}
-                </span>
-              </div>
+        {/* Horizontal Action Pills matching Screenshot 1 */}
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1 no-scrollbar text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setSettlePreload({});
+              setIsSettleOpen(true);
+            }}
+            className="px-4 py-2 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+            <span>Mark this as paid</span>
+          </button>
 
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={group.simplifyDebts}
-                  onChange={(e) => handleToggleSimplify(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-10 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
+          <button
+            type="button"
+            onClick={() => setActiveTab(activeTab === 'balances' ? 'activity' : 'balances')}
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+              activeTab === 'balances'
+                ? 'bg-emerald-600 border-emerald-500 text-white'
+                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5 text-indigo-300 stroke-[2.5]" />
+            <span>Who owes who</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleToggleSimplify(!group.simplifyDebts)}
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+              group.simplifyDebts
+                ? 'border-emerald-700 bg-emerald-950/70 text-emerald-300'
+                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+            title="Clean up who pays who (minimize transactions)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 stroke-[2.5]" />
+            <span>Clean up who pays who: {group.simplifyDebts ? 'ON' : 'OFF'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab(activeTab === 'members' ? 'activity' : 'members')}
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+              activeTab === 'members'
+                ? 'bg-emerald-600 border-emerald-500 text-white'
+                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-sky-300 stroke-[2.5]" />
+            <span>People</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="px-4 pt-4 pb-28">
+        {/* ================= TAB 1: ACTIVITY LIST (Screenshot 1) ================= */}
+        {activeTab === 'activity' && (
+          <div className="space-y-4">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search expenses by title, person..."
+                value={activitySearch}
+                onChange={(e) => setActivitySearch(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 text-sm font-medium bg-[#1e1e22] border border-slate-800 rounded-xl focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-500 text-white transition-colors"
+              />
+              {activitySearch && (
+                <button
+                  type="button"
+                  onClick={() => setActivitySearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
-            {/* Suggested Transfers */}
+            {/* Empty State */}
+            {activityItems.length === 0 ? (
+              <div className="py-16 text-center space-y-2">
+                <ReceiptText className="w-10 h-10 text-slate-600 mx-auto" />
+                <h4 className="font-bold text-slate-300 text-base">
+                  {activitySearch ? 'No matching expenses' : 'No expenses yet'}
+                </h4>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                  {activitySearch
+                    ? 'Try searching with a different term.'
+                    : 'Tap the button below to record what you spent money on.'}
+                </p>
+              </div>
+            ) : (
+              /* Monthly Grouped Activity matching Screenshot 1 */
+              <div className="space-y-6">
+                {groupedActivity.map((groupMonth) => (
+                  <div key={groupMonth.monthYear} className="space-y-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white tracking-tight px-1">
+                      {groupMonth.monthYear}
+                    </h3>
+
+                    <div className="divide-y divide-slate-800/80">
+                      {groupMonth.items.map((item) => {
+                        const monthShort = item.date.toLocaleDateString('en-US', { month: 'short' });
+                        const dayNum = item.date.getDate();
+
+                        if (item.type === 'EXPENSE') {
+                          const exp = item.raw;
+                          const share = getExpenseUserShare(exp, ownerMember?.id);
+                          const subtitle = getExpenseSubtitle(exp, ownerMember?.id);
+                          const ItemIcon = getExpenseItemIcon(exp.category, exp.description);
+
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => {
+                                setEditingExpense(item.raw);
+                                setIsAddExpenseOpen(true);
+                              }}
+                              className="py-3 px-1 flex items-center justify-between gap-3 hover:bg-slate-900/40 rounded-xl transition-colors cursor-pointer group"
+                            >
+                              {/* Left Column: Date Block + Category Icon Tile */}
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-9 text-center shrink-0">
+                                  <span className="text-[11px] font-bold text-slate-400 block uppercase leading-none">
+                                    {monthShort}
+                                  </span>
+                                  <span className="text-base font-bold text-slate-200 block leading-tight mt-0.5">
+                                    {dayNum}
+                                  </span>
+                                </div>
+
+                                <div className="w-12 h-12 rounded-xl bg-[#222226] border border-slate-700/80 flex items-center justify-center text-slate-200 shrink-0 group-hover:border-emerald-600/60 transition-colors shadow-2xs">
+                                  <ItemIcon className="w-6 h-6" />
+                                </div>
+
+                                {/* Middle Column: Title & Subtitle */}
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-base font-bold text-white truncate leading-snug">
+                                    {item.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                                    {subtitle}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Right Column: User Share (you lent / you borrowed) */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right shrink-0">
+                                  <span className={`text-[11px] font-semibold block ${share.color}`}>
+                                    {share.status}
+                                  </span>
+                                  <span className={`text-base sm:text-lg font-black block tracking-tight ${share.amountColor}`}>
+                                    ₹{share.amountText}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteExpense(item.id);
+                                  }}
+                                  className="p-1.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
+                                  title="Delete Expense"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          // Settlement Item
+                          const st = item.raw;
+                          const share = getSettlementUserShare(st, ownerMember?.id);
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="py-3 px-1 flex items-center justify-between gap-3 hover:bg-slate-900/40 rounded-xl transition-colors cursor-pointer group"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-9 text-center shrink-0">
+                                  <span className="text-[11px] font-bold text-slate-400 block uppercase leading-none">
+                                    {monthShort}
+                                  </span>
+                                  <span className="text-base font-bold text-slate-200 block leading-tight mt-0.5">
+                                    {dayNum}
+                                  </span>
+                                </div>
+
+                                <div className="w-12 h-12 rounded-xl bg-emerald-950/50 border border-emerald-700/60 flex items-center justify-center text-emerald-400 shrink-0 shadow-2xs">
+                                  <CheckCircle2 className="w-6 h-6" />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="text-base font-bold text-white truncate leading-snug">
+                                    {item.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                                    Payment recorded
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right shrink-0">
+                                  <span className={`text-[11px] font-semibold block ${share.color}`}>
+                                    {share.status}
+                                  </span>
+                                  <span className={`text-base sm:text-lg font-black block tracking-tight ${share.amountColor}`}>
+                                    ₹{share.amountText}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSettlement(item.id);
+                                  }}
+                                  className="p-1.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
+                                  title="Delete Settlement"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= TAB 2: BALANCES ("Who owes who") ================= */}
+        {activeTab === 'balances' && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">Who owes who</h3>
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity')}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+              >
+                Back to Activity
+              </button>
+            </div>
+
             {displayedTransfers.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-100 text-center space-y-2 shadow-2xs">
-                <CheckCircle2 className="w-9 h-9 text-emerald-500 mx-auto" />
-                <h4 className="font-normal text-slate-800 text-sm">All settled up!</h4>
-                <p className="text-xs text-slate-400 font-normal">Zero pending dues in this group.</p>
+              <div className="bg-[#1e1e22] rounded-2xl p-8 border border-slate-800 text-center space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                <h4 className="font-bold text-white text-base">All settled up!</h4>
+                <p className="text-xs text-slate-400">Nobody owes anyone anything in this group.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -1101,45 +1320,50 @@ export default function GroupDetailPage({
                         upiId: t.toUpiId,
                         name: t.toName,
                         amountRupees: numRupees,
-                        note: `${group.name} share to ${t.toName}`,
+                        note: `${group.name} payment to ${t.toName}`,
                       })
                     : null;
 
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
+                      className="bg-[#1e1e22] p-4 rounded-2xl border border-slate-800 shadow-2xs space-y-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0 truncate">
-                          <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(t.fromName)}`}>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                              t.fromName
+                            )}`}
+                          >
                             {t.fromName.charAt(0).toUpperCase()}
                           </div>
-                          <div className="text-sm sm:text-base truncate">
-                            <span className="font-bold text-slate-900">{t.fromName}</span>
-                            <span className="text-slate-400 font-medium mx-1.5 text-xs">owes</span>
-                            <span className="font-bold text-emerald-700">{t.toName}</span>
+                          <div className="text-sm truncate">
+                            <span className="font-bold text-white">{t.fromName}</span>
+                            <span className="text-slate-400 mx-1 text-xs">owes</span>
+                            <span className="font-bold text-emerald-400">{t.toName}</span>
                           </div>
                         </div>
-                        <div className="font-black text-orange-600 text-lg sm:text-xl tracking-tight shrink-0">
+                        <div className="font-black text-orange-400 text-lg tracking-tight shrink-0">
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
                         {upiUrl && (
                           <a
                             href={upiUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 py-2 px-3 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
-                            <Smartphone className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
+                            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
                             <span>Pay UPI</span>
                           </a>
                         )}
 
                         <button
+                          type="button"
                           onClick={() => {
                             setSettlePreload({
                               payerId: t.fromId,
@@ -1148,10 +1372,10 @@ export default function GroupDetailPage({
                             });
                             setIsSettleOpen(true);
                           }}
-                          className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                          <span>Settle</span>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Mark this as paid</span>
                         </button>
                       </div>
                     </div>
@@ -1159,48 +1383,23 @@ export default function GroupDetailPage({
                 })}
               </div>
             )}
-
-            {/* Historical Settlements */}
-            {group.settlements.length > 0 && (
-              <div className="pt-2 space-y-2">
-                <span className="text-xs font-normal text-slate-400 block px-1">
-                  Past Settlements ({group.settlements.length})
-                </span>
-                {group.settlements.map((st) => (
-                  <div
-                    key={st.id}
-                    className="bg-white p-3 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-xs font-normal text-slate-600 truncate">
-                        <span className="text-slate-800">{st.payer.name}</span> paid{' '}
-                        <span className="text-slate-800">{st.receiver.name}</span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-normal text-slate-900 text-sm">
-                        ₹{(st.amountPaisa / 100).toFixed(2)}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteSettlement(st.id)}
-                        className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
-        {/* TAB 3: MEMBERS */}
+        {/* ================= TAB 3: MEMBERS ("People") ================= */}
         {activeTab === 'members' && (
-          <div className="space-y-3.5 pt-1">
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">People ({group.members.length})</h3>
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity')}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+              >
+                Back to Activity
+              </button>
+            </div>
+
             {/* Quick Add Friend */}
             <form onSubmit={handleAddMember} className="flex gap-2">
               <input
@@ -1208,46 +1407,53 @@ export default function GroupDetailPage({
                 placeholder="Friend's name (e.g. Amit)..."
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-200/80 bg-white focus:outline-hidden focus:border-emerald-600 placeholder:text-slate-400 transition-colors"
+                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-800 bg-[#1e1e22] text-white focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-500 transition-colors"
               />
               <button
                 type="submit"
                 disabled={addingMember || !newMemberName.trim()}
-                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
               >
                 {addingMember ? 'Adding...' : 'Add'}
               </button>
             </form>
 
-            {/* Members List matching Screenshot 2 (Ledger) */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+            {/* Members List */}
+            <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-[#1e1e22] overflow-hidden">
               {group.balances.map((b) => (
-                <div key={b.memberId} className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors">
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className={`w-12 h-12 rounded-full font-bold flex items-center justify-center text-base shrink-0 shadow-2xs ${getAvatarBg(b.name)}`}>
+                <div
+                  key={b.memberId}
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-11 h-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border border-white/10 ${getAvatarBg(
+                        b.name
+                      )}`}
+                    >
                       {b.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-slate-900 text-base sm:text-lg truncate">
+                        <span className="font-bold text-white text-base truncate">
                           {b.name}
                         </span>
                         {b.isOwner ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full">
                             Creator & Admin
                           </span>
                         ) : b.isAdmin ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-full">
                             Admin
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-[13px] font-semibold text-slate-500 block mt-0.5">
+                      <span className="text-xs font-medium text-slate-400 block mt-0.5">
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
 
-                      {/* Admin assignment toggle button & Remove Member for other members */}
+                      {/* Creator Admin Controls */}
                       {!b.isOwner && (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <button
@@ -1255,8 +1461,8 @@ export default function GroupDetailPage({
                             onClick={() => handleToggleAdmin(b.memberId, Boolean(b.isAdmin))}
                             className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                               b.isAdmin
-                                ? 'text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                                : 'text-indigo-700 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100'
+                                ? 'text-slate-400 border-slate-700 hover:bg-rose-950/60 hover:text-rose-300 hover:border-rose-800'
+                                : 'text-indigo-300 border-indigo-800 bg-indigo-950/60 hover:bg-indigo-900'
                             }`}
                           >
                             {b.isAdmin ? 'Revoke Admin' : 'Make Admin'}
@@ -1265,10 +1471,10 @@ export default function GroupDetailPage({
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(b.memberId)}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-950/60 border border-rose-800 transition-all cursor-pointer flex items-center gap-1"
                             title={`Remove ${b.name} from group`}
                           >
-                            <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <Trash2 className="w-3.5 h-3.5" />
                             <span>Remove</span>
                           </button>
                         </div>
@@ -1276,20 +1482,24 @@ export default function GroupDetailPage({
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0 pl-3">
+                  <div className="text-right shrink-0 pl-2">
                     {b.netBalancePaisa > 0 ? (
-                      <span className="text-lg sm:text-xl font-black text-emerald-700 block">
+                      <span className="text-base sm:text-lg font-black text-emerald-400 block">
                         +₹{(b.netBalancePaisa / 100).toFixed(2)}
                       </span>
                     ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-lg sm:text-xl font-black text-orange-600 block">
+                      <span className="text-base sm:text-lg font-black text-orange-400 block">
                         -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-lg sm:text-xl font-black text-emerald-600 block">₹0</span>
+                      <span className="text-base sm:text-lg font-black text-slate-400 block">₹0</span>
                     )}
-                    <span className="text-xs font-bold text-slate-400 block mt-0.5">
-                      {b.netBalancePaisa > 0 ? 'Gets back' : b.netBalancePaisa < 0 ? 'Owes' : 'Settled'}
+                    <span className="text-[11px] font-medium text-slate-400 block mt-0.5">
+                      {b.netBalancePaisa > 0
+                        ? 'Gets back'
+                        : b.netBalancePaisa < 0
+                        ? 'Owes'
+                        : 'Settled'}
                     </span>
                   </div>
                 </div>
@@ -1297,6 +1507,33 @@ export default function GroupDetailPage({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Floating Action Button: smooth animated morphing like ledger fab-add-person */}
+      <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
+        <button
+          type="button"
+          onClick={() => {
+            setEditingExpense(null);
+            setIsAddExpenseOpen(true);
+          }}
+          className={`pointer-events-auto fab-add-person flex items-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-2xl shadow-black/50 overflow-hidden cursor-pointer ${
+            isScrolledDown ? 'w-[52px]' : 'w-[156px]'
+          }`}
+          title="What did you spend money on?"
+          aria-label="What did you spend money on?"
+        >
+          <div className="w-[52px] h-[52px] flex items-center justify-center shrink-0">
+            <ReceiptText className="w-5 h-5 stroke-[2.2px]" />
+          </div>
+          <span
+            className={`whitespace-nowrap fab-text-wrapper overflow-hidden font-bold pr-4 ${
+              isScrolledDown ? 'max-w-0 opacity-0 !pr-0' : 'max-w-[110px] opacity-100'
+            }`}
+          >
+            Add expense
+          </span>
+        </button>
       </div>
 
       {/* Modals */}
@@ -1318,6 +1555,8 @@ export default function GroupDetailPage({
         onClose={() => setIsSettleOpen(false)}
         groupId={group.id}
         members={group.members}
+        transfers={displayedTransfers}
+        currentUserId={ownerMember?.id}
         onSettled={handleSettled}
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}

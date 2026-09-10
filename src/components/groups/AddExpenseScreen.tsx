@@ -409,7 +409,7 @@ export function AddExpenseScreen({
 
               <div className="text-center">
                 <h2 className="text-base font-bold text-slate-900">
-                  {isEditing ? 'Edit Expense' : 'Add an Expense'}
+                  {isEditing ? 'Edit Details' : 'What did you spend money on?'}
                 </h2>
                 <span className="text-[11px] text-slate-400 font-semibold">Step 1 of 2: Details</span>
               </div>
@@ -711,18 +711,18 @@ export function AddExpenseScreen({
                     <button
                       type="button"
                       onClick={() => setSplitMode('EQUAL')}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         splitMode === 'EQUAL'
                           ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
                           : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
-                      Equally
+                      Share this cost the same for everyone
                     </button>
                     <button
                       type="button"
                       onClick={handleSwitchToCustom}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         splitMode === 'CUSTOM'
                           ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
                           : 'text-slate-500 hover:text-slate-900'

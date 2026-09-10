@@ -1,8 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, ArrowRight, Smartphone } from 'lucide-react';
-import { generateUpiUrl } from '@/lib/splitwise';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  X,
+  ArrowLeft,
+  ArrowRight,
+  Pencil,
+  Info,
+  Check,
+  Mail,
+  User,
+  AlertCircle,
+} from 'lucide-react';
 
 interface Member {
   id: string;
@@ -12,96 +21,157 @@ interface Member {
   isOwner?: boolean;
 }
 
+interface TransferDebt {
+  fromId: string;
+  fromName: string;
+  toId: string;
+  toName: string;
+  amountPaisa: number;
+}
+
 interface SettleUpModalProps {
   isOpen: boolean;
   onClose: () => void;
   groupId: string;
   members: Member[];
+  transfers?: TransferDebt[];
+  currentUserId?: string;
   onSettled: (settlement?: any) => void;
   initialPayerId?: string;
   initialReceiverId?: string;
   initialAmountPaisa?: number;
 }
 
+const getAvatarBg = (name: string) => {
+  if (name.includes('🐰')) return 'bg-pink-100 text-pink-700 border-pink-200';
+  const firstChar = name.charAt(0).toUpperCase();
+  if (['R', 'S', 'P'].includes(firstChar)) return 'bg-blue-100 text-blue-700 border-blue-200';
+  if (['T', 'B', 'A'].includes(firstChar)) return 'bg-orange-100 text-orange-700 border-orange-200';
+  return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+};
+
 export function SettleUpModal({
   isOpen,
   onClose,
   groupId,
   members,
+  transfers = [],
+  currentUserId,
   onSettled,
   initialPayerId,
   initialReceiverId,
   initialAmountPaisa,
 }: SettleUpModalProps) {
+  // Step 1: Balance Selection ("Which balance do you want to settle?")
+  // Step 2: Member Selection ("Who is paying?")
+  // Step 3: Recipient Selection ("Who are they paying?")
+  // Step 4: Record Payment ("Record a payment")
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
   const [payerId, setPayerId] = useState<string>('');
   const [receiverId, setReceiverId] = useState<string>('');
   const [amountRupees, setAmountRupees] = useState<string>('');
+  const [isEditingAmount, setIsEditingAmount] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CASH'>('UPI');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Synchronize and prefill whenever modal opens or props change
+  const currentUser = useMemo(() => {
+    return (
+      members.find((m) => m.id === currentUserId) ||
+      members.find((m) => m.isOwner) ||
+      members[0]
+    );
+  }, [members, currentUserId]);
+
+  // Balances involving the current user
+  const relevantTransfers = useMemo(() => {
+    if (!currentUser) return transfers;
+    return transfers.filter(
+      (t) => t.fromId === currentUser.id || t.toId === currentUser.id
+    );
+  }, [transfers, currentUser]);
+
   useEffect(() => {
-    if (isOpen && members && members.length > 0) {
+    if (isOpen) {
       setError('');
       setLoading(false);
       setNotes('');
+      setIsEditingAmount(false);
 
-      // Prefill Payer (Who owes / is paying)
-      const pId =
-        (initialPayerId && members.some((m) => m.id === initialPayerId) && initialPayerId) ||
-        members[0]?.id ||
-        '';
-      setPayerId(pId);
-
-      // Prefill Receiver (Who is owed / receives)
-      const rId =
-        (initialReceiverId && members.some((m) => m.id === initialReceiverId) && initialReceiverId) ||
-        members.find((m) => m.id !== pId)?.id ||
-        members[1]?.id ||
-        '';
-      setReceiverId(rId);
-
-      // Prefill Amount
-      if (initialAmountPaisa && initialAmountPaisa > 0) {
+      if (initialPayerId && initialReceiverId && initialAmountPaisa) {
+        setPayerId(initialPayerId);
+        setReceiverId(initialReceiverId);
         setAmountRupees((initialAmountPaisa / 100).toFixed(2));
+        setStep(4); // Jump directly to Record Payment screen
       } else {
+        setStep(1); // Start on balance pick screen
+        setPayerId('');
+        setReceiverId('');
         setAmountRupees('');
       }
     }
-  }, [isOpen, initialPayerId, initialReceiverId, initialAmountPaisa, members]);
+  }, [isOpen, initialPayerId, initialReceiverId, initialAmountPaisa]);
 
   if (!isOpen) return null;
 
-  const receiver = members.find((m) => m.id === receiverId);
   const payer = members.find((m) => m.id === payerId);
-  const numAmount = Number(amountRupees || 0);
+  const receiver = members.find((m) => m.id === receiverId);
 
-  // UPI deep link if receiver has upiId or phone
-  const upiLink =
-    receiver?.upiId && numAmount > 0
-      ? generateUpiUrl({
-          upiId: receiver.upiId,
-          name: receiver.name,
-          amountRupees: numAmount,
-          note: `Lena Dena Settlement to ${receiver.name}`,
-        })
-      : null;
+  // When tapping a direct balance in Step 1
+  const handleSelectBalance = (transfer: TransferDebt) => {
+    setPayerId(transfer.fromId);
+    setReceiverId(transfer.toId);
+    setAmountRupees((transfer.amountPaisa / 100).toFixed(2));
+    setStep(4);
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // When selecting payer in Step 2
+  const handleSelectPayer = (selectedPayerId: string) => {
+    setPayerId(selectedPayerId);
+    // Find if there is an existing debt from this payer to anyone
+    const existingDebt = transfers.find((t) => t.fromId === selectedPayerId);
+    if (existingDebt) {
+      setReceiverId(existingDebt.toId);
+      setAmountRupees((existingDebt.amountPaisa / 100).toFixed(2));
+      setStep(4);
+    } else {
+      setStep(3); // Choose receiver
+    }
+  };
+
+  // When selecting receiver in Step 3
+  const handleSelectReceiver = (selectedReceiverId: string) => {
+    setReceiverId(selectedReceiverId);
+    // Check if there is an existing amount
+    const debt = transfers.find(
+      (t) => t.fromId === payerId && t.toId === selectedReceiverId
+    );
+    if (debt) {
+      setAmountRupees((debt.amountPaisa / 100).toFixed(2));
+    } else if (!amountRupees) {
+      setAmountRupees('0.00');
+    }
+    setStep(4);
+  };
+
+  // Submit payment
+  const handleSubmit = async () => {
+    setError('');
     if (!payerId || !receiverId || payerId === receiverId) {
-      setError('Please select two different members');
+      setError('Please select both a payer and a receiver');
       return;
     }
+
+    const numAmount = Number(amountRupees || 0);
     const amountPaisa = Math.round(numAmount * 100);
     if (amountPaisa <= 0 || isNaN(amountPaisa)) {
-      setError('Please enter a valid payment amount');
+      setError('Please enter a valid amount');
       return;
     }
 
-    // ⚡ INSTANT OPTIMISTIC SUBMIT
+    // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
     const optimisticSettlement = {
       id: `temp_st_${Date.now()}`,
       payerId,
@@ -122,8 +192,9 @@ export function SettleUpModal({
     onSettled(optimisticSettlement);
     onClose();
 
-    // Persist to server in background
+    // Background server save
     try {
+      setLoading(true);
       const res = await fetch(`/api/groups/${groupId}/settlements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,168 +212,311 @@ export function SettleUpModal({
         onSettled(data.settlement);
       }
     } catch (err: any) {
-      console.error('Error recording settlement:', err);
+      console.error('Error saving settlement:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const isPreloadedDebt = Boolean(initialPayerId && initialReceiverId && initialAmountPaisa);
+  // Compute text for Step 4
+  const isPayerMe = currentUser && payerId === currentUser.id;
+  const isReceiverMe = currentUser && receiverId === currentUser.id;
+
+  const paymentTitle = isPayerMe
+    ? `You paid ${receiver?.name || 'Friend'}`
+    : isReceiverMe
+    ? `${payer?.name || 'Friend'} paid you`
+    : `${payer?.name || 'Payer'} paid ${receiver?.name || 'Receiver'}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
-        {/* Header with larger text */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <h3 className="font-black text-slate-900 text-lg">Settle Up</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200 select-none">
+      <div className="bg-[#18181b] text-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
+        {/* ================= STEP 1: SELECT BALANCE (Screenshot 2) ================= */}
+        {step === 1 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Header matching Screenshot 2 */}
+            <header className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <h3 className="font-bold text-white text-base">Mark this as paid</h3>
+              <div className="w-8" />
+            </header>
 
-        {/* Preloaded Debt Highlight Banner with prominent text */}
-        {isPreloadedDebt && payer && receiver && (
-          <div className="mx-5 mt-4 p-3 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl flex items-center justify-between text-sm">
-            <div className="text-emerald-950 font-bold">
-              <span>{payer.name}</span>
-              <span className="text-emerald-600 font-normal mx-1.5">pays</span>
-              <span>{receiver.name}</span>
+            {/* Content Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                Which balance do you want to settle?
+              </h2>
+
+              {/* Balances List matching Screenshot 2 */}
+              <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-[#1e1e22] overflow-hidden">
+                {relevantTransfers.length > 0 ? (
+                  relevantTransfers.map((t, idx) => {
+                    const isOwedToMe = currentUser && t.toId === currentUser.id;
+                    const otherMember = members.find(
+                      (m) => m.id === (isOwedToMe ? t.fromId : t.toId)
+                    );
+                    const otherName = otherMember?.name || (isOwedToMe ? t.fromName : t.toName);
+                    const otherContact = otherMember?.phone || otherMember?.upiId || 'In group';
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectBalance(t)}
+                        className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Circular white avatar with Mail icon matching Screenshot 2 */}
+                          <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 shrink-0 shadow-xs">
+                            <Mail className="w-5 h-5 stroke-[2]" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-white text-sm block truncate group-hover:text-emerald-400">
+                              {otherName}
+                            </span>
+                            <span className="text-xs text-slate-400 block truncate">
+                              {otherContact}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`text-[11px] font-semibold block ${
+                              isOwedToMe ? 'text-emerald-400' : 'text-orange-400'
+                            }`}
+                          >
+                            {isOwedToMe ? 'owes you' : 'you owe'}
+                          </span>
+                          <span
+                            className={`text-base font-black block tracking-tight ${
+                              isOwedToMe ? 'text-emerald-400' : 'text-orange-400'
+                            }`}
+                          >
+                            ₹{(t.amountPaisa / 100).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                    No pending dues found. Tap &ldquo;More options&rdquo; below to record any payment.
+                  </div>
+                )}
+              </div>
+
+              {/* More Options Button matching Screenshot 2 */}
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="w-full py-3 px-4 rounded-2xl bg-[#1e1e22] hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold text-sm transition-colors text-left flex items-center justify-between cursor-pointer"
+              >
+                <span>More options</span>
+                <ArrowRight className="w-4 h-4 text-slate-500" />
+              </button>
             </div>
-            <span className="font-black text-emerald-800 text-base">
-              ₹{(Number(initialAmountPaisa || 0) / 100).toFixed(2)}
-            </span>
           </div>
         )}
 
-        {/* Form Body with larger, clear inputs */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">
-              {error}
-            </div>
-          )}
-
-          {/* Payer and Receiver prefilled selector */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-                Payer (Who Paid)
-              </label>
-              <select
-                value={payerId}
-                onChange={(e) => setPayerId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50/50 truncate"
+        {/* ================= STEP 2: WHO IS PAYING? (Screenshot 3) ================= */}
+        {step === 2 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Header matching Screenshot 3 */}
+            <header className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Back"
               >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} {m.isOwner ? '(You)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h3 className="font-bold text-white text-base">Who is paying?</h3>
+              <div className="w-8" />
+            </header>
 
-            <div className="pt-6 text-slate-300">
-              <ArrowRight className="w-4 h-4" />
-            </div>
-
-            <div className="flex-1">
-              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-                Receiver (Got Money)
-              </label>
-              <select
-                value={receiverId}
-                onChange={(e) => setReceiverId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50/50 truncate"
-              >
+            {/* Members List matching Screenshot 3 */}
+            <div className="p-5 space-y-2 overflow-y-auto flex-1">
+              <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-[#1e1e22] overflow-hidden">
                 {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} {m.isOwner ? '(You)' : ''}
-                  </option>
+                  <div
+                    key={m.id}
+                    onClick={() => handleSelectPayer(m.id)}
+                    className="p-3.5 flex items-center gap-3.5 hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 shrink-0 shadow-xs">
+                      <Mail className="w-5 h-5 stroke-[2]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-white text-sm block truncate group-hover:text-emerald-400">
+                        {m.name}
+                        {currentUser && m.id === currentUser.id ? ' (You)' : ''}
+                      </span>
+                      <span className="text-xs text-slate-400 block truncate">
+                        {m.phone || m.upiId || 'Group member'}
+                      </span>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300" />
+                  </div>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Amount (Prefilled from debt transfer) */}
-          <div>
-            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-              Settlement Amount (₹) *
-            </label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">
-                ₹
-              </span>
-              <input
-                type="number"
-                step="0.01"
-                required
-                placeholder="0.00"
-                value={amountRupees}
-                onChange={(e) => setAmountRupees(e.target.value)}
-                className="w-full pl-8 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-black text-slate-900 text-2xl bg-slate-50/50"
-                autoFocus={!isPreloadedDebt}
-              />
+        {/* ================= STEP 3: WHO ARE THEY PAYING? ================= */}
+        {step === 3 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Header */}
+            <header className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h3 className="font-bold text-white text-base">Who received the money?</h3>
+              <div className="w-8" />
+            </header>
+
+            {/* Receivers List */}
+            <div className="p-5 space-y-2 overflow-y-auto flex-1">
+              <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-[#1e1e22] overflow-hidden">
+                {members
+                  .filter((m) => m.id !== payerId)
+                  .map((m) => (
+                    <div
+                      key={m.id}
+                      onClick={() => handleSelectReceiver(m.id)}
+                      className="p-3.5 flex items-center gap-3.5 hover:bg-slate-800/60 transition-colors cursor-pointer group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-600 shrink-0 shadow-xs">
+                        <Mail className="w-5 h-5 stroke-[2]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-white text-sm block truncate group-hover:text-emerald-400">
+                          {m.name}
+                          {currentUser && m.id === currentUser.id ? ' (You)' : ''}
+                        </span>
+                        <span className="text-xs text-slate-400 block truncate">
+                          {m.phone || m.upiId || 'Group member'}
+                        </span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300" />
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Payment Method: Bank removed! Only UPI & Cash */}
-          <div>
-            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-              Payment Mode
-            </label>
-            <div className="grid grid-cols-2 gap-2.5">
-              {(
-                [
-                  { label: 'UPI 📱', value: 'UPI' },
-                  { label: 'Cash 💵', value: 'CASH' },
-                ] as const
-              ).map((method) => (
-                <button
-                  key={method.value}
-                  type="button"
-                  onClick={() => setPaymentMethod(method.value)}
-                  className={`py-2.5 px-3 rounded-xl text-sm font-bold transition-all text-center cursor-pointer ${
-                    paymentMethod === method.value
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+        {/* ================= STEP 4: RECORD A PAYMENT (Screenshot 4) ================= */}
+        {step === 4 && payer && receiver && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Header matching Screenshot 4 */}
+            <header className="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <h3 className="font-bold text-white text-base">Record a payment</h3>
+              <div className="w-8" />
+            </header>
+
+            {/* Content Body matching Screenshot 4 */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1 flex flex-col items-center justify-center text-center">
+              {error && (
+                <div className="w-full p-3 bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-bold rounded-2xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Avatar Pair with Arrow matching Screenshot 4 */}
+              <div className="flex items-center gap-4 pt-2">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-slate-700 shadow-md">
+                  <Mail className="w-8 h-8 stroke-[2]" />
+                </div>
+
+                <ArrowRight className="w-6 h-6 text-slate-500 stroke-[2.5]" />
+
+                <div
+                  className={`w-16 h-16 rounded-full font-bold text-xl flex items-center justify-center border shadow-md ${getAvatarBg(
+                    receiver.name
+                  )}`}
                 >
-                  {method.label}
-                </button>
-              ))}
+                  {receiver.name.charAt(0).toUpperCase()}
+                </div>
+              </div>
+
+              {/* Text: "[Payer] paid [Receiver]" */}
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-white">{paymentTitle}</h2>
+              </div>
+
+              {/* Big Editable Amount with Pencil Icon matching Screenshot 4 */}
+              <div className="w-full flex items-center justify-center gap-2">
+                <span className="text-3xl font-black text-slate-400">₹</span>
+                {isEditingAmount ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    autoFocus
+                    value={amountRupees}
+                    onChange={(e) => setAmountRupees(e.target.value)}
+                    onBlur={() => setIsEditingAmount(false)}
+                    onKeyDown={(e) => e.key === 'Enter' && setIsEditingAmount(false)}
+                    className="w-44 text-4xl sm:text-5xl font-black text-white text-center border-b-2 border-emerald-500 focus:outline-hidden bg-transparent tracking-tight"
+                  />
+                ) : (
+                  <div
+                    onClick={() => setIsEditingAmount(true)}
+                    className="flex items-center gap-2.5 cursor-pointer group"
+                    title="Tap to edit amount"
+                  >
+                    <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
+                      {Number(amountRupees || 0).toFixed(2)}
+                    </span>
+                    <Pencil className="w-5 h-5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                  </div>
+                )}
+              </div>
+
+              {/* Disclaimer Card matching Screenshot 4 */}
+              <div className="w-full p-4 rounded-2xl bg-[#222226] border border-slate-800 text-left flex items-start gap-3 shadow-2xs">
+                <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-xs font-medium text-slate-300 leading-relaxed">
+                  You are recording a payment that happened outside Lena Dena. No money will be moved.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Instant UPI Launch Button if receiver upiId available */}
-          {upiLink && paymentMethod === 'UPI' && (
-            <a
-              href={upiLink}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full py-2.5 px-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
-            >
-              <Smartphone className="w-4 h-4 text-emerald-600" />
-              <span>Launch UPI App (GPay / PhonePe)</span>
-            </a>
-          )}
-
-          {/* Submit */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading || numAmount <= 0}
-              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
-            >
-              Record Settle Up
-            </button>
+            {/* Bottom Primary Button matching Screenshot 4 */}
+            <footer className="p-4 border-t border-slate-800 bg-[#18181b] shrink-0">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="w-full py-4 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-emerald-950/40 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>{loading ? 'Recording...' : 'Record payment'}</span>
+              </button>
+            </footer>
           </div>
-        </form>
+        )}
       </div>
     </div>
   );
