@@ -89,6 +89,9 @@ export async function POST(req: Request) {
     }
 
     const txDate = date ? new Date(date) : new Date();
+    if (txDate.getTime() > Date.now() + 60 * 1000) {
+      return NextResponse.json({ error: 'Future transaction date is not allowed' }, { status: 400 });
+    }
 
     const result = await recordLedgerTransaction({
       businessId: session.businessId,
@@ -107,7 +110,13 @@ export async function POST(req: Request) {
       newBalancePaisa: result.newBalancePaisa,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to record transaction' }, { status: 500 });
+    const isClientError =
+      err.message === 'Future transaction date is not allowed' ||
+      err.message === 'Transaction amount must be greater than zero';
+    return NextResponse.json(
+      { error: err.message || 'Failed to record transaction' },
+      { status: isClientError ? 400 : 500 }
+    );
   }
 }
 
@@ -135,7 +144,13 @@ export async function PUT(req: Request) {
       updateData.amountPaisa = toPaisa(numAmount);
     }
     if (paymentMethod) updateData.paymentMethod = paymentMethod;
-    if (date) updateData.date = new Date(date);
+    if (date) {
+      const parsedDate = new Date(date);
+      if (parsedDate.getTime() > Date.now() + 60 * 1000) {
+        return NextResponse.json({ error: 'Future transaction date is not allowed' }, { status: 400 });
+      }
+      updateData.date = parsedDate;
+    }
     if (description !== undefined) updateData.description = description;
     if (billNumber !== undefined) updateData.billNumber = billNumber;
 
@@ -150,7 +165,9 @@ export async function PUT(req: Request) {
     const isClientError =
       err.message === 'Transaction is already deleted' ||
       err.message === 'Cannot edit a deleted transaction' ||
-      err.message === 'Transaction not found';
+      err.message === 'Transaction not found' ||
+      err.message === 'Future transaction date is not allowed' ||
+      err.message === 'Transaction amount must be greater than zero';
     return NextResponse.json(
       { error: err.message || 'Failed to update transaction' },
       { status: isClientError ? 400 : 500 }

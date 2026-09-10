@@ -383,4 +383,27 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
     expect(receiptMsg).toContain('advance');
     expect(receiptMsg).not.toContain('settled');
   });
+
+  it('strictly rejects recording future transaction dates', async () => {
+    const customer = await db.customer.create({
+      data: {
+        businessId: testBusinessA.id,
+        name: 'Future Date Tester',
+        phone: `9199${Date.now().toString().slice(-8)}`,
+        openingBalancePaisa: 0,
+        currentBalancePaisa: 0,
+      },
+    });
+
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await expect(
+      recordLedgerTransaction({
+        businessId: testBusinessA.id,
+        customerId: customer.id,
+        type: 'CREDIT',
+        amountPaisa: toPaisa(1000),
+        date: tomorrow,
+      })
+    ).rejects.toThrow('Future transaction date is not allowed');
+  });
 });

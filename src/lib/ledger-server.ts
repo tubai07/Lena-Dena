@@ -71,6 +71,10 @@ export async function recordLedgerTransaction(data: {
     throw new Error('Transaction amount must be greater than zero');
   }
 
+  if (data.date && data.date.getTime() > Date.now() + 60 * 1000) {
+    throw new Error('Future transaction date is not allowed');
+  }
+
   return await db.$transaction(async (tx) => {
     // Verify customer belongs to this business
     const customer = await tx.customer.findFirst({
@@ -160,6 +164,10 @@ export async function updateLedgerTransaction(
 ) {
   if (data.amountPaisa !== undefined && data.amountPaisa <= 0) {
     throw new Error('Transaction amount must be greater than zero');
+  }
+
+  if (data.date && data.date.getTime() > Date.now() + 60 * 1000) {
+    throw new Error('Future transaction date is not allowed');
   }
 
   return await db.$transaction(async (tx) => {

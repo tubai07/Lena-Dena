@@ -7,9 +7,13 @@ import {
   FileText,
   Check,
   Loader2,
+  ChevronRight,
+  Camera,
+  Plus,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 import { pendingCustomerCreations } from '@/lib/utils';
+import { WheelDatePickerModal } from './WheelDatePickerModal';
 
 interface CustomerOption {
   id: string;
@@ -44,6 +48,7 @@ export function TransactionModal({
   const [note, setNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const loading = false;
   const [error, setError] = useState('');
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +90,11 @@ export function TransactionModal({
         const [y, m, d] = selectedDate.split('-').map(Number);
         txDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
       }
+    }
+
+    if (txDate.getTime() > now.getTime() + 60 * 1000) {
+      setError('Future transaction dates are not allowed');
+      return;
     }
     const txDescription = note.trim() || (type === 'CREDIT' ? 'Given' : 'Received');
 
@@ -173,6 +183,24 @@ export function TransactionModal({
     }
   };
 
+  const formatBillDateDisplay = (dateStr: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (dateStr === todayStr) {
+      return 'Today';
+    }
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const isPayment = type === 'PAYMENT';
+  const accentColor = isPayment ? 'text-emerald-700' : 'text-orange-600';
+  const borderColor = isPayment ? 'border-emerald-600' : 'border-orange-600';
+
   // Keyboard shortcut listener for Enter and Escape
   useEffect(() => {
     if (!isOpen) return;
@@ -209,7 +237,7 @@ export function TransactionModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-700 hover:text-black rounded-full hover:bg-slate-100 tap-effect"
+            className="p-2 text-slate-700 hover:text-black rounded-full hover:bg-slate-100 tap-effect cursor-pointer"
             aria-label="Back"
           >
             <ArrowLeft className="w-6 h-6" />
@@ -248,8 +276,8 @@ export function TransactionModal({
 
         {/* Big Amount Input - Direct Typing */}
         <div className="py-5 text-center px-4">
-          <div className="inline-flex items-baseline justify-center border-b-2 border-orange-600 pb-1 px-4 max-w-full">
-            <span className="text-3xl font-bold text-orange-600 mr-2 select-none">₹</span>
+          <div className={`inline-flex items-baseline justify-center border-b-2 ${borderColor} pb-1 px-4 max-w-full`}>
+            <span className={`text-3xl font-bold ${accentColor} mr-2 select-none`}>₹</span>
             <input
               ref={amountInputRef}
               type="text"
@@ -303,7 +331,7 @@ export function TransactionModal({
               <button
                 type="button"
                 onClick={() => setShowNoteInput(true)}
-                className="w-full flex items-center gap-2.5 text-slate-700 font-semibold text-left"
+                className="w-full flex items-center gap-2.5 text-slate-700 font-semibold text-left cursor-pointer"
               >
                 <FileText className="w-4 h-4 text-slate-500 shrink-0" />
                 <span className="truncate">{note ? note : 'Add Notes'}</span>
@@ -311,19 +339,31 @@ export function TransactionModal({
             )}
           </div>
 
-          {/* Date Card with Functional Date Picker */}
-          <div className="bg-slate-50 border border-slate-200/80 hover:bg-slate-100 rounded-2xl p-2.5 px-3.5 flex items-center justify-between text-xs text-slate-700 font-semibold transition-colors">
-            <label htmlFor="bill-date-input" className="flex items-center gap-2.5 cursor-pointer">
-              <Calendar className="w-4 h-4 text-slate-500" />
-              <span>Bill Date</span>
-            </label>
-            <input
-              id="bill-date-input"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-white border border-slate-300 hover:border-emerald-600 focus:border-emerald-600 text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 cursor-pointer outline-none shadow-2xs"
-            />
+          {/* Bill Date Card with Wheel Date Picker */}
+          <button
+            type="button"
+            onClick={() => setIsDatePickerOpen(true)}
+            className="w-full bg-slate-50 border border-slate-200/80 hover:bg-slate-100/80 active:bg-slate-100 rounded-2xl p-3 flex items-center justify-between text-left transition-colors cursor-pointer tap-effect"
+          >
+            <div className="flex items-center gap-2.5">
+              <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
+              <div>
+                <div className="text-xs font-semibold text-slate-700 leading-tight">Bill Date</div>
+                <div className="text-[11px] font-medium text-slate-500 leading-tight mt-0.5">
+                  {formatBillDateDisplay(selectedDate)}
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+          </button>
+
+          {/* Add Bills Card */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between text-xs text-slate-700 font-semibold transition-colors">
+            <div className="flex items-center gap-2.5">
+              <Camera className="w-4 h-4 text-slate-500 shrink-0" />
+              <span>Add Bills</span>
+            </div>
+            <Plus className="w-4 h-4 text-emerald-700 stroke-[2.5px] shrink-0" />
           </div>
         </div>
 
@@ -333,7 +373,7 @@ export function TransactionModal({
             type="button"
             onClick={handleConfirm}
             disabled={loading || !amountStr || parseFloat(amountStr) <= 0}
-            className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl font-bold text-base shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 tap-effect"
+            className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl font-bold text-base shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 tap-effect cursor-pointer"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -346,6 +386,18 @@ export function TransactionModal({
           </button>
         </div>
       </div>
+
+      {/* Wheel Date Picker Bottom Sheet Modal */}
+      <WheelDatePickerModal
+        isOpen={isDatePickerOpen}
+        onClose={() => setIsDatePickerOpen(false)}
+        selectedDate={selectedDate}
+        onSelectDate={(newDate) => {
+          setSelectedDate(newDate);
+          setError('');
+        }}
+        maxDate={new Date()}
+      />
     </div>
   );
 }
