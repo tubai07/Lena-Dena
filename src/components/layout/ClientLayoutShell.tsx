@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { MobileBottomNav } from './MobileBottomNav';
+import { setCachedItem } from '@/lib/groupCache';
 
 export function ClientLayoutShell({
   businessName,
@@ -10,6 +11,21 @@ export function ClientLayoutShell({
   businessName: string;
   children: React.ReactNode;
 }) {
+  // Warm up groups cache in background on idle so navigating to Split/Groups is instantaneous (0ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch('/api/groups')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.groups) {
+            setCachedItem('all_groups', data.groups);
+          }
+        })
+        .catch(() => {});
+    }, 150);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
       {/* Centered Mobile Canvas Frame */}

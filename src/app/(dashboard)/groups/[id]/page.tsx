@@ -340,9 +340,9 @@ export default function GroupDetailPage({
   if (loading && !group) {
     return (
       <div className="p-4 space-y-4 animate-pulse">
-        <div className="h-10 bg-slate-100 rounded-2xl w-3/4"></div>
-        <div className="h-28 bg-slate-100 rounded-3xl"></div>
-        <div className="h-40 bg-slate-100 rounded-3xl"></div>
+        <div className="h-12 bg-slate-100 rounded-2xl w-3/4"></div>
+        <div className="h-32 bg-slate-100 rounded-3xl"></div>
+        <div className="h-44 bg-slate-100 rounded-3xl"></div>
       </div>
     );
   }
@@ -360,59 +360,59 @@ export default function GroupDetailPage({
 
   return (
     <div className="w-full pb-28">
-      {/* Top Header */}
-      <header className="px-3.5 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
+      {/* Top Header with Larger Typography */}
+      <header className="px-4 py-3.5 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
             <Link
               href="/groups"
-              className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+              className="p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
               aria-label="Back"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
 
             <div className="min-w-0">
-              <h1 className="text-base font-black text-slate-900 tracking-tight truncate">
+              <h1 className="text-lg font-black text-slate-900 tracking-tight truncate">
                 {group.name}
               </h1>
 
               {/* Join Code Chip */}
               <button
                 onClick={handleCopyCode}
-                className="inline-flex items-center gap-1 text-[11px] font-mono font-extrabold text-amber-800 hover:text-amber-900 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-900 hover:text-amber-950 transition-colors cursor-pointer"
                 title="Tap to copy code"
               >
                 <span>Code: {group.joinCode}</span>
                 {copiedCode ? (
-                  <span className="text-[10px] text-emerald-600 font-sans font-bold flex items-center gap-0.5">
-                    <Check className="w-2.5 h-2.5" /> Copied
+                  <span className="text-xs text-emerald-600 font-sans font-bold flex items-center gap-0.5">
+                    <Check className="w-3 h-3" /> Copied
                   </span>
                 ) : (
-                  <Copy className="w-2.5 h-2.5 opacity-60" />
+                  <Copy className="w-3 h-3 opacity-60" />
                 )}
               </button>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => {
                 setSettlePreload({});
                 setIsSettleOpen(true);
               }}
-              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center gap-1 cursor-pointer"
             >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>Settle</span>
             </button>
 
             <button
               onClick={() => setIsAddExpenseOpen(true)}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all flex items-center gap-1 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>Bill</span>
             </button>
           </div>
@@ -420,22 +420,22 @@ export default function GroupDetailPage({
       </header>
 
       {/* Main Content Area */}
-      <div className="px-4 pt-3 space-y-3">
-        {/* Single Unified Summary Card */}
-        <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
+      <div className="px-4 pt-3.5 space-y-3.5">
+        {/* Single Unified Summary Card with larger text */}
+        <div className="p-4 sm:p-5 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             {/* Left: Your Standing */}
             <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
                 Your Standing
               </span>
               <div
-                className={`text-2xl font-black tracking-tight mt-0.5 ${
+                className={`text-3xl font-black tracking-tight mt-1 ${
                   userBalance > 0
                     ? 'text-emerald-600'
                     : userBalance < 0
                     ? 'text-rose-600'
-                    : 'text-slate-700'
+                    : 'text-slate-800'
                 }`}
               >
                 {userBalance > 0
@@ -444,7 +444,7 @@ export default function GroupDetailPage({
                   ? `-₹${(Math.abs(userBalance) / 100).toFixed(2)}`
                   : '₹0.00'}
               </div>
-              <span className="text-[11px] font-semibold text-slate-500 block mt-0.5">
+              <span className="text-xs font-bold text-slate-500 block mt-1">
                 {userBalance > 0
                   ? 'You get back'
                   : userBalance < 0
@@ -454,22 +454,22 @@ export default function GroupDetailPage({
             </div>
 
             {/* Right: Group Total */}
-            <div className="text-right border-l border-slate-200/80 pl-4">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+            <div className="text-right border-l border-slate-200/80 pl-5">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
                 Total Spend
               </span>
-              <div className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+              <div className="text-2xl font-black text-slate-900 tracking-tight mt-1">
                 ₹{(group.totalSpendPaisa / 100).toFixed(0)}
               </div>
-              <span className="text-[11px] font-medium text-slate-400 block mt-0.5">
+              <span className="text-xs font-semibold text-slate-500 block mt-1">
                 {group.members.length} members
               </span>
             </div>
           </div>
         </div>
 
-        {/* Clean Tabs */}
-        <div className="flex border-b border-slate-200 gap-4 pt-1">
+        {/* Clean Tabs with larger text */}
+        <div className="flex border-b border-slate-200 gap-5 pt-1">
           {[
             { key: 'expenses', label: `Expenses (${group.expenses.length})`, icon: Receipt },
             { key: 'balances', label: `Balances (${displayedTransfers.length})`, icon: Scale },
@@ -481,13 +481,13 @@ export default function GroupDetailPage({
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as any)}
-                className={`pb-2.5 text-xs font-bold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                className={`pb-3 text-sm font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
                   isActive
                     ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -496,12 +496,12 @@ export default function GroupDetailPage({
 
         {/* TAB 1: EXPENSES LIST */}
         {activeTab === 'expenses' && (
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2.5 pt-1">
             {group.expenses.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2 shadow-2xs">
-                <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
-                <h4 className="font-extrabold text-slate-800 text-xs">No expenses yet</h4>
-                <p className="text-[11px] text-slate-400">
+              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2.5 shadow-2xs">
+                <Receipt className="w-10 h-10 text-slate-300 mx-auto" />
+                <h4 className="font-extrabold text-slate-800 text-sm">No expenses yet</h4>
+                <p className="text-xs text-slate-500">
                   Tap '+ Bill' above to add dinner, hotel, or groceries.
                 </p>
               </div>
@@ -517,39 +517,39 @@ export default function GroupDetailPage({
                 return (
                   <div
                     key={exp.id}
-                    className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
+                    className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
+                      <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-base shrink-0">
                         ₹
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-extrabold text-slate-900 text-sm truncate">
+                        <h4 className="font-black text-slate-900 text-base truncate">
                           {exp.description}
                         </h4>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          Paid by <span className="font-semibold text-slate-600">{payerNames}</span> •{' '}
+                        <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                          Paid by <span className="font-bold text-slate-700">{payerNames}</span> •{' '}
                           {expDate}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                       <div className="text-right">
-                        <span className="font-black text-slate-900 text-sm block">
+                        <span className="font-black text-slate-900 text-base block">
                           ₹{totalRupees.toFixed(2)}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium capitalize">
+                        <span className="text-xs text-slate-500 font-semibold capitalize">
                           {exp.splitType.toLowerCase()}
                         </span>
                       </div>
 
                       <button
                         onClick={() => handleDeleteExpense(exp.id)}
-                        className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                         title="Delete"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -561,13 +561,13 @@ export default function GroupDetailPage({
 
         {/* TAB 2: BALANCES & SETTLE UP */}
         {activeTab === 'balances' && (
-          <div className="space-y-3 pt-1">
+          <div className="space-y-3.5 pt-1">
             {/* Simplify Debts Toggle */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200/80 flex items-center justify-between shadow-2xs">
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex items-center justify-between shadow-2xs">
               <div>
-                <span className="text-xs font-bold text-slate-800 block">Simplify Debts</span>
-                <span className="text-[10px] text-slate-400 block">
-                  {group.simplifyDebts ? 'Minimizes total payments' : 'Exact pairwise debts'}
+                <span className="text-sm font-extrabold text-slate-900 block">Simplify Debts</span>
+                <span className="text-xs font-medium text-slate-500 block mt-0.5">
+                  {group.simplifyDebts ? 'Minimizes total payments between group' : 'Exact pairwise debts'}
                 </span>
               </div>
 
@@ -578,19 +578,19 @@ export default function GroupDetailPage({
                   onChange={(e) => handleToggleSimplify(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                <div className="w-10 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
               </label>
             </div>
 
             {/* Suggested Transfers */}
             {displayedTransfers.length === 0 ? (
-              <div className="bg-white rounded-2xl p-6 border border-slate-200/80 text-center space-y-1.5 shadow-2xs">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
-                <h4 className="font-extrabold text-slate-900 text-xs">All settled up!</h4>
-                <p className="text-[11px] text-slate-400">Zero pending dues in this group.</p>
+              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2 shadow-2xs">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                <h4 className="font-extrabold text-slate-900 text-sm">All settled up!</h4>
+                <p className="text-xs text-slate-500">Zero pending dues in this group.</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {displayedTransfers.map((t, idx) => {
                   const numRupees = t.amountPaisa / 100;
                   const upiUrl = t.toUpiId
@@ -605,15 +605,15 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2.5"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="text-xs">
-                          <span className="font-extrabold text-slate-900">{t.fromName}</span>
-                          <span className="text-slate-400 mx-1.5">owes</span>
-                          <span className="font-extrabold text-indigo-700">{t.toName}</span>
+                        <div className="text-sm">
+                          <span className="font-black text-slate-900">{t.fromName}</span>
+                          <span className="text-slate-400 font-medium mx-1.5">owes</span>
+                          <span className="font-black text-indigo-700">{t.toName}</span>
                         </div>
-                        <div className="font-black text-slate-900 text-base">
+                        <div className="font-black text-slate-900 text-lg">
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>
@@ -624,9 +624,9 @@ export default function GroupDetailPage({
                             href={upiUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors"
+                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
-                            <Smartphone className="w-3 h-3 text-emerald-600" />
+                            <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Pay UPI</span>
                           </a>
                         )}
@@ -641,9 +641,9 @@ export default function GroupDetailPage({
                             });
                             setIsSettleOpen(true);
                           }}
-                          className="flex-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
-                          <CheckCircle2 className="w-3 h-3" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Settle</span>
                         </button>
                       </div>
@@ -655,33 +655,33 @@ export default function GroupDetailPage({
 
             {/* Historical Settlements */}
             {group.settlements.length > 0 && (
-              <div className="pt-2 space-y-1.5">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+              <div className="pt-2 space-y-2">
+                <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
                   Past Settlements ({group.settlements.length})
                 </span>
                 {group.settlements.map((st) => (
                   <div
                     key={st.id}
-                    className="bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs flex items-center justify-between text-xs"
+                    className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-2xs flex items-center justify-between text-xs"
                   >
-                    <div className="flex items-center gap-1.5 text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>
-                        <strong className="text-slate-800">{st.payer.name}</strong> paid{' '}
-                        <strong className="text-slate-800">{st.receiver.name}</strong>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="text-xs font-medium text-slate-600">
+                        <strong className="text-slate-900 font-bold">{st.payer.name}</strong> paid{' '}
+                        <strong className="text-slate-900 font-bold">{st.receiver.name}</strong>
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="font-black text-slate-900 text-xs">
+                      <span className="font-black text-slate-900 text-sm">
                         ₹{(st.amountPaisa / 100).toFixed(2)}
                       </span>
                       <button
                         onClick={() => handleDeleteSettlement(st.id)}
-                        className="text-slate-300 hover:text-rose-600 p-0.5 cursor-pointer"
+                        className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer"
                         title="Delete"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -693,7 +693,7 @@ export default function GroupDetailPage({
 
         {/* TAB 3: MEMBERS */}
         {activeTab === 'members' && (
-          <div className="space-y-3 pt-1">
+          <div className="space-y-3.5 pt-1">
             {/* Quick Add Friend */}
             <form onSubmit={handleAddMember} className="flex gap-2">
               <input
@@ -701,37 +701,37 @@ export default function GroupDetailPage({
                 placeholder="Friend's name (e.g. Amit)..."
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
-                className="flex-1 px-3.5 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
               />
               <button
                 type="submit"
                 disabled={addingMember || !newMemberName.trim()}
-                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shrink-0 cursor-pointer"
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all shrink-0 cursor-pointer"
               >
                 {addingMember ? 'Adding...' : 'Add'}
               </button>
             </form>
 
-            {/* Members List */}
+            {/* Members List with larger text */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
               {group.balances.map((b) => (
-                <div key={b.memberId} className="p-3.5 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-extrabold text-xs shrink-0">
+                <div key={b.memberId} className="p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center font-black text-sm shrink-0">
                       {b.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-slate-900 text-xs truncate">
+                        <span className="font-black text-slate-900 text-sm truncate">
                           {b.name}
                         </span>
                         {b.isOwner && (
-                          <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-indigo-50 text-indigo-700 rounded-md">
+                          <span className="px-1.5 py-0.5 text-[10px] font-extrabold bg-indigo-50 text-indigo-700 rounded-md">
                             You
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                      <span className="text-xs font-semibold text-slate-500 block mt-0.5">
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
@@ -740,15 +740,15 @@ export default function GroupDetailPage({
 
                   <div className="text-right shrink-0">
                     {b.netBalancePaisa > 0 ? (
-                      <span className="text-xs font-black text-emerald-600 block">
+                      <span className="text-sm font-black text-emerald-600 block">
                         +₹{(b.netBalancePaisa / 100).toFixed(2)}
                       </span>
                     ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-xs font-black text-rose-600 block">
+                      <span className="text-sm font-black text-rose-600 block">
                         -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-xs font-bold text-slate-400 block">Settled</span>
+                      <span className="text-sm font-bold text-slate-400 block">Settled</span>
                     )}
                   </div>
                 </div>

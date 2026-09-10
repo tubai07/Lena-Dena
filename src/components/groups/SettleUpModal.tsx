@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, ArrowRight, Smartphone, Banknote } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Smartphone } from 'lucide-react';
 import { generateUpiUrl } from '@/lib/splitwise';
 
 interface Member {
@@ -101,8 +101,7 @@ export function SettleUpModal({
       return;
     }
 
-    // ⚡ INSTANT OPTIMISTIC SUBMIT:
-    // Update parent state and close modal in 0ms!
+    // ⚡ INSTANT OPTIMISTIC SUBMIT
     const optimisticSettlement = {
       id: `temp_st_${Date.now()}`,
       payerId,
@@ -140,8 +139,6 @@ export function SettleUpModal({
       const data = await res.json();
       if (res.ok && data.settlement) {
         onSettled(data.settlement);
-      } else {
-        console.error('Failed to save settlement:', data.error);
       }
     } catch (err: any) {
       console.error('Error recording settlement:', err);
@@ -153,13 +150,13 @@ export function SettleUpModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
-        {/* Header */}
+        {/* Header with larger text */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-4 h-4" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
-            <h3 className="font-extrabold text-slate-900 text-base">Settle Up</h3>
+            <h3 className="font-black text-slate-900 text-lg">Settle Up</h3>
           </div>
           <button
             onClick={onClose}
@@ -169,24 +166,24 @@ export function SettleUpModal({
           </button>
         </div>
 
-        {/* Preloaded Debt Highlight Banner */}
+        {/* Preloaded Debt Highlight Banner with prominent text */}
         {isPreloadedDebt && payer && receiver && (
-          <div className="mx-5 mt-4 p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
-            <div className="text-emerald-900">
-              <span className="font-bold">{payer.name}</span>
-              <span className="text-emerald-600 mx-1">pays</span>
-              <span className="font-bold">{receiver.name}</span>
+          <div className="mx-5 mt-4 p-3 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl flex items-center justify-between text-sm">
+            <div className="text-emerald-950 font-bold">
+              <span>{payer.name}</span>
+              <span className="text-emerald-600 font-normal mx-1.5">pays</span>
+              <span>{receiver.name}</span>
             </div>
-            <span className="font-black text-emerald-800 text-sm">
+            <span className="font-black text-emerald-800 text-base">
               ₹{(Number(initialAmountPaisa || 0) / 100).toFixed(2)}
             </span>
           </div>
         )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
+        {/* Form Body with larger, clear inputs */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl">
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">
               {error}
             </div>
           )}
@@ -194,13 +191,13 @@ export function SettleUpModal({
           {/* Payer and Receiver prefilled selector */}
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
                 Payer (Who Paid)
               </label>
               <select
                 value={payerId}
                 onChange={(e) => setPayerId(e.target.value)}
-                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/50 truncate"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50/50 truncate"
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -210,18 +207,18 @@ export function SettleUpModal({
               </select>
             </div>
 
-            <div className="pt-4 text-slate-300">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="pt-6 text-slate-300">
+              <ArrowRight className="w-4 h-4" />
             </div>
 
             <div className="flex-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
                 Receiver (Got Money)
               </label>
               <select
                 value={receiverId}
                 onChange={(e) => setReceiverId(e.target.value)}
-                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/50 truncate"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50/50 truncate"
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -234,11 +231,11 @@ export function SettleUpModal({
 
           {/* Amount (Prefilled from debt transfer) */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
               Settlement Amount (₹) *
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">
                 ₹
               </span>
               <input
@@ -248,7 +245,7 @@ export function SettleUpModal({
                 placeholder="0.00"
                 value={amountRupees}
                 onChange={(e) => setAmountRupees(e.target.value)}
-                className="w-full pl-7 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-black text-slate-900 text-xl bg-slate-50/50"
+                className="w-full pl-8 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-black text-slate-900 text-2xl bg-slate-50/50"
                 autoFocus={!isPreloadedDebt}
               />
             </div>
@@ -256,10 +253,10 @@ export function SettleUpModal({
 
           {/* Payment Method: Bank removed! Only UPI & Cash */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
               Payment Mode
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               {(
                 [
                   { label: 'UPI 📱', value: 'UPI' },
@@ -270,10 +267,10 @@ export function SettleUpModal({
                   key={method.value}
                   type="button"
                   onClick={() => setPaymentMethod(method.value)}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-xl text-sm font-bold transition-all text-center cursor-pointer ${
                     paymentMethod === method.value
                       ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {method.label}
@@ -288,9 +285,9 @@ export function SettleUpModal({
               href={upiLink}
               target="_blank"
               rel="noreferrer"
-              className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+              className="w-full py-2.5 px-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
             >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <Smartphone className="w-4 h-4 text-emerald-600" />
               <span>Launch UPI App (GPay / PhonePe)</span>
             </a>
           )}
@@ -300,7 +297,7 @@ export function SettleUpModal({
             <button
               type="submit"
               disabled={loading || numAmount <= 0}
-              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               Record Settle Up
             </button>

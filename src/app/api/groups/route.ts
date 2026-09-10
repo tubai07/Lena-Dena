@@ -8,6 +8,18 @@ import {
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
 
+// Fast in-memory server cache with 10s TTL
+const groupsServerCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 10000;
+
+export function invalidateServerGroupsCache(businessId?: string) {
+  if (businessId) {
+    groupsServerCache.delete(businessId);
+  } else {
+    groupsServerCache.clear();
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const session = await getSession();
@@ -15,18 +27,58 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const cached = groupsServerCache.get(session.businessId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' },
+      });
+    }
+
+    // Highly optimized query selecting only necessary columns
     const groups = await db.group.findMany({
       where: { businessId: session.businessId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        members: true,
-        expenses: {
-          include: {
-            payers: true,
-            splits: true,
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        currencySymbol: true,
+        joinCode: true,
+        simplifyDebts: true,
+        createdAt: true,
+        members: {
+          select: {
+            id: true,
+            name: true,
+            isOwner: true,
           },
         },
-        settlements: true,
+        expenses: {
+          select: {
+            id: true,
+            totalAmountPaisa: true,
+            payers: {
+              select: {
+                memberId: true,
+                amountPaisa: true,
+              },
+            },
+            splits: {
+              select: {
+                memberId: true,
+                amountPaisa: true,
+              },
+            },
+          },
+        },
+        settlements: {
+          select: {
+            id: true,
+            payerId: true,
+            receiverId: true,
+            amountPaisa: true,
+          },
+        },
       },
     });
 
@@ -57,7 +109,12 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ groups: formatted });
+    const responsePayload = { groups: formatted };
+    groupsServerCache.set(session.businessId, { data: responsePayload, timestamp: Date.now() });
+
+    return NextResponse.json(responsePayload, {
+      headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' },
+    });
   } catch (err: any) {
     console.error('Error fetching groups:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
@@ -105,26 +162,24 @@ export async function POST(req: Request) {
 
     if (Array.isArray(initialMembers)) {
       for (const m of initialMembers) {
-        if (m && typeof m.name === 'string' && m.name.trim()) {
-          const trimmed = m.name.trim();
-          if (trimmed.toLowerCase() !== ownerName.toLowerCase()) {
-            membersToCreate.push({
-              name: trimmed,
-              phone: m.phone?.trim() || undefined,
-              upiId: m.upiId?.trim() || undefined,
-              isOwner: false,
-            });
-          }
+        const cleanName = (typeof m === 'string' ? m : m?.name || '').trim();
+        if (cleanName && cleanName.toLowerCase() !== ownerName.toLowerCase()) {
+          membersToCreate.push({
+            name: cleanName,
+            phone: typeof m === 'object' && m.phone ? m.phone.trim() : undefined,
+            upiId: typeof m === 'object' && m.upiId ? m.upiId.trim() : undefined,
+            isOwner: false,
+          });
         }
       }
     }
 
-    const group = await db.group.create({
+    const newGroup = await db.group.create({
       data: {
-        businessId: session.businessId,
         name: name.trim(),
         category: category?.trim() || 'Trip',
         joinCode,
+        businessId: session.businessId,
         members: {
           create: membersToCreate,
         },
@@ -134,7 +189,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ group });
+    // Invalidate server cache
+    invalidateServerGroupsCache(session.businessId);
+
+    return NextResponse.json({ group: newGroup }, { status: 201 });
   } catch (err: any) {
     console.error('Error creating group:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });

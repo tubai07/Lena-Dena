@@ -89,7 +89,6 @@ export function AddExpenseModal({
   // When switching to CUSTOM mode, auto-prefill with equal shares if custom amounts are empty
   const handleSwitchToCustom = () => {
     setSplitMode('CUSTOM');
-    // If custom amounts are currently empty and we have a total amount, prefill with equal shares
     const currentCustomPaisa = Object.values(customAmounts).reduce(
       (s, v) => s + Math.round(Number(v || 0) * 100),
       0
@@ -120,7 +119,6 @@ export function AddExpenseModal({
   // 1-tap helper to split remaining amount equally among remaining members
   const handleSplitRemainingEqually = () => {
     if (diffPaisa <= 0) return;
-    // Find members who have 0 or empty amount
     let targetMembers = members.filter(
       (m) => !customAmounts[m.id] || Number(customAmounts[m.id]) === 0
     );
@@ -148,7 +146,7 @@ export function AddExpenseModal({
 
   const toggleMemberSelection = (id: string) => {
     if (selectedMemberIds.includes(id)) {
-      if (selectedMemberIds.length === 1) return; // Keep at least 1
+      if (selectedMemberIds.length === 1) return;
       setSelectedMemberIds(selectedMemberIds.filter((mId) => mId !== id));
     } else {
       setSelectedMemberIds([...selectedMemberIds, id]);
@@ -221,8 +219,7 @@ export function AddExpenseModal({
       finalSplitType = 'EXACT';
     }
 
-    // ⚡ INSTANT OPTIMISTIC SUBMIT:
-    // Synthesize optimistic expense object so UI updates in 0ms without waiting for network!
+    // ⚡ INSTANT OPTIMISTIC SUBMIT
     const payerMember = members.find((m) => m.id === payerId) || { id: payerId, name: 'You' };
     const optimisticExpense = {
       id: `temp_exp_${Date.now()}`,
@@ -250,13 +247,10 @@ export function AddExpenseModal({
       }),
     };
 
-    // 1. Immediately notify parent with optimistic expense
     onExpenseAdded(optimisticExpense);
-
-    // 2. Immediately close modal (0ms UI latency)
     onClose();
 
-    // 3. Persist to server in background
+    // Persist to server in background
     try {
       const res = await fetch(`/api/groups/${groupId}/expenses`, {
         method: 'POST',
@@ -273,10 +267,7 @@ export function AddExpenseModal({
 
       const data = await res.json();
       if (res.ok && data.expense) {
-        // Re-notify with confirmed server expense
         onExpenseAdded(data.expense);
-      } else {
-        console.error('Failed to persist expense:', data.error);
       }
     } catch (err: any) {
       console.error('Error saving expense:', err);
@@ -286,13 +277,13 @@ export function AddExpenseModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-              <Receipt className="w-4 h-4" />
+        {/* Header with larger text */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+              <Receipt className="w-5 h-5" />
             </div>
-            <h3 className="font-extrabold text-slate-900 text-base">Add Expense</h3>
+            <h3 className="font-black text-slate-900 text-lg">Add Expense</h3>
           </div>
           <button
             onClick={onClose}
@@ -302,21 +293,21 @@ export function AddExpenseModal({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 overflow-y-auto space-y-3.5">
+        {/* Form Body with larger text and clear spacing */}
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4">
           {error && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl animate-in fade-in">
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl animate-in fade-in">
               {error}
             </div>
           )}
 
           {/* Amount */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
               Total Amount (₹) *
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">
                 ₹
               </span>
               <input
@@ -326,7 +317,7 @@ export function AddExpenseModal({
                 placeholder="0.00"
                 value={amountRupees}
                 onChange={(e) => setAmountRupees(e.target.value)}
-                className="w-full pl-7 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-black text-slate-900 text-xl bg-slate-50/50"
+                className="w-full pl-8 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-black text-slate-900 text-2xl bg-slate-50/50"
                 autoFocus
               />
             </div>
@@ -334,7 +325,7 @@ export function AddExpenseModal({
 
           {/* Description */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
               Description *
             </label>
             <input
@@ -343,28 +334,28 @@ export function AddExpenseModal({
               placeholder="e.g. Dinner, Cab, Groceries"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs font-semibold text-slate-900 bg-slate-50/50"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-900 bg-slate-50/50 placeholder:text-slate-400"
             />
           </div>
 
           {/* Paid By */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">
               Paid By
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {members.map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => setPayerId(m.id)}
-                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     payerId === m.id
                       ? 'bg-emerald-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  {payerId === m.id && <Check className="w-3 h-3" />}
+                  {payerId === m.id && <Check className="w-3.5 h-3.5" />}
                   {m.name} {m.isOwner ? '(You)' : ''}
                 </button>
               ))}
@@ -373,15 +364,15 @@ export function AddExpenseModal({
 
           {/* Split Mode: Equal vs Custom ₹ */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
                 Split Options
               </span>
-              <div className="flex bg-slate-100 p-0.5 rounded-xl text-[11px]">
+              <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs">
                 <button
                   type="button"
                   onClick={() => setSplitMode('EQUAL')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                     splitMode === 'EQUAL'
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -392,7 +383,7 @@ export function AddExpenseModal({
                 <button
                   type="button"
                   onClick={handleSwitchToCustom}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                     splitMode === 'CUSTOM'
                       ? 'bg-white text-indigo-700 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -403,10 +394,10 @@ export function AddExpenseModal({
               </div>
             </div>
 
-            {/* EQUAL SPLIT VIEW */}
+            {/* EQUAL SPLIT VIEW with larger text */}
             {splitMode === 'EQUAL' ? (
-              <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-200/60 text-[10px] text-slate-400 font-bold">
+              <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-slate-200/60 text-xs text-slate-500 font-bold">
                   <span>Selected ({selectedMemberIds.length}/{members.length})</span>
                   <button
                     type="button"
@@ -424,20 +415,20 @@ export function AddExpenseModal({
                   return (
                     <label
                       key={m.id}
-                      className="flex items-center justify-between py-1 px-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+                      className="flex items-center justify-between py-1.5 px-2 rounded-xl hover:bg-slate-100 cursor-pointer"
                     >
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 select-none">
+                      <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-800 select-none">
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleMemberSelection(m.id)}
-                          className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300"
                         />
                         <span>{m.name}</span>
                       </div>
 
                       {isChecked && splitItem && (
-                        <span className="text-xs font-bold text-slate-800">
+                        <span className="text-sm font-bold text-slate-900">
                           ₹{(splitItem.amountPaisa / 100).toFixed(2)}
                         </span>
                       )}
@@ -446,22 +437,22 @@ export function AddExpenseModal({
                 })}
               </div>
             ) : (
-              /* CUSTOM SPLIT VIEW (Customize amount between members) */
-              <div className="space-y-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 pb-1 border-b border-slate-200/60">
+              /* CUSTOM SPLIT VIEW with larger text */
+              <div className="space-y-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-500 pb-1.5 border-b border-slate-200/60">
                   <span>Member Share</span>
                   <span>Amount (₹)</span>
                 </div>
 
                 {members.map((m) => (
-                  <div key={m.id} className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-800 truncate">
+                  <div key={m.id} className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-slate-800 truncate">
                       {m.name}
                     </span>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="relative w-28">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="relative w-32">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold">
                           ₹
                         </span>
                         <input
@@ -472,7 +463,7 @@ export function AddExpenseModal({
                           onChange={(e) =>
                             setCustomAmounts({ ...customAmounts, [m.id]: e.target.value })
                           }
-                          className="w-full pl-6 pr-2 py-1 text-xs font-bold text-right border border-slate-200 rounded-lg bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
+                          className="w-full pl-6 pr-2.5 py-1.5 text-sm font-black text-right border border-slate-200 rounded-xl bg-white focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
                         />
                       </div>
 
@@ -480,10 +471,10 @@ export function AddExpenseModal({
                         <button
                           type="button"
                           onClick={() => handleAutoFillRemainder(m.id)}
-                          className="p-1.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors cursor-pointer"
+                          className="p-2 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors cursor-pointer"
                           title="Assign remaining balance to this person"
                         >
-                          <ArrowDownRight className="w-3.5 h-3.5" />
+                          <ArrowDownRight className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -491,13 +482,13 @@ export function AddExpenseModal({
                 ))}
 
                 {/* Custom Split Helpers & Status */}
-                <div className="pt-2 border-t border-slate-200/70 space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between font-semibold">
-                    <span className="text-slate-500">
+                <div className="pt-2 border-t border-slate-200/70 space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-slate-600">
                       Allocated: ₹{(customSumPaisa / 100).toFixed(2)} / ₹{(totalAmountPaisa / 100).toFixed(2)}
                     </span>
                     <span
-                      className={`font-bold ${
+                      className={`${
                         diffPaisa === 0 && totalAmountPaisa > 0
                           ? 'text-emerald-600'
                           : diffPaisa > 0
@@ -518,9 +509,9 @@ export function AddExpenseModal({
                     <button
                       type="button"
                       onClick={handleSplitRemainingEqually}
-                      className="w-full py-1 px-2 rounded-lg bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="w-full py-1.5 px-3 rounded-xl bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Scale className="w-3 h-3" />
+                      <Scale className="w-3.5 h-3.5" />
                       <span>Split remaining ₹{(diffPaisa / 100).toFixed(2)} equally</span>
                     </button>
                   )}
@@ -529,9 +520,9 @@ export function AddExpenseModal({
                     <button
                       type="button"
                       onClick={handleSyncTotalFromCustom}
-                      className="w-full py-1 px-2 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="w-full py-1.5 px-3 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3 text-indigo-600" />
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                       <span>Set Total to ₹{(customSumPaisa / 100).toFixed(2)}</span>
                     </button>
                   )}
@@ -540,12 +531,12 @@ export function AddExpenseModal({
             )}
           </div>
 
-          {/* Submit */}
+          {/* Submit with larger button */}
           <div className="pt-2">
             <button
               type="submit"
               disabled={loading || totalAmountPaisa <= 0}
-              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all text-xs flex items-center justify-center cursor-pointer"
+              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center cursor-pointer"
             >
               Add Expense
             </button>

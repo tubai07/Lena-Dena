@@ -2,11 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, Receipt, Settings, UsersRound } from 'lucide-react';
+import { setCachedItem } from '@/lib/groupCache';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
 
   // If inside a customer profile (/customers/...), hide the general bottom nav
   // because customer profile has its own sticky Received / Given action tray!
@@ -21,6 +23,19 @@ export function MobileBottomNav() {
     { href: '/settings', label: 'More', icon: Settings },
   ];
 
+  const handlePrefetch = (href: string) => {
+    if (href === '/groups') {
+      fetch('/api/groups')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.groups) {
+            setCachedItem('all_groups', data.groups);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2">
       <div className="flex items-center justify-around">
@@ -34,6 +49,8 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               prefetch={true}
+              onMouseEnter={() => handlePrefetch(item.href)}
+              onPointerDown={() => handlePrefetch(item.href)}
               className={`flex flex-col items-center py-1 px-4 rounded-xl transition-all ${
                 isActive ? 'text-emerald-700 font-bold' : 'text-slate-500 font-medium hover:text-slate-800'
               }`}
@@ -45,7 +62,7 @@ export function MobileBottomNav() {
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               </div>
-              <span className="text-[11px] mt-0.5">{item.label}</span>
+              <span className="text-xs font-semibold mt-0.5">{item.label}</span>
             </Link>
           );
         })}
