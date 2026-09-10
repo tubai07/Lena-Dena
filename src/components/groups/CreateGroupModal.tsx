@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, Users, Sparkles } from 'lucide-react';
+import { X, Plus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface CreateGroupModalProps {
@@ -10,18 +10,9 @@ interface CreateGroupModalProps {
   onGroupCreated?: (group: any) => void;
 }
 
-const CATEGORIES = [
-  { label: 'Trip 🏖️', value: 'Trip' },
-  { label: 'Home / Flatmates 🏠', value: 'Home' },
-  { label: 'Dining / Food 🍕', value: 'Dining' },
-  { label: 'Event / Party 🎂', value: 'Event' },
-  { label: 'Other ⚡', value: 'Other' },
-];
-
 export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGroupModalProps) {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Trip');
   const [memberName, setMemberName] = useState('');
   const [members, setMembers] = useState<{ name: string; phone?: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,7 +59,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          category,
+          category: 'General',
           initialMembers: members,
         }),
       });
@@ -93,30 +84,27 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
               <Users className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-lg">Create New Group</h3>
-              <p className="text-xs text-slate-500">Trip, flatmates, or shared dinner bill</p>
-            </div>
+            <h3 className="font-extrabold text-slate-900 text-base">New Group</h3>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl">
+            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl">
               {error}
             </div>
           )}
@@ -129,59 +117,36 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             <input
               type="text"
               required
-              placeholder="e.g. Goa Trip 2026, Flat 302, Friday Dinner"
+              placeholder="e.g. Goa Trip, Flat 302, Dinner"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900 text-sm bg-slate-50/50"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-900 text-sm bg-slate-50/50"
               autoFocus
             />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Category
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.value}
-                  type="button"
-                  onClick={() => setCategory(cat.value)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    category === cat.value
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Add Members */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Group Members
+                Add Members
               </label>
-              <span className="text-[11px] text-slate-400">You are automatically added</span>
+              <span className="text-[10px] text-slate-400">You are automatically added</span>
             </div>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Type friend's name (e.g. Rahul)"
+                placeholder="Friend's name (e.g. Rahul)"
                 value={memberName}
                 onChange={(e) => setMemberName(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="flex-1 px-4 py-2.5 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-900 bg-slate-50/50"
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs font-medium text-slate-900 bg-slate-50/50"
               />
               <button
                 type="button"
                 onClick={handleAddMemberChip}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-2xl transition-colors flex items-center gap-1 shrink-0"
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add
@@ -189,31 +154,28 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             </div>
 
             {/* Added Members Chips */}
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                You (Creator)
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[11px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                You
               </span>
 
               {members.map((m, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full text-xs font-bold animate-in zoom-in-95 duration-150"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full text-[11px] font-bold"
                 >
                   {m.name}
                   <button
                     type="button"
                     onClick={() => handleRemoveMember(idx)}
-                    className="hover:text-rose-600 ml-0.5"
+                    className="hover:text-rose-600 ml-0.5 cursor-pointer"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </span>
               ))}
             </div>
-            <p className="text-[11px] text-slate-400 mt-2">
-              💡 Tip: You can also invite friends later with your 5-character Join Code.
-            </p>
           </div>
 
           {/* Submit */}
@@ -221,16 +183,9 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-md transition-all text-sm flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
-              {loading ? (
-                'Creating Group...'
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Create Group & Get Join Code
-                </>
-              )}
+              {loading ? 'Creating Group...' : 'Create Group'}
             </button>
           </div>
         </form>

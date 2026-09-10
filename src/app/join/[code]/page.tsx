@@ -180,8 +180,8 @@ export default function JoinGroupDetailPage({
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
           <div className="text-center space-y-1">
-            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-              {group.category} • Code: {group.joinCode}
+            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
+              Code: {group.joinCode}
             </span>
             <h1 className="text-2xl font-black text-slate-900">{group.name}</h1>
             <p className="text-xs text-slate-500">Who are you in this group?</p>
