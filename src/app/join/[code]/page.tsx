@@ -39,6 +39,7 @@ interface Member {
   phone?: string | null;
   upiId?: string | null;
   isOwner: boolean;
+  isAdmin?: boolean;
 }
 
 interface MemberBalance {
@@ -47,6 +48,7 @@ interface MemberBalance {
   phone?: string | null;
   upiId?: string | null;
   isOwner: boolean;
+  isAdmin?: boolean;
   totalPaidPaisa: number;
   totalOwedPaisa: number;
   settlementsPaidPaisa: number;
@@ -543,10 +545,10 @@ export default function JoinGroupDetailPage({
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-normal text-slate-400">You pay</span>
-                      <h4 className="font-normal text-slate-900 text-base">{t.toName}</h4>
+                      <span className="text-xs font-bold text-slate-400">You pay</span>
+                      <h4 className="font-bold text-slate-900 text-base">{t.toName}</h4>
                     </div>
-                    <div className="text-xl font-light text-rose-600 tracking-tight">
+                    <div className="text-xl font-black text-orange-600 tracking-tight">
                       ₹{numRupees.toFixed(2)}
                     </div>
                   </div>
@@ -557,7 +559,7 @@ export default function JoinGroupDetailPage({
                         href={upiUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs"
+                        className="flex-1 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs"
                       >
                         <Smartphone className="w-3.5 h-3.5" />
                         Pay via UPI
@@ -587,19 +589,19 @@ export default function JoinGroupDetailPage({
         {/* Debts owed to you */}
         {transfersOwedToMe.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+            <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider px-1">
               Friends who owe you ({transfersOwedToMe.length})
             </h3>
             {transfersOwedToMe.map((t, idx) => (
               <div
                 key={idx}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between"
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between"
               >
                 <div>
-                  <h4 className="font-normal text-slate-900 text-base">{t.fromName}</h4>
-                  <span className="text-xs text-emerald-600 font-normal">owes you</span>
+                  <h4 className="font-bold text-slate-900 text-base">{t.fromName}</h4>
+                  <span className="text-xs text-emerald-700 font-bold">owes you</span>
                 </div>
-                <div className="text-xl font-light text-emerald-600 tracking-tight">
+                <div className="text-xl font-black text-emerald-700 tracking-tight">
                   ₹{(t.amountPaisa / 100).toFixed(2)}
                 </div>
               </div>
@@ -698,20 +700,20 @@ export default function JoinGroupDetailPage({
                           <CategoryIcon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-normal text-slate-900 text-base truncate">
+                          <div className="font-bold text-slate-900 text-base truncate">
                             {item.title}
                           </div>
-                          <div className="text-xs font-normal text-slate-400 truncate mt-0.5">
+                          <div className="text-xs font-semibold text-slate-500 truncate mt-0.5">
                             {item.payerNames} paid • {dateStr}
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="font-normal text-slate-900 text-base block">
+                        <span className="font-black text-slate-900 text-base sm:text-lg block">
                           ₹{totalRupees.toFixed(2)}
                         </span>
-                        <span className="text-xs font-normal text-slate-400 capitalize">
+                        <span className="text-xs font-semibold text-slate-400 capitalize">
                           {item.raw.splitType.toLowerCase()}
                         </span>
                       </div>
@@ -721,27 +723,27 @@ export default function JoinGroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3 text-xs"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3 text-xs"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
                           <CheckCircle2 className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-normal text-slate-900 text-base truncate">
+                          <div className="font-bold text-slate-900 text-base truncate">
                             {item.title}
                           </div>
-                          <div className="text-xs font-normal text-slate-400 truncate mt-0.5">
+                          <div className="text-xs font-semibold text-slate-500 truncate mt-0.5">
                             Settlement • {dateStr}
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="font-normal text-emerald-600 text-base block">
+                        <span className="font-black text-emerald-700 text-base sm:text-lg block">
                           ₹{totalRupees.toFixed(2)}
                         </span>
-                        <span className="text-xs font-normal text-slate-400">
+                        <span className="text-xs font-bold text-emerald-600">
                           Settled
                         </span>
                       </div>

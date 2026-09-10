@@ -51,6 +51,7 @@ export async function GET(req: Request) {
             id: true,
             name: true,
             isOwner: true,
+            isAdmin: true,
           },
         },
         expenses: {
@@ -152,11 +153,12 @@ export async function POST(req: Request) {
 
     // Prepare members list: Owner is always first member
     const ownerName = session.userName?.trim() || session.businessName || 'You';
-    const membersToCreate: { name: string; phone?: string; upiId?: string; isOwner: boolean }[] = [
+    const membersToCreate: { name: string; phone?: string; upiId?: string; isOwner: boolean; isAdmin: boolean }[] = [
       {
         name: ownerName,
         phone: session.phone || undefined,
         isOwner: true,
+        isAdmin: true,
       },
     ];
 
@@ -169,6 +171,7 @@ export async function POST(req: Request) {
             phone: typeof m === 'object' && m.phone ? m.phone.trim() : undefined,
             upiId: typeof m === 'object' && m.upiId ? m.upiId.trim() : undefined,
             isOwner: false,
+            isAdmin: false,
           });
         }
       }

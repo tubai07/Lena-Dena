@@ -88,7 +88,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
         {/* Header with larger text */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
               <Users className="w-5 h-5" />
             </div>
             <h3 className="font-black text-slate-900 text-lg">New Group</h3>
@@ -120,7 +120,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
               placeholder="e.g. Goa Trip, Flat 302, Dinner"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-bold text-slate-900 text-sm bg-slate-50/50 placeholder:text-slate-400"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 font-bold text-slate-900 text-sm bg-slate-50/50 placeholder:text-slate-400"
               autoFocus
             />
           </div>
@@ -131,7 +131,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
               <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider">
                 Add Members
               </label>
-              <span className="text-xs text-slate-400 font-medium">You are auto-added</span>
+              <span className="text-xs text-slate-400 font-semibold">You are auto-added</span>
             </div>
 
             <div className="flex gap-2">
@@ -141,7 +141,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
                 value={memberName}
                 onChange={(e) => setMemberName(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-900 bg-slate-50/50 placeholder:text-slate-400"
+                className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-sm font-semibold text-slate-900 bg-slate-50/50 placeholder:text-slate-400"
               />
               <button
                 type="button"
@@ -156,14 +156,14 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             {/* Added Members Chips */}
             <div className="flex flex-wrap gap-2 mt-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/60 rounded-full text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                You
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                You (Admin)
               </span>
 
               {members.map((m, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full text-xs font-bold"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-800 border border-slate-200 rounded-full text-xs font-bold"
                 >
                   {m.name}
                   <button
@@ -183,7 +183,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center cursor-pointer"
+              className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center cursor-pointer"
             >
               {loading ? 'Creating...' : 'Create Group'}
             </button>

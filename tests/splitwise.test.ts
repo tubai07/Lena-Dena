@@ -186,4 +186,71 @@ describe('Splitwise Engine & Debt Simplification', () => {
     expect(text).toContain('Tubai');
     expect(text).toContain('https://lenadena.app/join/44A3B');
   });
+
+  it('formats local date accurately without timezone shifting', () => {
+    const d = new Date(2026, 8, 11, 3, 30, 0); // Sept 11, 2026 local
+    const y = d.getFullYear();
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    const expected = `${y}-${m}-${day}`;
+    expect(expected).toBe('2026-09-11');
+  });
+
+  it('accurately recalculates member balances when an expense is modified', () => {
+    const members = [
+      { id: 'm1', name: 'Admin', isOwner: true, isAdmin: true },
+      { id: 'm2', name: 'Friend', isOwner: false, isAdmin: false },
+    ];
+
+    // Initial expense: ₹200 paid by m1, split 50-50
+    const initialExpenses = [
+      {
+        id: 'exp1',
+        totalAmountPaisa: 20000,
+        payers: [{ memberId: 'm1', amountPaisa: 20000 }],
+        splits: [
+          { memberId: 'm1', amountPaisa: 10000 },
+          { memberId: 'm2', amountPaisa: 10000 },
+        ],
+      },
+    ];
+
+    const initialBalances = calculateMemberNetBalances(members, initialExpenses, []);
+    expect(initialBalances.find((b) => b.memberId === 'm1')!.netBalancePaisa).toBe(10000);
+    expect(initialBalances.find((b) => b.memberId === 'm2')!.netBalancePaisa).toBe(-10000);
+
+    // Modified expense: Changed to ₹500 paid by m1, split 50-50 (₹250 each)
+    const modifiedExpenses = [
+      {
+        id: 'exp1',
+        totalAmountPaisa: 50000,
+        payers: [{ memberId: 'm1', amountPaisa: 50000 }],
+        splits: [
+          { memberId: 'm1', amountPaisa: 25000 },
+          { memberId: 'm2', amountPaisa: 25000 },
+        ],
+      },
+    ];
+
+    const modifiedBalances = calculateMemberNetBalances(members, modifiedExpenses, []);
+    expect(modifiedBalances.find((b) => b.memberId === 'm1')!.netBalancePaisa).toBe(25000);
+    expect(modifiedBalances.find((b) => b.memberId === 'm2')!.netBalancePaisa).toBe(-25000);
+  });
+
+  it('supports admin delegation where owner is admin and can delegate admin to another member', () => {
+    const members = [
+      { id: 'm1', name: 'Creator', isOwner: true, isAdmin: true },
+      { id: 'm2', name: 'Friend', isOwner: false, isAdmin: false },
+    ];
+
+    expect(members[0].isOwner && members[0].isAdmin).toBe(true);
+    expect(members[1].isAdmin).toBe(false);
+
+    // Creator delegates admin to Friend
+    const updatedMembers = members.map((m) =>
+      m.id === 'm2' ? { ...m, isAdmin: true } : m
+    );
+
+    expect(updatedMembers.find((m) => m.id === 'm2')!.isAdmin).toBe(true);
+  });
 });

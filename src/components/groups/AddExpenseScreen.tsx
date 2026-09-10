@@ -27,6 +27,22 @@ const getAvatarBg = (name: string) => {
   return 'bg-emerald-100 text-emerald-700';
 };
 
+// Safe local date string formatter (YYYY-MM-DD) that never shifts due to UTC offset
+export const getLocalDateString = (dInput?: Date | string) => {
+  const d = dInput ? new Date(dInput) : new Date();
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 interface Member {
   id: string;
   name: string;
@@ -41,6 +57,7 @@ interface AddExpenseScreenProps {
   members: Member[];
   onExpenseAdded: (newExpense?: any) => void;
   defaultPayerId?: string;
+  initialExpense?: any | null; // For editing existing expense
 }
 
 const CATEGORIES = [
@@ -61,7 +78,9 @@ export function AddExpenseScreen({
   members,
   onExpenseAdded,
   defaultPayerId,
+  initialExpense = null,
 }: AddExpenseScreenProps) {
+  const isEditing = Boolean(initialExpense?.id);
   const [step, setStep] = useState<1 | 2>(1);
   const [description, setDescription] = useState('');
   const [amountRupees, setAmountRupees] = useState('');
@@ -71,9 +90,8 @@ export function AddExpenseScreen({
   const [category, setCategory] = useState('General');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
-  // Date selection (default today YYYY-MM-DD)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const [expenseDate, setExpenseDate] = useState(todayStr);
+  // Date selection (default today YYYY-MM-DD using local time)
+  const [expenseDate, setExpenseDate] = useState(() => getLocalDateString());
   const [showWheelDatePicker, setShowWheelDatePicker] = useState(false);
 
   // Notes
@@ -84,37 +102,70 @@ export function AddExpenseScreen({
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
 
-  // CRITICAL BUG FIX: Track previous isOpen state so background auto-polling
-  // changing the `members` prop NEVER resets user input while they type!
+  // Track previous state to avoid losing typing on re-renders
   const prevIsOpenRef = useRef(false);
+  const prevExpenseIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && !prevIsOpenRef.current) {
+    const shouldReset = isOpen && (!prevIsOpenRef.current || prevExpenseIdRef.current !== (initialExpense?.id || null));
+
+    if (shouldReset) {
       setStep(1);
-      setDescription('');
-      setAmountRupees('');
       setError('');
       setLoading(false);
-      setSplitMode('EQUAL');
-      setCategory('General');
       setShowCategoryPicker(false);
-      setExpenseDate(new Date().toISOString().split('T')[0]);
       setShowWheelDatePicker(false);
-      setNotes('');
 
-      const targetPayer =
-        (defaultPayerId && members.some((m) => m.id === defaultPayerId) && defaultPayerId) ||
-        members.find((m) => m.isOwner)?.id ||
-        members[0]?.id ||
-        '';
-      setPayerId(targetPayer);
+      if (initialExpense) {
+        // Edit mode pre-population
+        setDescription(initialExpense.description || '');
+        setAmountRupees(((initialExpense.totalAmountPaisa || 0) / 100).toFixed(2));
+        setCategory(initialExpense.category || 'General');
+        setExpenseDate(getLocalDateString(initialExpense.date));
+        setNotes(initialExpense.notes || '');
 
-      setSelectedMemberIds(members.map((m) => m.id));
-      setCustomAmounts({});
+        const editPayer = initialExpense.payers?.[0]?.memberId || defaultPayerId || members[0]?.id || '';
+        setPayerId(editPayer);
+
+        const isCustom = initialExpense.splitType === 'EXACT' || initialExpense.splitType === 'CUSTOM';
+        setSplitMode(isCustom ? 'CUSTOM' : 'EQUAL');
+
+        const splitMembers = (initialExpense.splits || []).map((s: any) => s.memberId);
+        setSelectedMemberIds(splitMembers.length > 0 ? splitMembers : members.map((m) => m.id));
+
+        if (isCustom) {
+          const customs: Record<string, string> = {};
+          (initialExpense.splits || []).forEach((s: any) => {
+            customs[s.memberId] = (s.amountPaisa / 100).toFixed(2);
+          });
+          setCustomAmounts(customs);
+        } else {
+          setCustomAmounts({});
+        }
+      } else {
+        // Create mode fresh state
+        setDescription('');
+        setAmountRupees('');
+        setSplitMode('EQUAL');
+        setCategory('General');
+        setExpenseDate(getLocalDateString());
+        setNotes('');
+
+        const targetPayer =
+          (defaultPayerId && members.some((m) => m.id === defaultPayerId) && defaultPayerId) ||
+          members.find((m) => m.isOwner)?.id ||
+          members[0]?.id ||
+          '';
+        setPayerId(targetPayer);
+
+        setSelectedMemberIds(members.map((m) => m.id));
+        setCustomAmounts({});
+      }
     }
 
     prevIsOpenRef.current = isOpen;
-  }, [isOpen, members, defaultPayerId]);
+    prevExpenseIdRef.current = initialExpense?.id || null;
+  }, [isOpen, members, defaultPayerId, initialExpense]);
 
   const totalAmountPaisa = Math.round(Number(amountRupees || 0) * 100);
 
@@ -137,11 +188,13 @@ export function AddExpenseScreen({
   // Formatted date string for button
   const formattedDateLabel = useMemo(() => {
     if (!expenseDate) return 'Today';
-    const nowStr = new Date().toISOString().split('T')[0];
-    if (expenseDate === nowStr) return 'Today';
+    const today = getLocalDateString();
+    if (expenseDate === today) return 'Today';
 
-    const d = new Date(expenseDate);
-    return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    const [y, m, d] = expenseDate.split('-').map(Number);
+    if (!y || !m || !d) return expenseDate;
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
   }, [expenseDate]);
 
   const activeCategory = useMemo(() => {
@@ -263,12 +316,15 @@ export function AddExpenseScreen({
       finalSplitType = 'EXACT';
     }
 
-    const selectedDateObj = expenseDate ? new Date(`${expenseDate}T12:00:00Z`) : new Date();
+    // Build local date object without timezone day shifting
+    const [y, m, d] = expenseDate.split('-').map(Number);
+    const selectedDateObj = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date();
     const payerMember = members.find((m) => m.id === payerId) || { id: payerId, name: 'You' };
 
-    // ⚡ INSTANT OPTIMISTIC SUBMIT
+    // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
     const optimisticExpense = {
-      id: `temp_exp_${Date.now()}`,
+      ...(initialExpense || {}),
+      id: isEditing ? initialExpense.id : `temp_exp_${Date.now()}`,
       description: trimmedDesc,
       totalAmountPaisa,
       category,
@@ -277,7 +333,7 @@ export function AddExpenseScreen({
       notes: notes.trim() || null,
       payers: [
         {
-          id: `temp_p_${Date.now()}`,
+          id: isEditing ? initialExpense.payers?.[0]?.id || `temp_p_${Date.now()}` : `temp_p_${Date.now()}`,
           memberId: payerId,
           amountPaisa: totalAmountPaisa,
           member: { id: payerMember.id, name: payerMember.name },
@@ -286,7 +342,7 @@ export function AddExpenseScreen({
       splits: finalSplits.map((s, idx) => {
         const mem = members.find((m) => m.id === s.memberId) || { id: s.memberId, name: 'Member' };
         return {
-          id: `temp_s_${Date.now()}_${idx}`,
+          id: isEditing ? initialExpense.splits?.[idx]?.id || `temp_s_${Date.now()}_${idx}` : `temp_s_${Date.now()}_${idx}`,
           memberId: s.memberId,
           amountPaisa: s.amountPaisa,
           member: { id: mem.id, name: mem.name },
@@ -297,10 +353,16 @@ export function AddExpenseScreen({
     onExpenseAdded(optimisticExpense);
     onClose();
 
-    // Background server save
+    // Background server save/update
     try {
-      const res = await fetch(`/api/groups/${groupId}/expenses`, {
-        method: 'POST',
+      setLoading(true);
+      const endpoint = isEditing
+        ? `/api/groups/${groupId}/expenses/${initialExpense.id}`
+        : `/api/groups/${groupId}/expenses`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description: trimmedDesc,
@@ -320,10 +382,10 @@ export function AddExpenseScreen({
       }
     } catch (err: any) {
       console.error('Error saving expense:', err);
+    } finally {
+      setLoading(false);
     }
   };
-
-  if (!isOpen) return null;
 
   const isStep1Ready = description.trim().length > 0 && Number(amountRupees) > 0;
 
@@ -346,16 +408,18 @@ export function AddExpenseScreen({
               </button>
 
               <div className="text-center">
-                <h2 className="text-base font-medium text-slate-800">Add an expense</h2>
-                <span className="text-[11px] text-slate-400 font-normal">Step 1 of 2: Details</span>
+                <h2 className="text-base font-bold text-slate-900">
+                  {isEditing ? 'Edit Expense' : 'Add an Expense'}
+                </h2>
+                <span className="text-[11px] text-slate-400 font-semibold">Step 1 of 2: Details</span>
               </div>
 
               <button
                 onClick={handleGoToStep2}
                 type="button"
                 disabled={!isStep1Ready}
-                className={`text-sm font-medium transition-colors cursor-pointer ${
-                  isStep1Ready ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-300 cursor-not-allowed'
+                className={`text-sm font-bold transition-colors cursor-pointer ${
+                  isStep1Ready ? 'text-emerald-700 hover:text-emerald-800' : 'text-slate-300 cursor-not-allowed'
                 }`}
               >
                 Next
@@ -364,8 +428,8 @@ export function AddExpenseScreen({
 
             {/* Sub-Header: Group tag */}
             <div className="bg-slate-50/70 border-b border-slate-100 px-5 py-2 flex items-center gap-2 shrink-0">
-              <span className="text-xs text-slate-400 font-normal">With:</span>
-              <span className="text-xs font-medium text-slate-700 bg-white border border-slate-200/60 px-2.5 py-0.5 rounded-full shadow-2xs">
+              <span className="text-xs text-slate-500 font-bold">Group:</span>
+              <span className="text-xs font-bold text-slate-800 bg-white border border-slate-200/80 px-2.5 py-0.5 rounded-full shadow-2xs">
                 {groupName}
               </span>
             </div>
@@ -373,7 +437,7 @@ export function AddExpenseScreen({
             {/* Form Body */}
             <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
               {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-normal rounded-2xl flex items-center gap-2 animate-in fade-in">
+                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{error}</span>
                 </div>
@@ -412,7 +476,7 @@ export function AddExpenseScreen({
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.color}`}>
                               <Icon className="w-4 h-4" />
                             </div>
-                            <span className="text-[10px] text-slate-700 font-normal truncate w-full text-center">
+                            <span className="text-[10px] text-slate-800 font-bold truncate w-full text-center">
                               {c.label}
                             </span>
                           </button>
@@ -423,32 +487,32 @@ export function AddExpenseScreen({
                 </div>
 
                 {/* Description Input */}
-                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-500 transition-colors pb-1">
+                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
                   <input
                     type="text"
                     placeholder="Enter a description (e.g. Dinner, Taxi)"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     autoFocus
-                    className="w-full text-lg font-normal text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
+                    className="w-full text-lg font-bold text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
                   />
                 </div>
               </div>
 
               {/* Currency Symbol + Amount */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 font-light text-2xl flex items-center justify-center border border-slate-200/60">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-800 font-bold text-2xl flex items-center justify-center border border-slate-200">
                   ₹
                 </div>
 
-                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-500 transition-colors pb-1">
+                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
                   <input
                     type="number"
                     step="0.01"
                     placeholder="0.00"
                     value={amountRupees}
                     onChange={(e) => setAmountRupees(e.target.value)}
-                    className="w-full text-3xl font-light text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
+                    className="w-full text-3xl font-black text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
                   />
                 </div>
               </div>
@@ -458,23 +522,18 @@ export function AddExpenseScreen({
                 <button
                   type="button"
                   onClick={() => setShowWheelDatePicker(true)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-sm font-medium transition-all cursor-pointer shadow-2xs hover:border-slate-300"
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-sm font-semibold transition-all cursor-pointer shadow-2xs hover:border-slate-300"
                 >
                   <Calendar className="w-4 h-4 text-emerald-700" />
-                  <span>Date: <strong className="font-bold text-slate-900">{formattedDateLabel}</strong></span>
+                  <span>
+                    Date: <strong className="font-bold text-slate-900">{formattedDateLabel}</strong>
+                  </span>
                 </button>
-
-                <WheelDatePickerModal
-                  isOpen={showWheelDatePicker}
-                  onClose={() => setShowWheelDatePicker(false)}
-                  onConfirm={(d) => setExpenseDate(d)}
-                  initialDate={expenseDate}
-                />
               </div>
 
               {/* Optional Notes */}
               <div className="space-y-1.5 pt-1">
-                <label className="text-xs text-slate-400 font-normal">
+                <label className="text-xs text-slate-500 font-semibold">
                   Notes or Bill # (optional)
                 </label>
                 <textarea
@@ -482,12 +541,12 @@ export function AddExpenseScreen({
                   placeholder="Add details, invoice number..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full p-3 rounded-2xl border border-slate-200/80 text-sm font-normal text-slate-800 placeholder:text-slate-300 focus:outline-hidden focus:border-emerald-500 bg-slate-50/40 resize-none"
+                  className="w-full p-3 rounded-2xl border border-slate-200/80 text-sm font-medium text-slate-800 placeholder:text-slate-300 focus:outline-hidden focus:border-emerald-600 bg-slate-50/40 resize-none"
                 />
               </div>
             </div>
 
-            {/* Bottom Button */}
+            {/* Bottom Button matching Screenshot 1 */}
             <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
               <button
                 type="button"
@@ -515,7 +574,7 @@ export function AddExpenseScreen({
                 onClick={() => setStep(1)}
                 type="button"
                 aria-label="Back to Step 1"
-                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs"
+                className="p-1 -ml-1 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs"
               >
                 <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
                 <span>Back</span>
@@ -523,7 +582,7 @@ export function AddExpenseScreen({
 
               <div className="text-center">
                 <h2 className="text-base font-bold text-slate-900">Who paid & split</h2>
-                <span className="text-[11px] text-slate-400 font-medium">Step 2 of 2: Allocation</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Step 2 of 2: Allocation</span>
               </div>
 
               <button
@@ -532,7 +591,7 @@ export function AddExpenseScreen({
                 disabled={loading}
                 className="text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
               >
-                Save
+                {isEditing ? 'Update' : 'Save'}
               </button>
             </header>
 
@@ -546,15 +605,18 @@ export function AddExpenseScreen({
                   <span className="text-sm font-bold text-slate-900 truncate block">
                     {description}
                   </span>
-                  <span className="text-[11px] font-medium text-slate-400 block">
+                  <span className="text-[11px] font-semibold text-slate-500 block">
                     {activeCategory.label} • {formattedDateLabel}
                   </span>
                 </div>
               </div>
 
               <div className="text-right shrink-0">
-                <span className="text-lg font-black text-emerald-700 block">
-                  ₹{Number(amountRupees).toFixed(2)}
+                <span className="text-lg font-black text-slate-900 block tracking-tight">
+                  ₹{Number(amountRupees || 0).toFixed(2)}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
+                  Total Bill
                 </span>
               </div>
             </div>
@@ -562,24 +624,22 @@ export function AddExpenseScreen({
             {/* Form Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
               {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Section 1: Who Paid */}
+              {/* Section 1: Who Paid? */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Who paid for this?
+                    Who paid for this bill?
                   </label>
-                  <span className="text-xs font-semibold text-slate-500">
-                    {members.find((m) => m.id === payerId)?.name || 'Select payer'}
-                  </span>
+                  <span className="text-xs font-semibold text-slate-400">Single payer</span>
                 </div>
 
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex flex-wrap gap-2">
                   {members.map((m) => {
                     const isSelected = payerId === m.id;
                     return (
@@ -587,15 +647,15 @@ export function AddExpenseScreen({
                         key={m.id}
                         type="button"
                         onClick={() => setPayerId(m.id)}
-                        className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20 ring-2 ring-emerald-600 active:scale-95'
-                            : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50'
                         }`}
                       >
                         <div
-                          className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] shrink-0 ${
-                            isSelected ? 'bg-white/25 text-white' : getAvatarBg(m.name)
+                          className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] ${
+                            isSelected ? 'bg-white/20 text-white' : getAvatarBg(m.name)
                           }`}
                         >
                           {m.name.charAt(0).toUpperCase()}
@@ -645,7 +705,7 @@ export function AddExpenseScreen({
                 {splitMode === 'EQUAL' && (
                   <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-xs font-bold">
-                      <span className="text-slate-500">
+                      <span className="text-slate-600">
                         Included ({selectedMemberIds.length} of {members.length})
                       </span>
                       <button
@@ -788,12 +848,20 @@ export function AddExpenseScreen({
                 disabled={loading}
                 className="w-full py-3.5 rounded-full text-base font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-[0.99]"
               >
-                Save Expense
+                {isEditing ? 'Update Expense' : 'Save Expense'}
               </button>
             </footer>
           </div>
         )}
       </div>
+
+      {/* Standalone Wheel Date Picker Modal at highest z-index */}
+      <WheelDatePickerModal
+        isOpen={showWheelDatePicker}
+        onClose={() => setShowWheelDatePicker(false)}
+        onConfirm={(d) => setExpenseDate(d)}
+        initialDate={expenseDate}
+      />
     </div>
   );
 }

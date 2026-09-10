@@ -25,6 +25,7 @@ export async function GET(
             phone: true,
             upiId: true,
             isOwner: true,
+            isAdmin: true,
           },
         },
         expenses: {

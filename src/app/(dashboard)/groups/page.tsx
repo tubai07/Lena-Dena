@@ -191,7 +191,7 @@ export default function GroupsPage() {
 
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-sm shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>New Group</span>
@@ -255,7 +255,7 @@ export default function GroupsPage() {
               placeholder="Search group or code..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+              className="w-full pl-10 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-600 placeholder:text-slate-400"
             />
           </div>
         )}
@@ -268,7 +268,7 @@ export default function GroupsPage() {
           </div>
         ) : filteredGroups.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-3 shadow-2xs mt-2">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto">
               <UsersRound className="w-7 h-7 stroke-[1.8]" />
             </div>
             <div>
@@ -279,7 +279,7 @@ export default function GroupsPage() {
             </div>
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Create Group</span>
@@ -298,12 +298,12 @@ export default function GroupsPage() {
                   prefetch={true}
                   onMouseEnter={() => prefetchGroupDetail(group.id)}
                   onPointerDown={() => prefetchGroupDetail(group.id)}
-                  className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-indigo-300 shadow-2xs hover:shadow-xs transition-all block group"
+                  className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xs transition-all block group"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-slate-900 text-lg truncate group-hover:text-indigo-600 transition-colors">
+                        <h3 className="font-black text-slate-900 text-lg truncate group-hover:text-emerald-700 transition-colors">
                           {group.name}
                         </h3>
 

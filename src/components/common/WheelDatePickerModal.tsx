@@ -22,15 +22,21 @@ export function WheelDatePickerModal({
   onConfirm,
   initialDate,
 }: WheelDatePickerModalProps) {
-  // Parse initial date
+  // Parse initial date purely by date components to avoid any timezone shifts
   const parsed = useMemo(() => {
-    const d = initialDate ? new Date(`${initialDate}T12:00:00`) : new Date();
-    const isValid = !isNaN(d.getTime());
-    const validD = isValid ? d : new Date();
+    if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+      const [y, m, d] = initialDate.split('-').map(Number);
+      return {
+        day: d,
+        month: m - 1, // 0-indexed
+        year: y,
+      };
+    }
+    const now = new Date();
     return {
-      day: validD.getDate(),
-      month: validD.getMonth(), // 0-indexed
-      year: validD.getFullYear(),
+      day: now.getDate(),
+      month: now.getMonth(), // 0-indexed
+      year: now.getFullYear(),
     };
   }, [initialDate, isOpen]);
 
@@ -153,7 +159,7 @@ export function WheelDatePickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div

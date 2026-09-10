@@ -157,6 +157,7 @@ model GroupMember {
   phone               String?
   upiId               String?
   isOwner             Boolean           @default(false)
+  isAdmin             Boolean           @default(false)
   expensePayers       ExpensePayer[]
   splits              ExpenseSplit[]
   settlementsPaid     GroupSettlement[] @relation("PayerSettlements")
