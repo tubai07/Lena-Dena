@@ -39,7 +39,7 @@ export function AppProvider({
   const [business, setBusiness] = useState(initialBusiness || null);
   const [allCustomers, setAllCustomers] = useState<any[]>(initialCustomers || []);
   const [allTransactions, setAllTransactions] = useState<any[]>(initialTransactions || []);
-  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const [lastUpdated, setLastUpdated] = useState<number>(0);
   const deletedCustomerIdsRef = useRef<Set<string>>(new Set());
 
   // Modals state

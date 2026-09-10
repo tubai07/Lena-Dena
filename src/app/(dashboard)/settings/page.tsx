@@ -85,8 +85,8 @@ export default function PersonalSettingsPage() {
       setPasswordError('Please enter a new password');
       return;
     }
-    if (newPassword.trim().length < 4) {
-      setPasswordError('Password should be at least 4 characters');
+    if (newPassword.trim().length < 6) {
+      setPasswordError('Password should be at least 6 characters');
       return;
     }
 

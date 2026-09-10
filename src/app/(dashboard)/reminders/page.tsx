@@ -78,7 +78,7 @@ export default function RemindersPage() {
 
   const previewMessage = (settings.reminderTemplate || '')
     .replace('{customer_name}', 'Rahul Sharma')
-    .replace('{business_name}', 'Tubai General Store')
+    .replace('{business_name}', 'Tubai')
     .replace('{amount}', '₹12,500')
     .replace('{upi_id}', 'tubai@okaxis');
 

@@ -44,7 +44,7 @@ export function TransactionModal({
   const [note, setNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [loading, setLoading] = useState(false);
+  const loading = false;
   const [error, setError] = useState('');
   const amountInputRef = useRef<HTMLInputElement>(null);
 

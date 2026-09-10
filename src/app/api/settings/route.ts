@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSession, setSession } from '@/lib/auth';
 import { hashPassword } from '@/lib/security';
 
 export async function GET() {
@@ -93,6 +93,15 @@ export async function PUT(req: Request) {
         ...(defaultPaymentMethod && { defaultPaymentMethod }),
         ...(preferredLanguage && { preferredLanguage }),
       },
+    });
+
+    // Refresh session cookie with updated name/phone
+    await setSession({
+      userId: session.userId,
+      businessId: session.businessId,
+      userName: updatedBusiness.owner?.name || updatedBusiness.name,
+      businessName: updatedBusiness.name,
+      phone: updatedBusiness.phone || session.phone,
     });
 
     return NextResponse.json({

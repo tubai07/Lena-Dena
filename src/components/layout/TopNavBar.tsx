@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Store, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { Search, Wallet, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { GlobalSearchModal } from '../common/GlobalSearchModal';
 import { useTranslation } from '../common/LanguageContext';
 
@@ -30,7 +30,7 @@ export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopN
     <>
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          {/* Brand & Store Name (Mobile & Tablet) */}
+          {/* Brand & Account Name (Mobile & Tablet) */}
           <div className="flex items-center gap-3">
             <img
               src="/app-icon.png"
@@ -39,7 +39,7 @@ export function TopNavBar({ businessName = 'My Khata', onOpenQuickAction }: TopN
             />
             <div>
               <div className="flex items-center gap-1.5">
-                <Store className="w-3.5 h-3.5 text-emerald-600" />
+                <Wallet className="w-3.5 h-3.5 text-emerald-600" />
                 <h1 className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate max-w-[160px] sm:max-w-[220px]">
                   {businessName}
                 </h1>

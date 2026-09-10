@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, MessageSquare, Copy, Check, Smartphone, QrCode } from 'lucide-react';
+import { X, Copy, Check, Smartphone, QrCode } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 import { generateReminderMessage, generateSmsLink } from '@/lib/reminders';
 import { useApp } from '@/components/common/AppContext';

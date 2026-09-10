@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { CheckCircle, Smartphone, X } from 'lucide-react';
+import { CheckCircle, Smartphone } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 import { generatePaymentReceiptMessage, generateSmsLink } from '@/lib/reminders';
 

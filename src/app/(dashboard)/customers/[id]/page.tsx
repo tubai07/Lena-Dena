@@ -169,6 +169,32 @@ export default function PersonChatLedgerPage({
     }
   }, [cachedCustomer, allTransactions]);
 
+  const customer = data?.customer;
+  const stats = data?.stats;
+  const isDue = (customer?.currentBalancePaisa || 0) > 0;
+  const isAdvance = (customer?.currentBalancePaisa || 0) < 0;
+
+  const custTransactions = customer?.transactions;
+  const chronologicalTx = useMemo(() => {
+    if (!custTransactions) return [];
+    return [...custTransactions].sort((a: any, b: any) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      const createA = new Date(a.createdAt || a.date).getTime();
+      const createB = new Date(b.createdAt || b.date).getTime();
+      if (createA !== createB) return createA - createB;
+      return (a.id || '').localeCompare(b.id || '');
+    });
+  }, [custTransactions]);
+
+  // Smooth scroll to latest transaction at bottom when entries change
+  useEffect(() => {
+    if (chronologicalTx.length > 0) {
+      timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chronologicalTx.length]);
+
   if (loading && !data) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-white p-4 space-y-4 animate-pulse">
@@ -178,7 +204,7 @@ export default function PersonChatLedgerPage({
     );
   }
 
-  if (!data?.customer) {
+  if (!customer) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-white p-8 text-center">
         <h3 className="text-base font-bold text-slate-800">Person not found</h3>
@@ -189,10 +215,6 @@ export default function PersonChatLedgerPage({
     );
   }
 
-  const { customer, stats } = data;
-  const isDue = customer.currentBalancePaisa > 0;
-  const isAdvance = customer.currentBalancePaisa < 0;
-
   // Format time e.g. "9:56 PM"
   const formatTime = (dateInput: string | Date) => {
     return new Date(dateInput).toLocaleTimeString('en-US', {
@@ -201,25 +223,6 @@ export default function PersonChatLedgerPage({
       hour12: true,
     });
   };
-
-  // Group transactions by date for centered date pills
-  // Deterministic chronological sorting: oldest at top, newest at bottom
-  const chronologicalTx = useMemo(() => {
-    return [...(customer.transactions || [])].sort((a: any, b: any) => {
-      const timeA = new Date(a.date).getTime();
-      const timeB = new Date(b.date).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      const createA = new Date(a.createdAt || a.date).getTime();
-      const createB = new Date(b.createdAt || b.date).getTime();
-      if (createA !== createB) return createA - createB;
-      return (a.id || '').localeCompare(b.id || '');
-    });
-  }, [customer.transactions]);
-
-  // Smooth scroll to latest transaction at bottom when entries change
-  useEffect(() => {
-    timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chronologicalTx.length]);
 
   // Export CSV
   const handleExportCSV = () => {

@@ -9,10 +9,8 @@ import {
   Trash2,
   Edit2,
   Plus,
-  Loader2,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
-import { formatDate } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
 
 interface TransactionDetailModalProps {

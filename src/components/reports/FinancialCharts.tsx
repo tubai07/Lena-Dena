@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { formatINRShort, formatINR } from '@/lib/ledger';
+import { formatINR } from '@/lib/ledger';
 
 interface ChartPoint {
   month: string;

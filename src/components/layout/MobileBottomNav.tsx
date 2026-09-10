@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Receipt, Settings, ChevronUp, Sparkles } from 'lucide-react';
+import { BookOpen, Receipt, Settings } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();

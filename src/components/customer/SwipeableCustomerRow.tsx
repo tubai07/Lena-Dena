@@ -201,7 +201,7 @@ export function SwipeableCustomerRow({
         className="relative bg-white z-10"
       >
         <Link
-          href={isOpen || Math.abs(currentOffsetRef.current) > 5 ? '#' : `/customers/${c.id}`}
+          href={isOpen ? '#' : `/customers/${c.id}`}
           onClick={(e) => {
             if (isOpen || Math.abs(currentOffsetRef.current) > 5) {
               e.preventDefault();
