@@ -1,0 +1,64 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Runs every 3 days at 04:00 UTC (Supabase pauses after 7 days of inactivity)
+    - cron: '0 4 */3 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  ping:
+    name: Ping Database & App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Keep-Alive API Endpoint (if APP_URL configured)
+        if: "${{ env.APP_URL != '' }}"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Pinging deployed app at $APP_URL/api/cron/keep-alive..."
+          if [ -n "$CRON_SECRET" ]; then
+            RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/keep-alive")
+          else
+            RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "$APP_URL/api/cron/keep-alive")
+          fi
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::warning::App ping returned HTTP status $HTTP_STATUS"
+          else
+            echo "App endpoint successfully reached and queried database!"
+          fi
+
+      - name: Direct Ping to Supabase REST API (if SUPABASE_URL configured)
+        if: "${{ env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != '' }}"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "Pinging Supabase REST API directly..."
+          # Querying the REST endpoint directly wakes up and exercises the PostgREST / Postgres engine
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          echo "HTTP Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 404 ]; then
+            echo "Supabase successfully pinged!"
+          else
+            echo "::warning::Supabase direct ping returned status $HTTP_STATUS"
+          fi
+
+      - name: Verify Setup
+        if: "${{ env.APP_URL == '' && env.SUPABASE_URL == '' }}"
+        run: |
+          echo "::error::Neither APP_URL nor SUPABASE_URL secrets are configured in GitHub Secrets!"
+          echo "To make this workflow ping automatically, go to your GitHub repository:"
+          echo "Settings -> Secrets and variables -> Actions -> New repository secret"
+          echo "Add either:"
+          echo "  - APP_URL (e.g., https://your-project.vercel.app)"
+          echo "  - OR SUPABASE_URL and SUPABASE_ANON_KEY"
+          exit 1
