@@ -249,7 +249,7 @@ export default function PersonChatLedgerPage({
   };
 
   const handleDeleteTransaction = async () => {
-    if (!deleteConfirmTx) return;
+    if (!deleteConfirmTx || deleteConfirmTx.isDeleted) return;
     const txId = deleteConfirmTx.id;
     setDeleteConfirmTx(null);
 
@@ -366,11 +366,11 @@ export default function PersonChatLedgerPage({
                 >
                   {/* Bubble Card */}
                   <div
-                    onClick={() => setSelectedTxForDetail(tx)}
-                    className={`border rounded-2xl p-3.5 shadow-xs max-w-[82%] cursor-pointer tap-effect transition-all ${
+                    onClick={tx.isDeleted ? undefined : () => setSelectedTxForDetail(tx)}
+                    className={`border rounded-2xl p-3.5 shadow-xs max-w-[82%] transition-all ${
                       tx.isDeleted
-                        ? 'bg-slate-100/90 border-slate-300'
-                        : 'bg-white border-slate-200/90 hover:border-slate-300'
+                        ? 'bg-slate-100/90 border-slate-300 cursor-not-allowed select-none'
+                        : 'bg-white border-slate-200/90 hover:border-slate-300 cursor-pointer tap-effect'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -541,7 +541,7 @@ export default function PersonChatLedgerPage({
 
       {/* Transaction Detail Screen / Modal matching Screenshot */}
       <TransactionDetailModal
-        isOpen={!!selectedTxForDetail}
+        isOpen={!!selectedTxForDetail && !selectedTxForDetail.isDeleted}
         onClose={() => setSelectedTxForDetail(null)}
         transaction={selectedTxForDetail}
         customer={customer}

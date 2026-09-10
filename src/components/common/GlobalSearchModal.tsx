@@ -36,7 +36,7 @@ export function GlobalSearchModal({ isOpen, onClose }: { isOpen: boolean; onClos
         const data = await res.json();
         setResults({
           customers: data.customers || [],
-          transactions: data.transactions || [],
+          transactions: (data.transactions || []).filter((tx: any) => !tx.isDeleted),
         });
       } catch (err) {
         console.error(err);

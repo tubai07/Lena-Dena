@@ -126,6 +126,10 @@ export async function deleteLedgerTransaction(transactionId: string, businessId:
       throw new Error('Transaction not found');
     }
 
+    if (transaction.isDeleted) {
+      throw new Error('Transaction is already deleted');
+    }
+
     const updated = await tx.transaction.update({
       where: { id: transactionId },
       data: {
@@ -165,6 +169,10 @@ export async function updateLedgerTransaction(
 
     if (!existing) {
       throw new Error('Transaction not found');
+    }
+
+    if (existing.isDeleted) {
+      throw new Error('Cannot edit a deleted transaction');
     }
 
     const updated = await tx.transaction.update({

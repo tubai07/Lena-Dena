@@ -147,7 +147,14 @@ export async function PUT(req: Request) {
       newBalancePaisa: result.newBalancePaisa,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to update transaction' }, { status: 500 });
+    const isClientError =
+      err.message === 'Transaction is already deleted' ||
+      err.message === 'Cannot edit a deleted transaction' ||
+      err.message === 'Transaction not found';
+    return NextResponse.json(
+      { error: err.message || 'Failed to update transaction' },
+      { status: isClientError ? 400 : 500 }
+    );
   }
 }
 
@@ -174,6 +181,12 @@ export async function DELETE(req: Request) {
       newBalancePaisa: result.newBalancePaisa,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to delete transaction' }, { status: 500 });
+    const isClientError =
+      err.message === 'Transaction is already deleted' ||
+      err.message === 'Transaction not found';
+    return NextResponse.json(
+      { error: err.message || 'Failed to delete transaction' },
+      { status: isClientError ? 400 : 500 }
+    );
   }
 }

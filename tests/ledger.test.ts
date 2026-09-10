@@ -284,5 +284,15 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
     expect(running[0].runningBalancePaisa).toBe(toPaisa(1000));
     expect(running[1].isDeleted).toBe(true);
     expect(running[1].runningBalancePaisa).toBe(toPaisa(1000)); // Unchanged!
+
+    // Verify attempting to delete an already-deleted transaction is rejected
+    await expect(
+      deleteLedgerTransaction(tx2.transaction.id, testBusinessA.id)
+    ).rejects.toThrow('Transaction is already deleted');
+
+    // Verify attempting to edit an already-deleted transaction is rejected
+    await expect(
+      updateLedgerTransaction(tx2.transaction.id, testBusinessA.id, { description: 'New Note' })
+    ).rejects.toThrow('Cannot edit a deleted transaction');
   });
 });

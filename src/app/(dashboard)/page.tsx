@@ -137,7 +137,7 @@ export default function SimplifiedDashboardPage() {
   };
 
   const getSubtext = (c: any) => {
-    const tx = c.transactions && c.transactions[0];
+    const tx = (c.transactions || []).find((t: any) => !t.isDeleted);
     if (!tx) {
       return c.currentBalancePaisa > 0
         ? '📅 Pending Collection'

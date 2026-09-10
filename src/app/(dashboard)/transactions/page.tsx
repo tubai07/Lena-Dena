@@ -32,7 +32,7 @@ export default function ActivityPage() {
   }, []);
 
   const handleDelete = async () => {
-    if (!deleteConfirmTx) return;
+    if (!deleteConfirmTx || deleteConfirmTx.isDeleted) return;
     const txId = deleteConfirmTx.id;
     setDeleteConfirmTx(null);
 
@@ -102,8 +102,10 @@ export default function ActivityPage() {
             return (
               <div
                 key={tx.id}
-                className={`px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                  tx.isDeleted ? 'bg-slate-50/70 opacity-65' : ''
+                className={`px-4 py-3 flex items-center justify-between transition-colors ${
+                  tx.isDeleted
+                    ? 'bg-slate-50/70 opacity-60 cursor-not-allowed select-none'
+                    : 'hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -124,16 +126,18 @@ export default function ActivityPage() {
                   </div>
 
                   <div className="min-w-0">
-                    <Link
-                      href={`/customers/${tx.customer?.id}`}
-                      className={`font-bold text-sm truncate block ${
-                        tx.isDeleted
-                          ? 'text-slate-400 line-through'
-                          : 'text-slate-900 hover:text-emerald-700'
-                      }`}
-                    >
-                      {tx.customer?.name}
-                    </Link>
+                    {tx.isDeleted ? (
+                      <span className="font-bold text-sm truncate block text-slate-400 line-through select-none">
+                        {tx.customer?.name}
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/customers/${tx.customer?.id}`}
+                        className="font-bold text-sm truncate block text-slate-900 hover:text-emerald-700"
+                      >
+                        {tx.customer?.name}
+                      </Link>
+                    )}
                     <div className="text-xs text-slate-400 mt-0.5 truncate flex items-center gap-1.5">
                       <span className={tx.isDeleted ? 'line-through' : ''}>
                         {formatDate(tx.date)} {tx.description ? `• ${tx.description}` : ''}

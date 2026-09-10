@@ -32,6 +32,7 @@ export async function GET(req: Request) {
       db.transaction.findMany({
         where: {
           businessId: session.businessId,
+          isDeleted: false,
           OR: [
             { description: { contains: q } },
             { billNumber: { contains: q } },

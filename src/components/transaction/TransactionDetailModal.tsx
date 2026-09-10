@@ -41,7 +41,7 @@ export function TransactionDetailModal({
   const [amountInputStr, setAmountInputStr] = useState('');
   const [savingAmount, setSavingAmount] = useState(false);
 
-  if (!isOpen || !transaction || !customer) return null;
+  if (!isOpen || !transaction || !customer || transaction.isDeleted) return null;
 
   const isPayment = transaction.type === 'PAYMENT';
 
@@ -55,6 +55,7 @@ export function TransactionDetailModal({
   };
 
   const handleDelete = async () => {
+    if (transaction.isDeleted) return;
     try {
       setDeleting(true);
       const res = await fetch(`/api/transactions?id=${transaction.id}`, {
@@ -73,6 +74,7 @@ export function TransactionDetailModal({
   };
 
   const handleSaveAmount = async () => {
+    if (transaction.isDeleted) return;
     const num = parseFloat(amountInputStr);
     if (isNaN(num) || num <= 0) return;
     try {
@@ -98,6 +100,7 @@ export function TransactionDetailModal({
   };
 
   const handleSaveNote = async () => {
+    if (transaction.isDeleted) return;
     try {
       setSavingNote(true);
       const res = await fetch('/api/transactions', {
