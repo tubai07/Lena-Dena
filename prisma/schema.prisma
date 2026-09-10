@@ -35,6 +35,7 @@ model Business {
   transactions   Transaction[]
   reminders      Reminder[]
   notifications  Notification[]
+  groups         Group[]
   settings       BusinessSettings?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -127,3 +128,101 @@ model BusinessSettings {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+model Group {
+  id             String            @id @default(cuid())
+  businessId     String
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name           String
+  category       String            @default("Trip") // Trip, Home, Dining, Event, Other
+  currency       String            @default("INR")
+  currencySymbol String            @default("₹")
+  joinCode       String            @unique // e.g. "44A3B" (5 uppercase alphanumeric chars)
+  simplifyDebts  Boolean           @default(true)
+  members        GroupMember[]
+  expenses       GroupExpense[]
+  settlements    GroupSettlement[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([businessId])
+  @@index([joinCode])
+}
+
+model GroupMember {
+  id                  String            @id @default(cuid())
+  groupId             String
+  group               Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name                String
+  phone               String?
+  upiId               String?
+  isOwner             Boolean           @default(false)
+  expensePayers       ExpensePayer[]
+  splits              ExpenseSplit[]
+  settlementsPaid     GroupSettlement[] @relation("PayerSettlements")
+  settlementsReceived GroupSettlement[] @relation("ReceiverSettlements")
+  createdAt           DateTime          @default(now())
+
+  @@index([groupId])
+}
+
+model GroupExpense {
+  id               String         @id @default(cuid())
+  groupId          String
+  group            Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  description      String
+  totalAmountPaisa Int            // Strictly integer paise (10000 = ₹100.00)
+  category         String         @default("GENERAL") // FOOD, TRAVEL, STAY, SHOPPING, OTHER
+  splitType        String         @default("EQUAL")   // EQUAL, EXACT, SHARES
+  notes            String?
+  date             DateTime       @default(now())
+  payers           ExpensePayer[]
+  splits           ExpenseSplit[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([groupId])
+}
+
+model ExpensePayer {
+  id          String       @id @default(cuid())
+  expenseId   String
+  expense     GroupExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      GroupMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  amountPaisa Int          // Amount paid toward this bill
+
+  @@index([expenseId])
+  @@index([memberId])
+}
+
+model ExpenseSplit {
+  id          String       @id @default(cuid())
+  expenseId   String
+  expense     GroupExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      GroupMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  amountPaisa Int          // Amount owed for this bill
+  shareValue  Float?       // Weight if splitType == SHARES
+
+  @@index([expenseId])
+  @@index([memberId])
+}
+
+model GroupSettlement {
+  id            String      @id @default(cuid())
+  groupId       String
+  group         Group       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payerId       String
+  payer         GroupMember @relation("PayerSettlements", fields: [payerId], references: [id], onDelete: Cascade)
+  receiverId    String
+  receiver      GroupMember @relation("ReceiverSettlements", fields: [receiverId], references: [id], onDelete: Cascade)
+  amountPaisa   Int         // Settlement amount in integer paise
+  paymentMethod String      @default("UPI") // UPI, CASH, BANK_TRANSFER
+  notes         String?
+  date          DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  @@index([groupId])
+}
+

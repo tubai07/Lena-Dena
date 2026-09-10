@@ -14,6 +14,7 @@ import {
   LogOut,
   ChevronRight,
   Sparkles,
+  UsersRound,
 } from 'lucide-react';
 import { useTranslation } from '../common/LanguageContext';
 
@@ -25,6 +26,7 @@ export function DesktopSidebar({ businessName = 'My Khata' }: { businessName?: s
   const navItems = [
     { href: '/', label: t.dashboard, icon: LayoutDashboard },
     { href: '/customers', label: t.customers, icon: Users },
+    { href: '/groups', label: t.groups, icon: UsersRound },
     { href: '/transactions', label: t.transactions, icon: Receipt },
     { href: '/reports', label: t.reports, icon: BarChart3 },
     { href: '/reminders', label: t.reminders, icon: BellRing },

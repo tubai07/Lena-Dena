@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Receipt, Settings } from 'lucide-react';
+import { BookOpen, Receipt, Settings, UsersRound } from 'lucide-react';
 
 export function MobileBottomNav() {
   const pathname = usePathname();
@@ -16,6 +16,7 @@ export function MobileBottomNav() {
 
   const navItems = [
     { href: '/', label: 'Ledger', icon: BookOpen },
+    { href: '/groups', label: 'Split', icon: UsersRound },
     { href: '/transactions', label: 'Activity', icon: Receipt },
     { href: '/settings', label: 'More', icon: Settings },
   ];
