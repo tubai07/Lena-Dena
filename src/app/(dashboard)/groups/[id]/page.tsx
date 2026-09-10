@@ -24,7 +24,7 @@ import {
   ShoppingBag,
   Activity,
 } from 'lucide-react';
-import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
+import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
 import {
   generateUpiUrl,
@@ -560,36 +560,36 @@ export default function GroupDetailPage({
 
   return (
     <div className="w-full pb-28">
-      {/* Top Header with Larger Typography */}
-      <header className="px-4 py-3.5 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
+      {/* Top Header */}
+      <header className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <Link
               href="/groups"
-              className="p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+              className="p-1 -ml-1 rounded-xl text-slate-400 hover:text-slate-700 transition-colors shrink-0"
               aria-label="Back"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
 
             <div className="min-w-0">
-              <h1 className="text-lg font-black text-slate-900 tracking-tight truncate">
+              <h1 className="text-lg font-medium text-slate-900 tracking-tight truncate">
                 {group.name}
               </h1>
 
-              {/* Join Code Chip */}
+              {/* Join Code */}
               <button
                 onClick={handleCopyCode}
-                className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-900 hover:text-amber-950 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 title="Tap to copy code"
               >
-                <span>Code: {group.joinCode}</span>
+                <span>Code: <span className="font-mono text-slate-600">{group.joinCode}</span></span>
                 {copiedCode ? (
-                  <span className="text-xs text-emerald-600 font-sans font-bold flex items-center gap-0.5">
+                  <span className="text-xs text-emerald-600 font-normal flex items-center gap-0.5">
                     <Check className="w-3 h-3" /> Copied
                   </span>
                 ) : (
-                  <Copy className="w-3 h-3 opacity-60" />
+                  <Copy className="w-3 h-3 opacity-50" />
                 )}
               </button>
             </div>
@@ -602,17 +602,17 @@ export default function GroupDetailPage({
                 setSettlePreload({});
                 setIsSettleOpen(true);
               }}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-normal rounded-xl text-xs border border-slate-200/70 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               <span>Settle</span>
             </button>
 
             <button
               onClick={() => setIsAddExpenseOpen(true)}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Bill</span>
             </button>
           </div>
@@ -620,17 +620,17 @@ export default function GroupDetailPage({
       </header>
 
       {/* Main Content Area */}
-      <div className="px-4 pt-3.5 space-y-3.5">
-        {/* Single Unified Summary Card with larger text */}
-        <div className="p-4 sm:p-5 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="flex items-center justify-between">
+      <div className="px-4 pt-3.5 space-y-4">
+        {/* Clean, Uncluttered Summary Card with light typography */}
+        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
+          <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
             {/* Left: Your Standing */}
-            <div>
-              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
-                Your Standing
+            <div className="space-y-1">
+              <span className="text-xs font-normal text-slate-400 block">
+                Your balance
               </span>
               <div
-                className={`text-3xl font-black tracking-tight mt-1 ${
+                className={`text-3xl font-light tracking-tight ${
                   userBalance > 0
                     ? 'text-emerald-600'
                     : userBalance < 0
@@ -644,50 +644,48 @@ export default function GroupDetailPage({
                   ? `-₹${(Math.abs(userBalance) / 100).toFixed(2)}`
                   : '₹0.00'}
               </div>
-              <span className="text-xs font-bold text-slate-500 block mt-1">
+              <span className="text-xs font-normal text-slate-400 block">
                 {userBalance > 0
                   ? 'You get back'
                   : userBalance < 0
-                  ? 'You owe friends'
+                  ? 'You owe'
                   : 'All settled'}
               </span>
             </div>
 
-            {/* Right: Group Total */}
-            <div className="text-right border-l border-slate-200/80 pl-5">
-              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
-                Total Spend
+            {/* Right: Total Spend */}
+            <div className="pl-5 space-y-1">
+              <span className="text-xs font-normal text-slate-400 block">
+                Total spend
               </span>
-              <div className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+              <div className="text-3xl font-light text-slate-800 tracking-tight">
                 ₹{(group.totalSpendPaisa / 100).toFixed(0)}
               </div>
-              <span className="text-xs font-semibold text-slate-500 block mt-1">
+              <span className="text-xs font-normal text-slate-400 block">
                 {group.members.length} members
               </span>
             </div>
           </div>
         </div>
 
-        {/* Clean Tabs with larger text */}
-        <div className="flex border-b border-slate-200 gap-5 pt-1">
+        {/* Clean Tabs */}
+        <div className="flex border-b border-slate-100 gap-6 pt-1">
           {[
-            { key: 'activity', label: `Activity (${group.expenses.length + group.settlements.length})`, icon: Activity },
-            { key: 'balances', label: `Balances (${displayedTransfers.length})`, icon: Scale },
-            { key: 'members', label: `Members (${group.members.length})`, icon: Users },
+            { key: 'activity', label: `Activity (${group.expenses.length + group.settlements.length})` },
+            { key: 'balances', label: `Balances (${displayedTransfers.length})` },
+            { key: 'members', label: `Members (${group.members.length})` },
           ].map((tab) => {
-            const Icon = tab.icon;
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as any)}
-                className={`pb-3 text-sm font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                className={`pb-2.5 text-sm transition-all cursor-pointer ${
                   isActive
-                    ? 'border-emerald-600 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    ? 'border-b-2 border-emerald-600 text-emerald-600 font-medium'
+                    : 'border-b-2 border-transparent text-slate-400 hover:text-slate-700 font-normal'
                 }`}
               >
-                <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -698,22 +696,22 @@ export default function GroupDetailPage({
         {activeTab === 'activity' && (
           <div className="space-y-3 pt-1">
             {/* Search & Filter Bar */}
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search activity by name, description, amount..."
                   value={activitySearch}
                   onChange={(e) => setActivitySearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs placeholder:text-slate-400"
+                  className="w-full pl-9.5 pr-8 py-2.5 text-sm font-normal bg-slate-50/70 border border-slate-200/60 rounded-xl focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-400 transition-colors"
                 />
                 {activitySearch && (
                   <button
                     onClick={() => setActivitySearch('')}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
@@ -728,10 +726,10 @@ export default function GroupDetailPage({
                   <button
                     key={f.id}
                     onClick={() => setActivityFilter(f.id as any)}
-                    className={`px-3 py-1 rounded-full font-bold transition-all shrink-0 cursor-pointer ${
+                    className={`px-3 py-1 rounded-full text-xs transition-all shrink-0 cursor-pointer ${
                       activityFilter === f.id
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-800 text-white font-medium'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200/70 font-normal'
                     }`}
                   >
                     {f.label}
@@ -743,16 +741,16 @@ export default function GroupDetailPage({
             {/* List items */}
             {loading && activityItems.length === 0 ? (
               <div className="space-y-2.5 pt-1 animate-pulse">
-                <div className="h-16 bg-slate-100 rounded-2xl"></div>
-                <div className="h-16 bg-slate-100 rounded-2xl"></div>
+                <div className="h-16 bg-slate-50 rounded-2xl"></div>
+                <div className="h-16 bg-slate-50 rounded-2xl"></div>
               </div>
             ) : activityItems.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2.5 shadow-2xs">
-                <Receipt className="w-10 h-10 text-slate-300 mx-auto" />
-                <h4 className="font-extrabold text-slate-800 text-sm">
+              <div className="bg-white rounded-2xl p-8 border border-slate-100 text-center space-y-2 shadow-2xs">
+                <Receipt className="w-9 h-9 text-slate-300 mx-auto" />
+                <h4 className="font-normal text-slate-800 text-sm">
                   {activitySearch ? 'No matching activity found' : 'No activity yet'}
                 </h4>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400 font-normal">
                   {activitySearch ? 'Try a different search query.' : "Tap '+ Bill' above to record your first expense."}
                 </p>
               </div>
@@ -771,36 +769,35 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-11 h-11 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
+                        <div className={`w-10 h-10 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
                           <CategoryIcon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <h4 className="font-black text-slate-900 text-base truncate">
+                          <h4 className="text-base font-normal text-slate-900 truncate">
                             {item.title}
                           </h4>
-                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
-                            Paid by <span className="font-bold text-slate-700">{item.payerNames}</span> •{' '}
-                            {dateStr}
+                          <p className="text-xs font-normal text-slate-400 truncate mt-0.5">
+                            Paid by <span className="text-slate-600">{item.payerNames}</span> • {dateStr}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <div className="text-right">
-                          <span className="font-black text-slate-900 text-base block">
+                          <span className="text-base font-normal text-slate-900 block">
                             ₹{totalRupees.toFixed(2)}
                           </span>
-                          <span className="text-xs text-slate-500 font-semibold capitalize">
+                          <span className="text-xs font-normal text-slate-400 capitalize">
                             {item.raw.splitType.toLowerCase()}
                           </span>
                         </div>
 
                         <button
                           onClick={() => handleDeleteExpense(item.id)}
-                          className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -815,17 +812,17 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-emerald-100/90 shadow-2xs flex items-center justify-between gap-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                           <CheckCircle2 className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <h4 className="font-black text-slate-900 text-sm truncate">
+                          <h4 className="text-base font-normal text-slate-900 truncate">
                             {item.title}
                           </h4>
-                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                          <p className="text-xs font-normal text-slate-400 truncate mt-0.5">
                             Settlement • {dateStr}
                             {item.paymentMethod ? ` • via ${item.paymentMethod}` : ''}
                           </p>
@@ -834,17 +831,17 @@ export default function GroupDetailPage({
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <div className="text-right">
-                          <span className="font-black text-emerald-600 text-base block">
+                          <span className="text-base font-normal text-emerald-600 block">
                             ₹{totalRupees.toFixed(2)}
                           </span>
-                          <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                          <span className="text-xs font-normal text-slate-400">
                             Settled
                           </span>
                         </div>
 
                         <button
                           onClick={() => handleDeleteSettlement(item.id)}
-                          className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
                           title="Delete Settlement"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -862,10 +859,10 @@ export default function GroupDetailPage({
         {activeTab === 'balances' && (
           <div className="space-y-3.5 pt-1">
             {/* Simplify Debts Toggle */}
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 flex items-center justify-between shadow-2xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between">
               <div>
-                <span className="text-sm font-extrabold text-slate-900 block">Simplify Debts</span>
-                <span className="text-xs font-medium text-slate-500 block mt-0.5">
+                <span className="text-base font-normal text-slate-900 block">Simplify Debts</span>
+                <span className="text-xs font-normal text-slate-400 block mt-0.5">
                   {group.simplifyDebts ? 'Minimizes total payments between group' : 'Exact pairwise debts'}
                 </span>
               </div>
@@ -877,16 +874,16 @@ export default function GroupDetailPage({
                   onChange={(e) => handleToggleSimplify(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-10 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                <div className="w-10 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
               </label>
             </div>
 
             {/* Suggested Transfers */}
             {displayedTransfers.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2 shadow-2xs">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-                <h4 className="font-extrabold text-slate-900 text-sm">All settled up!</h4>
-                <p className="text-xs text-slate-500">Zero pending dues in this group.</p>
+              <div className="bg-white rounded-2xl p-8 border border-slate-100 text-center space-y-2 shadow-2xs">
+                <CheckCircle2 className="w-9 h-9 text-emerald-500 mx-auto" />
+                <h4 className="font-normal text-slate-800 text-sm">All settled up!</h4>
+                <p className="text-xs text-slate-400 font-normal">Zero pending dues in this group.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -904,26 +901,26 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs space-y-3"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm">
-                          <span className="font-black text-slate-900">{t.fromName}</span>
-                          <span className="text-slate-400 font-medium mx-1.5">owes</span>
-                          <span className="font-black text-indigo-700">{t.toName}</span>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-base min-w-0 truncate">
+                          <span className="font-normal text-slate-900">{t.fromName}</span>
+                          <span className="text-slate-400 font-light mx-1.5 text-xs">owes</span>
+                          <span className="font-normal text-emerald-700">{t.toName}</span>
                         </div>
-                        <div className="font-black text-slate-900 text-lg">
+                        <div className="font-light text-slate-900 text-xl tracking-tight shrink-0">
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-50">
                         {upiUrl && (
                           <a
                             href={upiUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-normal rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Pay UPI</span>
@@ -940,7 +937,7 @@ export default function GroupDetailPage({
                             });
                             setIsSettleOpen(true);
                           }}
-                          className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-normal rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Settle</span>
@@ -955,29 +952,29 @@ export default function GroupDetailPage({
             {/* Historical Settlements */}
             {group.settlements.length > 0 && (
               <div className="pt-2 space-y-2">
-                <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">
+                <span className="text-xs font-normal text-slate-400 block px-1">
                   Past Settlements ({group.settlements.length})
                 </span>
                 {group.settlements.map((st) => (
                   <div
                     key={st.id}
-                    className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-2xs flex items-center justify-between text-xs"
+                    className="bg-white p-3 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between text-xs"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-xs font-medium text-slate-600">
-                        <strong className="text-slate-900 font-bold">{st.payer.name}</strong> paid{' '}
-                        <strong className="text-slate-900 font-bold">{st.receiver.name}</strong>
+                      <span className="text-xs font-normal text-slate-600 truncate">
+                        <span className="text-slate-800">{st.payer.name}</span> paid{' '}
+                        <span className="text-slate-800">{st.receiver.name}</span>
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-slate-900 text-sm">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-normal text-slate-900 text-sm">
                         ₹{(st.amountPaisa / 100).toFixed(2)}
                       </span>
                       <button
                         onClick={() => handleDeleteSettlement(st.id)}
-                        className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer"
+                        className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer transition-colors"
                         title="Delete"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1000,37 +997,37 @@ export default function GroupDetailPage({
                 placeholder="Friend's name (e.g. Amit)..."
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200 bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
+                className="flex-1 px-4 py-2.5 text-sm font-normal rounded-xl border border-slate-200/80 bg-white focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-400 transition-colors"
               />
               <button
                 type="submit"
                 disabled={addingMember || !newMemberName.trim()}
-                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all shrink-0 cursor-pointer"
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-normal rounded-xl transition-all shrink-0 cursor-pointer"
               >
                 {addingMember ? 'Adding...' : 'Add'}
               </button>
             </form>
 
-            {/* Members List with larger text */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+            {/* Members List with clean typography */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-2xs divide-y divide-slate-100 overflow-hidden">
               {group.balances.map((b) => (
                 <div key={b.memberId} className="p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center font-black text-sm shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-normal text-sm shrink-0">
                       {b.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-black text-slate-900 text-sm truncate">
+                        <span className="font-normal text-slate-900 text-base truncate">
                           {b.name}
                         </span>
                         {b.isOwner && (
-                          <span className="px-1.5 py-0.5 text-[10px] font-extrabold bg-indigo-50 text-indigo-700 rounded-md">
+                          <span className="px-2 py-0.5 text-[10px] font-normal bg-emerald-50 text-emerald-700 rounded-full">
                             You
                           </span>
                         )}
                       </div>
-                      <span className="text-xs font-semibold text-slate-500 block mt-0.5">
+                      <span className="text-xs font-normal text-slate-400 block mt-0.5">
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
@@ -1039,15 +1036,15 @@ export default function GroupDetailPage({
 
                   <div className="text-right shrink-0">
                     {b.netBalancePaisa > 0 ? (
-                      <span className="text-sm font-black text-emerald-600 block">
+                      <span className="text-base font-light text-emerald-600 block">
                         +₹{(b.netBalancePaisa / 100).toFixed(2)}
                       </span>
                     ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-sm font-black text-rose-600 block">
+                      <span className="text-base font-light text-rose-600 block">
                         -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-sm font-bold text-slate-400 block">Settled</span>
+                      <span className="text-sm font-normal text-slate-400 block">Settled</span>
                     )}
                   </div>
                 </div>
@@ -1058,7 +1055,7 @@ export default function GroupDetailPage({
       </div>
 
       {/* Modals */}
-      <AddExpenseModal
+      <AddExpenseScreen
         isOpen={isAddExpenseOpen}
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}

@@ -24,7 +24,7 @@ import {
   Activity,
   Trash2,
 } from 'lucide-react';
-import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
+import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
 import {
   generateUpiUrl,
@@ -249,16 +249,16 @@ export default function JoinGroupDetailPage({
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
           <div className="text-center space-y-1">
-            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
+            <span className="text-xs font-normal text-amber-700 font-mono tracking-wider">
               Code: {group.joinCode}
             </span>
-            <h1 className="text-2xl font-black text-slate-900">{group.name}</h1>
-            <p className="text-xs text-slate-500">Who are you in this group?</p>
+            <h1 className="text-2xl font-normal text-slate-900">{group.name}</h1>
+            <p className="text-xs text-slate-400">Who are you in this group?</p>
           </div>
 
           {/* Existing Member List */}
           <div className="space-y-2">
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
+            <label className="block text-xs font-normal text-slate-400 text-center">
               Select Your Name
             </label>
             <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
@@ -266,13 +266,13 @@ export default function JoinGroupDetailPage({
                 <button
                   key={m.id}
                   onClick={() => handleClaimExisting(m)}
-                  className="w-full p-3 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-2xl text-left flex items-center justify-between transition-colors group cursor-pointer"
+                  className="w-full p-3 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200/70 hover:border-emerald-300 rounded-2xl text-left flex items-center justify-between transition-colors group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-extrabold text-xs flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-normal text-xs flex items-center justify-center">
                       {m.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-bold text-slate-800 text-sm group-hover:text-indigo-600">
+                    <span className="font-normal text-slate-800 text-sm group-hover:text-emerald-700">
                       {m.name}
                     </span>
                   </div>
@@ -449,16 +449,16 @@ export default function JoinGroupDetailPage({
       <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-black text-slate-900">{group.name}</span>
-            <span className="text-[10px] font-mono font-extrabold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
+            <span className="text-base font-normal text-slate-900">{group.name}</span>
+            <span className="text-[10px] font-mono font-normal bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
               {group.joinCode}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-0.5">
-            <span>You are: <strong>{claimedMember.name}</strong></span>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-normal mt-0.5">
+            <span>You are: <strong className="font-medium text-slate-700">{claimedMember.name}</strong></span>
             <button
               onClick={handleSwitchIdentity}
-              className="text-[10px] text-indigo-600 font-bold hover:underline"
+              className="text-[10px] text-emerald-600 font-normal hover:underline cursor-pointer"
             >
               (Switch)
             </button>
@@ -467,7 +467,7 @@ export default function JoinGroupDetailPage({
 
         <button
           onClick={() => setIsAddExpenseOpen(true)}
-          className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-sm"
+          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           Add Bill
@@ -476,20 +476,20 @@ export default function JoinGroupDetailPage({
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
         {/* Personal Standing Card */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs text-center space-y-1">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs text-center space-y-1">
+          <span className="text-xs font-normal text-slate-400">
             Your Balance in this group
           </span>
-          <div className="text-3xl font-black tracking-tight">
+          <div className="text-3xl font-light tracking-tight">
             {myBalance > 0 ? (
               <span className="text-emerald-600">+₹{(myBalance / 100).toFixed(2)}</span>
             ) : myBalance < 0 ? (
               <span className="text-rose-600">-₹{(Math.abs(myBalance) / 100).toFixed(2)}</span>
             ) : (
-              <span className="text-slate-700">₹0.00</span>
+              <span className="text-slate-800">₹0.00</span>
             )}
           </div>
-          <p className="text-xs font-bold text-slate-500">
+          <p className="text-xs font-normal text-slate-400">
             {myBalance > 0
               ? 'You are owed money back'
               : myBalance < 0
@@ -501,7 +501,7 @@ export default function JoinGroupDetailPage({
         {/* Debts you owe with 1-tap UPI launch */}
         {transfersIOwe.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+            <h3 className="text-xs font-normal text-slate-400 block px-1">
               Payments you need to make ({transfersIOwe.length})
             </h3>
             {transfersIOwe.map((t, idx) => {
@@ -518,14 +518,14 @@ export default function JoinGroupDetailPage({
               return (
                 <div
                   key={idx}
-                  className="bg-white p-4 rounded-2xl border border-rose-100 shadow-xs space-y-3"
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs space-y-3"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs text-slate-500">You pay</span>
-                      <h4 className="font-extrabold text-slate-900 text-sm">{t.toName}</h4>
+                      <span className="text-xs font-normal text-slate-400">You pay</span>
+                      <h4 className="font-normal text-slate-900 text-base">{t.toName}</h4>
                     </div>
-                    <div className="text-lg font-black text-rose-600">
+                    <div className="text-xl font-light text-rose-600 tracking-tight">
                       ₹{numRupees.toFixed(2)}
                     </div>
                   </div>
@@ -572,13 +572,13 @@ export default function JoinGroupDetailPage({
             {transfersOwedToMe.map((t, idx) => (
               <div
                 key={idx}
-                className="bg-white p-4 rounded-2xl border border-emerald-100 shadow-xs flex items-center justify-between"
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs flex items-center justify-between"
               >
                 <div>
-                  <h4 className="font-extrabold text-slate-900 text-sm">{t.fromName}</h4>
-                  <span className="text-xs text-emerald-700 font-semibold">owes you</span>
+                  <h4 className="font-normal text-slate-900 text-base">{t.fromName}</h4>
+                  <span className="text-xs text-emerald-600 font-normal">owes you</span>
                 </div>
-                <div className="text-lg font-black text-emerald-600">
+                <div className="text-xl font-light text-emerald-600 tracking-tight">
                   ₹{(t.amountPaisa / 100).toFixed(2)}
                 </div>
               </div>
@@ -589,12 +589,12 @@ export default function JoinGroupDetailPage({
         {/* Group Activity Feed */}
         <div className="space-y-3 pt-1">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+            <h3 className="text-xs font-normal text-slate-400 block px-1">
               Group Activity ({group.expenses.length + group.settlements.length})
             </h3>
             <button
               onClick={() => setIsAddExpenseOpen(true)}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+              className="text-xs font-medium text-emerald-600 hover:text-emerald-700 cursor-pointer"
             >
               + Add Bill
             </button>
@@ -603,13 +603,13 @@ export default function JoinGroupDetailPage({
           {/* Search & Filter Bar */}
           <div className="space-y-2">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search activity by name, description, amount..."
                 value={activitySearch}
                 onChange={(e) => setActivitySearch(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs placeholder:text-slate-400"
+                className="w-full pl-9.5 pr-8 py-2.5 text-sm font-normal bg-slate-50/70 border border-slate-200/60 rounded-xl focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-400 transition-colors"
               />
               {activitySearch && (
                 <button
@@ -631,10 +631,10 @@ export default function JoinGroupDetailPage({
                 <button
                   key={f.id}
                   onClick={() => setActivityFilter(f.id as any)}
-                  className={`px-3 py-1 rounded-full font-bold transition-all shrink-0 cursor-pointer ${
+                  className={`px-3 py-1 rounded-full text-xs transition-all shrink-0 cursor-pointer ${
                     activityFilter === f.id
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-slate-800 text-white font-medium'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200/70 font-normal'
                   }`}
                 >
                   {f.label}
@@ -645,12 +645,12 @@ export default function JoinGroupDetailPage({
 
           {/* List items */}
           {activityItems.length === 0 ? (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 text-center space-y-2 shadow-2xs">
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center space-y-2 shadow-2xs">
               <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
-              <h4 className="font-extrabold text-slate-800 text-xs">
+              <h4 className="font-normal text-slate-800 text-sm">
                 {activitySearch ? 'No matching activity found' : 'No activity yet'}
               </h4>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-xs text-slate-400 font-normal">
                 {activitySearch ? 'Try a different search query.' : "Tap '+ Add Bill' above to record a bill."}
               </p>
             </div>
@@ -670,27 +670,27 @@ export default function JoinGroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3 text-xs"
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3 text-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-9 h-9 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
-                          <CategoryIcon className="w-4 h-4" />
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
+                          <CategoryIcon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-extrabold text-slate-900 text-sm truncate">
+                          <div className="font-normal text-slate-900 text-base truncate">
                             {item.title}
                           </div>
-                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                          <div className="text-xs font-normal text-slate-400 truncate mt-0.5">
                             {item.payerNames} paid • {dateStr}
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="font-black text-slate-900 text-sm block">
+                        <span className="font-normal text-slate-900 text-base block">
                           ₹{totalRupees.toFixed(2)}
                         </span>
-                        <span className="text-[10px] text-slate-400 capitalize">
+                        <span className="text-xs font-normal text-slate-400 capitalize">
                           {item.raw.splitType.toLowerCase()}
                         </span>
                       </div>
@@ -700,27 +700,27 @@ export default function JoinGroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-3.5 rounded-2xl border border-emerald-100/90 shadow-2xs flex items-center justify-between gap-3 text-xs"
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3 text-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-4 h-4" />
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-extrabold text-slate-900 text-sm truncate">
+                          <div className="font-normal text-slate-900 text-base truncate">
                             {item.title}
                           </div>
-                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                          <div className="text-xs font-normal text-slate-400 truncate mt-0.5">
                             Settlement • {dateStr}
                           </div>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="font-black text-emerald-600 text-sm block">
+                        <span className="font-normal text-emerald-600 text-base block">
                           ₹{totalRupees.toFixed(2)}
                         </span>
-                        <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-1 py-0.5 rounded">
+                        <span className="text-xs font-normal text-slate-400">
                           Settled
                         </span>
                       </div>
@@ -734,7 +734,7 @@ export default function JoinGroupDetailPage({
       </div>
 
       {/* Modals for Friend */}
-      <AddExpenseModal
+      <AddExpenseScreen
         isOpen={isAddExpenseOpen}
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}

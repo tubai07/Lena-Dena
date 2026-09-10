@@ -5,9 +5,8 @@ import {
   X,
   Check,
   Calendar,
-  Sparkles,
-  Users,
-  ChevronDown,
+  ArrowLeft,
+  ArrowRight,
   Car,
   Utensils,
   ShoppingCart,
@@ -54,6 +53,7 @@ export function AddExpenseScreen({
   onExpenseAdded,
   defaultPayerId,
 }: AddExpenseScreenProps) {
+  const [step, setStep] = useState<1 | 2>(1);
   const [description, setDescription] = useState('');
   const [amountRupees, setAmountRupees] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,21 +69,19 @@ export function AddExpenseScreen({
 
   // Notes
   const [notes, setNotes] = useState('');
-  const [showNotes, setShowNotes] = useState(false);
 
   // Split configurations
   const [splitMode, setSplitMode] = useState<'EQUAL' | 'CUSTOM'>('EQUAL');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
-  const [showSplitDrawer, setShowSplitDrawer] = useState(false);
 
   // CRITICAL BUG FIX: Track previous isOpen state so background auto-polling
   // changing the `members` prop NEVER resets user input while they type!
   const prevIsOpenRef = useRef(false);
 
   useEffect(() => {
-    // Only initialize form fields when transition from closed (false) to open (true)
     if (isOpen && !prevIsOpenRef.current) {
+      setStep(1);
       setDescription('');
       setAmountRupees('');
       setError('');
@@ -94,10 +92,7 @@ export function AddExpenseScreen({
       setExpenseDate(new Date().toISOString().split('T')[0]);
       setShowDatePicker(false);
       setNotes('');
-      setShowNotes(false);
-      setShowSplitDrawer(false);
 
-      // Default payer: prioritized by defaultPayerId, owner, or first member
       const targetPayer =
         (defaultPayerId && members.some((m) => m.id === defaultPayerId) && defaultPayerId) ||
         members.find((m) => m.isOwner)?.id ||
@@ -105,7 +100,6 @@ export function AddExpenseScreen({
         '';
       setPayerId(targetPayer);
 
-      // Default all members selected
       setSelectedMemberIds(members.map((m) => m.id));
       setCustomAmounts({});
     }
@@ -140,34 +134,6 @@ export function AddExpenseScreen({
     const d = new Date(expenseDate);
     return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
   }, [expenseDate]);
-
-  // Payer display name
-  const payerName = useMemo(() => {
-    const p = members.find((m) => m.id === payerId);
-    return p ? p.name : 'You';
-  }, [members, payerId]);
-
-  // Split summary text
-  const splitSummaryText = useMemo(() => {
-    if (splitMode === 'EQUAL') {
-      if (selectedMemberIds.length === members.length) {
-        return 'split equally';
-      }
-      return `split equally (${selectedMemberIds.length}/${members.length})`;
-    }
-    return 'custom split';
-  }, [splitMode, selectedMemberIds, members.length]);
-
-  const perPersonText = useMemo(() => {
-    if (splitMode === 'EQUAL' && selectedMemberIds.length > 0 && totalAmountPaisa > 0) {
-      const share = totalAmountPaisa / selectedMemberIds.length / 100;
-      return `(₹${share.toFixed(2)}/person)`;
-    }
-    if (splitMode === 'CUSTOM') {
-      return `(${Object.values(customAmounts).filter((v) => Number(v) > 0).length} customized)`;
-    }
-    return '';
-  }, [splitMode, selectedMemberIds.length, totalAmountPaisa, customAmounts]);
 
   const activeCategory = useMemo(() => {
     return CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
@@ -216,20 +182,35 @@ export function AddExpenseScreen({
     setSelectedMemberIds(members.map((m) => m.id));
   };
 
+  const handleGoToStep2 = () => {
+    setError('');
+    const trimmed = description.trim();
+    if (!trimmed) {
+      setError('Please enter a description');
+      return;
+    }
+    if (totalAmountPaisa <= 0 || isNaN(totalAmountPaisa)) {
+      setError('Please enter a valid bill amount');
+      return;
+    }
+    setStep(2);
+  };
+
   if (!isOpen) return null;
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async () => {
     setError('');
 
     const trimmedDesc = description.trim();
     if (!trimmedDesc) {
       setError('Please enter a description');
+      setStep(1);
       return;
     }
 
     if (totalAmountPaisa <= 0 || isNaN(totalAmountPaisa)) {
       setError('Please enter a valid bill amount');
+      setStep(1);
       return;
     }
 
@@ -249,7 +230,6 @@ export function AddExpenseScreen({
       finalSplits = distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
       finalSplitType = 'EQUAL';
     } else {
-      // Custom split validation with 2-paisa tolerance
       if (Math.abs(diffPaisa) > 2) {
         const diffRupees = Math.abs(diffPaisa) / 100;
         if (diffPaisa > 0) {
@@ -274,11 +254,10 @@ export function AddExpenseScreen({
       finalSplitType = 'EXACT';
     }
 
-    // Parse date
     const selectedDateObj = expenseDate ? new Date(`${expenseDate}T12:00:00Z`) : new Date();
+    const payerMember = members.find((m) => m.id === payerId) || { id: payerId, name: 'You' };
 
     // ⚡ INSTANT OPTIMISTIC SUBMIT
-    const payerMember = members.find((m) => m.id === payerId) || { id: payerId, name: 'You' };
     const optimisticExpense = {
       id: `temp_exp_${Date.now()}`,
       description: trimmedDesc,
@@ -335,433 +314,468 @@ export function AddExpenseScreen({
     }
   };
 
-  const isSaveReady = description.trim().length > 0 && Number(amountRupees) > 0;
+  if (!isOpen) return null;
+
+  const isStep1Ready = description.trim().length > 0 && Number(amountRupees) > 0;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col animate-in slide-in-from-bottom duration-250 ease-out overflow-hidden select-none">
-      {/* Top Splitwise-style Navigation Bar */}
-      <header className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-xs">
-        <button
-          onClick={onClose}
-          type="button"
-          aria-label="Close"
-          className="p-1 -ml-1 rounded-full hover:bg-emerald-700/60 active:scale-95 transition-all cursor-pointer text-white"
-        >
-          <X className="w-6 h-6" />
-        </button>
+    <div className="fixed inset-0 z-50 flex justify-center bg-slate-900/40 backdrop-blur-xs sm:py-6 animate-in fade-in duration-200 select-none">
+      {/* Centered canvas matching web app width (max-w-md) */}
+      <div className="w-full max-w-md bg-white h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom duration-250 ease-out border-slate-100">
+        {/* ================= STEP 1: BILL DETAILS ================= */}
+        {step === 1 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Navigation Header */}
+            <header className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+              <button
+                onClick={onClose}
+                type="button"
+                aria-label="Close"
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-        <h1 className="text-base font-extrabold tracking-tight">Add an expense</h1>
+              <div className="text-center">
+                <h2 className="text-base font-medium text-slate-800">Add an expense</h2>
+                <span className="text-[11px] text-slate-400 font-normal">Step 1 of 2: Details</span>
+              </div>
 
-        <button
-          onClick={() => handleSubmit()}
-          type="button"
-          disabled={!isSaveReady || loading}
-          className={`text-sm font-black px-3 py-1 rounded-lg transition-all cursor-pointer ${
-            isSaveReady
-              ? 'text-white bg-emerald-700/80 hover:bg-emerald-800 active:scale-95'
-              : 'text-emerald-200/50 cursor-not-allowed'
-          }`}
-        >
-          Save
-        </button>
-      </header>
+              <button
+                onClick={handleGoToStep2}
+                type="button"
+                disabled={!isStep1Ready}
+                className={`text-sm font-medium transition-colors cursor-pointer ${
+                  isStep1Ready ? 'text-emerald-600 hover:text-emerald-700' : 'text-slate-300 cursor-not-allowed'
+                }`}
+              >
+                Next
+              </button>
+            </header>
 
-      {/* Sub-Header: Group Identifier */}
-      <div className="bg-slate-50 border-b border-slate-200/80 px-4 py-2.5 flex items-center gap-2 shrink-0">
-        <span className="text-xs font-semibold text-slate-500">With you and:</span>
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-full shadow-2xs">
-          <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black">
-            {groupName.slice(0, 1).toUpperCase()}
-          </div>
-          <span className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
-            {groupName}
-          </span>
-        </div>
-      </div>
+            {/* Sub-Header: Group tag */}
+            <div className="bg-slate-50/70 border-b border-slate-100 px-5 py-2 flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-400 font-normal">With:</span>
+              <span className="text-xs font-medium text-slate-700 bg-white border border-slate-200/60 px-2.5 py-0.5 rounded-full shadow-2xs">
+                {groupName}
+              </span>
+            </div>
 
-      {/* Main Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6 max-w-md mx-auto w-full">
-        {error && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-            <span>{error}</span>
+            {/* Form Body */}
+            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
+              {error && (
+                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-normal rounded-2xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Category Icon + Description */}
+              <div className="flex items-center gap-3 pt-1">
+                {/* Category Picker Button */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-2xs cursor-pointer hover:scale-105 ${activeCategory.color}`}
+                    title="Change Category"
+                  >
+                    <CategoryIcon className="w-6 h-6" />
+                  </button>
+
+                  {/* Popover */}
+                  {showCategoryPicker && (
+                    <div className="absolute left-0 top-14 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2 z-20 grid grid-cols-3 gap-1.5 w-60 animate-in fade-in zoom-in-95">
+                      {CATEGORIES.map((c) => {
+                        const Icon = c.icon;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setCategory(c.id);
+                              setShowCategoryPicker(false);
+                            }}
+                            className={`p-2 rounded-xl flex flex-col items-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer ${
+                              category === c.id ? 'ring-2 ring-emerald-500 bg-emerald-50/40' : ''
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.color}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <span className="text-[10px] text-slate-700 font-normal truncate w-full text-center">
+                              {c.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Description Input */}
+                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-500 transition-colors pb-1">
+                  <input
+                    type="text"
+                    placeholder="Enter a description (e.g. Dinner, Taxi)"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    autoFocus
+                    className="w-full text-lg font-normal text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Currency Symbol + Amount */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 font-light text-2xl flex items-center justify-center border border-slate-200/60">
+                  ₹
+                </div>
+
+                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-500 transition-colors pb-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={amountRupees}
+                    onChange={(e) => setAmountRupees(e.target.value)}
+                    className="w-full text-3xl font-light text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
+                  />
+                </div>
+              </div>
+
+              {/* Transaction Date Row */}
+              <div className="pt-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/70 text-slate-700 text-sm font-normal transition-all cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4 text-emerald-600" />
+                    <span>Date: <strong className="font-medium text-slate-900">{formattedDateLabel}</strong></span>
+                  </button>
+
+                  {/* Date Popover */}
+                  {showDatePicker && (
+                    <div className="absolute left-0 top-12 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-20 space-y-2 animate-in fade-in zoom-in-95 w-56">
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpenseDate(new Date().toISOString().split('T')[0]);
+                            setShowDatePicker(false);
+                          }}
+                          className="flex-1 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors cursor-pointer"
+                        >
+                          Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+                            setExpenseDate(yesterday);
+                            setShowDatePicker(false);
+                          }}
+                          className="flex-1 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-normal hover:bg-slate-200 transition-colors cursor-pointer"
+                        >
+                          Yesterday
+                        </button>
+                      </div>
+
+                      <div className="pt-1 border-t border-slate-100">
+                        <label className="text-[10px] text-slate-400 font-normal block mb-1">
+                          Custom Date:
+                        </label>
+                        <input
+                          type="date"
+                          value={expenseDate}
+                          onChange={(e) => {
+                            setExpenseDate(e.target.value);
+                            setShowDatePicker(false);
+                          }}
+                          className="w-full text-xs font-normal p-1.5 border border-slate-200 rounded-lg focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Optional Notes */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs text-slate-400 font-normal">
+                  Notes or Bill # (optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Add details, invoice number..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full p-3 rounded-2xl border border-slate-200/80 text-sm font-normal text-slate-800 placeholder:text-slate-300 focus:outline-hidden focus:border-emerald-500 bg-slate-50/40 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Bottom Button */}
+            <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={handleGoToStep2}
+                disabled={!isStep1Ready}
+                className={`w-full py-3.5 rounded-2xl text-sm font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  isStep1Ready
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-[0.99]'
+                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                }`}
+              >
+                <span>Next: Choose who paid & split</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </footer>
           </div>
         )}
 
-        {/* Input Rows */}
-        <div className="space-y-4 pt-2">
-          {/* Row 1: Category Icon + Description */}
-          <div className="flex items-center gap-3">
-            {/* Category Icon Button */}
-            <div className="relative">
+        {/* ================= STEP 2: WHO PAID & SPLIT ================= */}
+        {step === 2 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Navigation Header */}
+            <header className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <button
+                onClick={() => setStep(1)}
                 type="button"
-                onClick={() => setShowCategoryPicker(!showCategoryPicker)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-2xs cursor-pointer hover:scale-105 active:scale-95 ${activeCategory.color}`}
-                title="Change Category"
+                aria-label="Back to Step 1"
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-1"
               >
-                <CategoryIcon className="w-6 h-6" />
+                <ArrowLeft className="w-5 h-5" />
+                <span className="text-xs font-normal text-slate-500">Back</span>
               </button>
 
-              {/* Category Picker Popover */}
-              {showCategoryPicker && (
-                <div className="absolute left-0 top-14 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 grid grid-cols-3 gap-1.5 w-60 animate-in fade-in zoom-in-95">
-                  {CATEGORIES.map((c) => {
-                    const Icon = c.icon;
+              <div className="text-center">
+                <h2 className="text-base font-medium text-slate-800">Who paid & split</h2>
+                <span className="text-[11px] text-slate-400 font-normal">Step 2 of 2: Allocation</span>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                type="button"
+                disabled={loading}
+                className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer"
+              >
+                Save
+              </button>
+            </header>
+
+            {/* Summary Tag */}
+            <div className="bg-emerald-50/50 border-b border-emerald-100/60 px-5 py-2.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeCategory.color} shrink-0`}>
+                  <CategoryIcon className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-sm font-medium text-slate-900 truncate">
+                  {description}
+                </span>
+              </div>
+
+              <span className="text-sm font-medium text-emerald-800 shrink-0">
+                ₹{Number(amountRupees).toFixed(2)}
+              </span>
+            </div>
+
+            {/* Form Body */}
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              {error && (
+                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-normal rounded-2xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Section 1: Who Paid */}
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400 font-normal">
+                  Who paid for this?
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {members.map((m) => {
+                    const isSelected = payerId === m.id;
                     return (
                       <button
-                        key={c.id}
+                        key={m.id}
                         type="button"
-                        onClick={() => {
-                          setCategory(c.id);
-                          setShowCategoryPicker(false);
-                        }}
-                        className={`p-2 rounded-xl flex flex-col items-center gap-1 hover:bg-slate-50 transition-colors cursor-pointer ${
-                          category === c.id ? 'ring-2 ring-emerald-500 bg-emerald-50/40' : ''
+                        onClick={() => setPayerId(m.id)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-normal transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white font-medium shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border border-slate-200/70 hover:bg-slate-100'
                         }`}
                       >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.color}`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-700 truncate w-full text-center">
-                          {c.label}
-                        </span>
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                        <span>{m.name}</span>
                       </button>
                     );
                   })}
                 </div>
-              )}
-            </div>
-
-            {/* Description Input */}
-            <div className="flex-1 border-b-2 border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
-              <input
-                type="text"
-                placeholder="Enter a description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                autoFocus
-                className="w-full text-lg font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium focus:outline-hidden bg-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Currency Symbol + Amount */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-800 font-black text-xl flex items-center justify-center border border-slate-200/80">
-              ₹
-            </div>
-
-            <div className="flex-1 border-b-2 border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={amountRupees}
-                onChange={(e) => setAmountRupees(e.target.value)}
-                className="w-full text-3xl font-black text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Splitwise-style Interactive Payer & Split Bar */}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => setShowSplitDrawer(!showSplitDrawer)}
-            className="w-full py-3.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 rounded-2xl transition-all flex items-center justify-between shadow-2xs group cursor-pointer"
-          >
-            <div className="text-left space-y-0.5">
-              <div className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                <span>Paid by</span>
-                <span className="text-emerald-700 underline underline-offset-2 decoration-emerald-400">
-                  {payerName}
-                </span>
-                <span>and</span>
-                <span className="text-emerald-700 underline underline-offset-2 decoration-emerald-400">
-                  {splitSummaryText}
-                </span>
               </div>
-              {perPersonText && (
-                <div className="text-xs font-semibold text-slate-500">
-                  {perPersonText}
-                </div>
-              )}
-            </div>
 
-            <div className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-slate-700 transition-colors shrink-0 ml-2">
-              <ChevronDown
-                className={`w-4 h-4 transition-transform duration-200 ${
-                  showSplitDrawer ? 'rotate-180 text-emerald-600' : ''
-                }`}
-              />
-            </div>
-          </button>
-        </div>
+              {/* Section 2: Split Mode */}
+              <div className="space-y-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400 font-normal">
+                    How should it be split?
+                  </label>
 
-        {/* Expandable Payer & Split Drawer */}
-        {showSplitDrawer && (
-          <div className="bg-slate-50/70 border border-slate-200 rounded-3xl p-4 space-y-5 animate-in fade-in slide-in-from-top-2 duration-200">
-            {/* Section 1: Who Paid? */}
-            <div className="space-y-2">
-              <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">
-                Who Paid?
-              </span>
-              <div className="flex gap-2 flex-wrap">
-                {members.map((m) => {
-                  const isSelected = payerId === m.id;
-                  return (
+                  <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
                     <button
-                      key={m.id}
                       type="button"
-                      onClick={() => setPayerId(m.id)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      onClick={() => setSplitMode('EQUAL')}
+                      className={`px-3 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                        splitMode === 'EQUAL'
+                          ? 'bg-white text-slate-900 font-medium shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 font-normal'
                       }`}
                     >
-                      {isSelected && <Check className="w-3.5 h-3.5" />}
-                      <span>{m.name}</span>
+                      Equally
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Section 2: Split Options */}
-            <div className="space-y-3 pt-1 border-t border-slate-200/80">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-                  Split Mode
-                </span>
-
-                <div className="bg-white border border-slate-200 p-1 rounded-xl flex gap-1 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setSplitMode('EQUAL')}
-                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                      splitMode === 'EQUAL'
-                        ? 'bg-emerald-600 text-white'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Equally
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSwitchToCustom}
-                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                      splitMode === 'CUSTOM'
-                        ? 'bg-emerald-600 text-white'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Custom (₹)
-                  </button>
-                </div>
-              </div>
-
-              {/* Mode A: Equal Split with Checkboxes */}
-              {splitMode === 'EQUAL' && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-xs font-bold text-slate-500">
-                    <span>Selected ({selectedMemberIds.length}/{members.length})</span>
                     <button
                       type="button"
-                      onClick={handleSelectAll}
-                      className="text-emerald-700 hover:underline cursor-pointer"
+                      onClick={handleSwitchToCustom}
+                      className={`px-3 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                        splitMode === 'CUSTOM'
+                          ? 'bg-white text-slate-900 font-medium shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 font-normal'
+                      }`}
                     >
-                      Select All
+                      Custom (₹)
                     </button>
                   </div>
-
-                  <div className="space-y-1.5 pt-1">
-                    {members.map((m) => {
-                      const isSelected = selectedMemberIds.includes(m.id);
-                      const equalSplit = computedEqualSplits.find((s) => s.memberId === m.id);
-                      const shareRupees = equalSplit ? (equalSplit.amountPaisa / 100).toFixed(2) : '0.00';
-
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={() => toggleMemberSelection(m.id)}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-emerald-50/40 border-emerald-200 text-slate-900'
-                              : 'bg-slate-50/50 border-slate-100 text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer pointer-events-none"
-                            />
-                            <span className="text-xs font-bold">{m.name}</span>
-                          </div>
-
-                          {isSelected && totalAmountPaisa > 0 && (
-                            <span className="text-xs font-extrabold text-emerald-800">
-                              ₹{shareRupees}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
-              )}
 
-              {/* Mode B: Custom Amount Split */}
-              {splitMode === 'CUSTOM' && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-xs font-bold">
-                    <span className="text-slate-500">
-                      Allocated: ₹{(customSumPaisa / 100).toFixed(2)} / ₹{(totalAmountPaisa / 100).toFixed(2)}
-                    </span>
-                    {diffPaisa !== 0 && (
-                      <span className={diffPaisa > 0 ? 'text-amber-600 font-extrabold' : 'text-rose-600 font-extrabold'}>
-                        {diffPaisa > 0 ? `₹${(diffPaisa / 100).toFixed(2)} left` : `₹${(Math.abs(diffPaisa) / 100).toFixed(2)} over`}
-                      </span>
-                    )}
-                  </div>
+                {/* EQUAL SPLIT LIST */}
+                {splitMode === 'EQUAL' && (
+                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-2xl p-3 space-y-2">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 text-xs text-slate-400 font-normal">
+                      <span>Included ({selectedMemberIds.length}/{members.length})</span>
+                      <button
+                        type="button"
+                        onClick={handleSelectAll}
+                        className="text-emerald-600 hover:underline cursor-pointer font-medium"
+                      >
+                        Select All
+                      </button>
+                    </div>
 
-                  <div className="space-y-2">
-                    {members.map((m) => {
-                      const val = customAmounts[m.id] || '';
-                      return (
-                        <div key={m.id} className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-700 w-24 truncate">
-                            {m.name}
-                          </span>
+                    <div className="space-y-1.5 pt-1">
+                      {members.map((m) => {
+                        const isSelected = selectedMemberIds.includes(m.id);
+                        const equalSplit = computedEqualSplits.find((s) => s.memberId === m.id);
+                        const shareRupees = equalSplit ? (equalSplit.amountPaisa / 100).toFixed(2) : '0.00';
 
-                          <div className="relative flex-1">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                              ₹
-                            </span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={val}
-                              onChange={(e) => {
-                                setCustomAmounts({
-                                  ...customAmounts,
-                                  [m.id]: e.target.value,
-                                });
-                              }}
-                              className="w-full pl-6 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 bg-slate-50/50"
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleAutoFillRemainder(m.id)}
-                            className="p-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0 cursor-pointer"
-                            title="Fill Remaining"
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => toggleMemberSelection(m.id)}
+                            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-white border-slate-200 text-slate-900 shadow-2xs'
+                                : 'bg-transparent border-transparent text-slate-400'
+                            }`}
                           >
-                            Fill rest
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <div className="flex items-center gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer pointer-events-none"
+                              />
+                              <span className="text-sm font-normal">{m.name}</span>
+                            </div>
+
+                            {isSelected && totalAmountPaisa > 0 && (
+                              <span className="text-xs font-medium text-slate-600">
+                                ₹{shareRupees}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* CUSTOM SPLIT LIST */}
+                {splitMode === 'CUSTOM' && (
+                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-2xl p-3 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 text-xs font-normal">
+                      <span className="text-slate-400">
+                        Allocated: ₹{(customSumPaisa / 100).toFixed(2)} / ₹{(totalAmountPaisa / 100).toFixed(2)}
+                      </span>
+                      {diffPaisa !== 0 && (
+                        <span className={diffPaisa > 0 ? 'text-amber-600 font-medium' : 'text-rose-600 font-medium'}>
+                          {diffPaisa > 0 ? `₹${(diffPaisa / 100).toFixed(2)} left` : `₹${(Math.abs(diffPaisa) / 100).toFixed(2)} over`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {members.map((m) => {
+                        const val = customAmounts[m.id] || '';
+                        return (
+                          <div key={m.id} className="flex items-center gap-2">
+                            <span className="text-sm font-normal text-slate-700 w-24 truncate">
+                              {m.name}
+                            </span>
+
+                            <div className="relative flex-1">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-normal">
+                                ₹
+                              </span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={val}
+                                onChange={(e) => {
+                                  setCustomAmounts({
+                                    ...customAmounts,
+                                    [m.id]: e.target.value,
+                                  });
+                                }}
+                                className="w-full pl-6 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-normal text-slate-900 focus:outline-hidden focus:border-emerald-500 bg-white"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAutoFillRemainder(m.id)}
+                              className="p-1.5 text-[11px] font-normal text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0 cursor-pointer"
+                              title="Fill Remaining"
+                            >
+                              Fill rest
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Bottom Save Button */}
+            <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="w-full py-3.5 rounded-2xl text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-[0.99]"
+              >
+                Save Expense
+              </button>
+            </footer>
           </div>
         )}
-
-        {/* Optional Notes */}
-        {showNotes ? (
-          <div className="space-y-1.5 animate-in fade-in">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-              Notes or Bill #
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Add optional details, invoice no..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full p-3 rounded-2xl border border-slate-200 text-xs font-medium text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-emerald-500 bg-slate-50/50"
-            />
-          </div>
-        ) : null}
       </div>
-
-      {/* Bottom Action Bar (Date Picker & Notes) */}
-      <footer className="bg-slate-50 border-t border-slate-200 px-5 py-3.5 flex items-center justify-between shrink-0 max-w-md mx-auto w-full">
-        {/* Date Selector */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowDatePicker(!showDatePicker)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 active:scale-95 transition-all text-xs font-extrabold shadow-2xs cursor-pointer"
-          >
-            <Calendar className="w-4 h-4 text-emerald-600" />
-            <span>{formattedDateLabel}</span>
-          </button>
-
-          {/* Date Picker Popover */}
-          {showDatePicker && (
-            <div className="absolute left-0 bottom-12 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-20 space-y-2 animate-in fade-in zoom-in-95 w-56">
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpenseDate(new Date().toISOString().split('T')[0]);
-                    setShowDatePicker(false);
-                  }}
-                  className="flex-1 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer"
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                    setExpenseDate(yesterday);
-                    setShowDatePicker(false);
-                  }}
-                  className="flex-1 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
-                >
-                  Yesterday
-                </button>
-              </div>
-
-              <div className="pt-1 border-t border-slate-100">
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">
-                  Custom Date:
-                </label>
-                <input
-                  type="date"
-                  value={expenseDate}
-                  onChange={(e) => {
-                    setExpenseDate(e.target.value);
-                    setShowDatePicker(false);
-                  }}
-                  className="w-full text-xs font-bold p-1.5 border border-slate-200 rounded-lg focus:outline-hidden"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Notes Toggle Button */}
-        {!showNotes && (
-          <button
-            type="button"
-            onClick={() => setShowNotes(true)}
-            className="flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-          >
-            <FileText className="w-4 h-4" />
-            <span>Add note</span>
-          </button>
-        )}
-      </footer>
     </div>
   );
 }
