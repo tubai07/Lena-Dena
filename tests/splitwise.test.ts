@@ -288,4 +288,110 @@ describe('Splitwise Engine & Debt Simplification', () => {
     const canRemoveCreator = remainingMembers.some((m) => m.id === 'm1' && !m.isOwner);
     expect(canRemoveCreator).toBe(false);
   });
+
+  it('enforces that a member cannot be deleted unless they have settled everything (net balance = 0)', () => {
+    const members = [
+      { id: 'm1', name: 'Creator', isOwner: true },
+      { id: 'm2', name: 'Unsettled Friend', isOwner: false },
+      { id: 'm3', name: 'Settled Friend', isOwner: false },
+    ];
+
+    const expenses = [
+      {
+        id: 'exp1',
+        totalAmountPaisa: 20000,
+        payers: [{ memberId: 'm1', amountPaisa: 20000 }],
+        splits: [
+          { memberId: 'm1', amountPaisa: 10000 },
+          { memberId: 'm2', amountPaisa: 10000 },
+        ],
+      },
+    ];
+
+    const balances = calculateMemberNetBalances(members, expenses, []);
+    const m2Bal = balances.find((b) => b.memberId === 'm2')!;
+    const m3Bal = balances.find((b) => b.memberId === 'm3')!;
+
+    // m2 has an unsettled balance (-₹100) -> CANNOT be deleted
+    expect(Math.abs(m2Bal.netBalancePaisa)).toBeGreaterThan(0);
+    const canDeleteM2 = Math.abs(m2Bal.netBalancePaisa) === 0;
+    expect(canDeleteM2).toBe(false);
+
+    // m3 has 0 balance -> CAN be deleted
+    expect(m3Bal.netBalancePaisa).toBe(0);
+    const canDeleteM3 = Math.abs(m3Bal.netBalancePaisa) === 0;
+    expect(canDeleteM3).toBe(true);
+
+    // Once m2 settles with a settlement of ₹100
+    const settlements = [
+      { id: 'st1', payerId: 'm2', receiverId: 'm1', amountPaisa: 10000 },
+    ];
+    const postSettlementBalances = calculateMemberNetBalances(members, expenses, settlements);
+    const m2Settled = postSettlementBalances.find((b) => b.memberId === 'm2')!;
+    expect(m2Settled.netBalancePaisa).toBe(0);
+    expect(Math.abs(m2Settled.netBalancePaisa) === 0).toBe(true);
+  });
+
+  it('validates mandatory 10-digit mobile phone number for adding group members', () => {
+    const isValidPhone = (phone?: string | null) => {
+      const clean = phone ? String(phone).replace(/\D/g, '') : '';
+      return clean.length >= 10;
+    };
+
+    expect(isValidPhone('')).toBe(false);
+    expect(isValidPhone('12345')).toBe(false);
+    expect(isValidPhone('987654321')).toBe(false);
+    expect(isValidPhone('9876543210')).toBe(true);
+    expect(isValidPhone('+91 98765 43210')).toBe(true);
+  });
+
+  it('generates accurate standing sentence without "0 people need to pay you back" glitch', () => {
+    const getStandingSentence = (
+      userBalance: number,
+      transfers: any[],
+      ownerId: string,
+      allBalances: any[]
+    ) => {
+      const peopleOwingMe = transfers.filter((t) => t.toId === ownerId);
+      const membersOwingMe = allBalances.filter(
+        (b) => b.memberId !== ownerId && b.netBalancePaisa < 0
+      );
+
+      if (userBalance > 0) {
+        const count = peopleOwingMe.length > 0 ? peopleOwingMe.length : membersOwingMe.length;
+        if (count > 0) {
+          const countLabel = count === 1 ? '1 person needs' : `${count} people need`;
+          return `${countLabel} to pay you back ₹${(userBalance / 100).toFixed(2)} overall`;
+        }
+        return `You are owed ₹${(userBalance / 100).toFixed(2)} overall`;
+      }
+      if (userBalance < 0) {
+        return `You need to pay back ₹${(Math.abs(userBalance) / 100).toFixed(2)} overall`;
+      }
+      return 'You are all squared away overall';
+    };
+
+    // Case 1: 1 person owes ₹18
+    const sentence1 = getStandingSentence(
+      1800,
+      [{ fromId: 'm2', toId: 'm1', amountPaisa: 1800 }],
+      'm1',
+      [{ memberId: 'm1', netBalancePaisa: 1800 }, { memberId: 'm2', netBalancePaisa: -1800 }]
+    );
+    expect(sentence1).toBe('1 person needs to pay you back ₹18.00 overall');
+
+    // Case 2: Only 1 member left in group (transfers is empty) -> must NEVER say 0 people
+    const sentence2 = getStandingSentence(1800, [], 'm1', [
+      { memberId: 'm1', netBalancePaisa: 1800 },
+    ]);
+    expect(sentence2).not.toContain('0 people');
+    expect(sentence2).toBe('You are owed ₹18.00 overall');
+
+    // Case 3: Fully settled
+    const sentence3 = getStandingSentence(0, [], 'm1', [
+      { memberId: 'm1', netBalancePaisa: 0 },
+    ]);
+    expect(sentence3).toBe('You are all squared away overall');
+  });
 });
+

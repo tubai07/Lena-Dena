@@ -10,9 +10,9 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // If inside a customer profile (/customers/...), hide the general bottom nav
-  // because customer profile has its own sticky Received / Given action tray!
-  if (pathname.startsWith('/customers/')) {
+  // If inside a customer profile (/customers/...) or group details (/groups/...),
+  // hide the general bottom nav because they have dedicated action docks!
+  if (pathname.startsWith('/customers/') || pathname.match(/^\/groups\/[^\/]+$/)) {
     return null;
   }
 

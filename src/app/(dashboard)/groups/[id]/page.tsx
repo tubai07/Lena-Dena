@@ -8,7 +8,6 @@ import {
   Plus,
   Copy,
   Check,
-  Receipt,
   ReceiptText,
   ChevronDown,
   ChevronUp,
@@ -25,11 +24,8 @@ import {
   Utensils,
   ShoppingCart,
   Coffee,
-  Hotel,
-  ShoppingBag,
-  Activity,
-  Pencil,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -208,8 +204,13 @@ export default function GroupDetailPage({
     amountPaisa?: number;
   }>({});
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Add Member inputs with mandatory phone number
   const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberPhone, setNewMemberPhone] = useState('');
+  const [memberError, setMemberError] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [isStandingExpanded, setIsStandingExpanded] = useState(true);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
@@ -228,16 +229,16 @@ export default function GroupDetailPage({
       });
       if (!res.ok) throw new Error('Group not found');
       const data = await res.json();
-      
+
       setGroup((prev) => {
         if (!prev) return data.group;
 
-        // Preserve in-flight optimistic expenses that server hasn't returned yet (prevents vanishing glitch!)
+        // Preserve in-flight optimistic expenses that server hasn't returned yet
         const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
         const pendingExpenses = prev.expenses.filter((e) => {
           if (deletedExpenseIdsRef.current.has(e.id)) return false;
           if (serverExpIds.has(e.id)) return false;
-          return true; // Retain recent local additions
+          return true;
         });
         const mergedExpenses = [...pendingExpenses, ...data.group.expenses].filter(
           (e) => !deletedExpenseIdsRef.current.has(e.id)
@@ -289,17 +290,14 @@ export default function GroupDetailPage({
   };
 
   useEffect(() => {
-    // Initial fetch
     fetchGroup();
 
-    // 1. Silent live polling every 3.5 seconds
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchGroup(true);
       }
     }, 3500);
 
-    // 2. Instant re-validation when returning to app/tab
     const handleSync = () => {
       if (document.visibilityState === 'visible') {
         fetchGroup(true);
@@ -314,6 +312,7 @@ export default function GroupDetailPage({
       document.removeEventListener('visibilitychange', handleSync);
     };
   }, [id]);
+
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
@@ -380,17 +379,15 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant optimistic expense addition or modification (NO 150ms premature refetch!)
+  // Instant optimistic expense addition or modification
   const handleExpenseAdded = (newExpense?: any) => {
     if (newExpense) {
-      // Clear from deleted set in case it was re-added
       deletedExpenseIdsRef.current.delete(newExpense.id);
 
       setGroup((prev) => {
         if (!prev) return null;
         const filtered = prev.expenses.filter((e) => {
           if (e.id === newExpense.id) return false;
-          // When real confirmed expense arrives from server, remove the temp one
           if (!newExpense.id.startsWith('temp_') && e.id.startsWith('temp_')) {
             return false;
           }
@@ -420,7 +417,7 @@ export default function GroupDetailPage({
     setEditingExpense(null);
   };
 
-  // Instant optimistic settlement addition (NO 150ms premature refetch!)
+  // Instant optimistic settlement addition
   const handleSettled = (newSettlement?: any) => {
     if (newSettlement) {
       deletedSettlementIdsRef.current.delete(newSettlement.id);
@@ -455,7 +452,7 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant 0ms optimistic expense deletion without thread-blocking confirm popup
+  // Instant 0ms optimistic expense deletion
   const handleDeleteExpense = async (expenseId: string) => {
     deletedExpenseIdsRef.current.add(expenseId);
     if (group) {
@@ -486,7 +483,7 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant 0ms optimistic settlement deletion without thread-blocking confirm popup
+  // Instant 0ms optimistic settlement deletion
   const handleDeleteSettlement = async (settlementId: string) => {
     deletedSettlementIdsRef.current.add(settlementId);
     if (group) {
@@ -549,12 +546,25 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant optimistic member removal by Creator
+  // Safe member removal with strict settlement check:
+  // "The user cannot delete anyone inside the group unless they have settled everything"
   const handleRemoveMember = async (memberId: string) => {
     if (!group) return;
     const target = group.members.find((m) => m.id === memberId);
     if (!target) return;
     if (target.isOwner) {
+      alert('The group creator cannot be removed from the group.');
+      return;
+    }
+
+    // Check unsettled balance
+    const memberBal = group.balances.find((b) => b.memberId === memberId);
+    if (memberBal && Math.abs(memberBal.netBalancePaisa) > 0) {
+      const amt = (Math.abs(memberBal.netBalancePaisa) / 100).toFixed(2);
+      const direction = memberBal.netBalancePaisa > 0 ? 'is owed' : 'owes';
+      alert(
+        `Cannot remove ${target.name} because they have an unsettled balance (${direction} ₹${amt}). All dues must be settled first.`
+      );
       return;
     }
 
@@ -581,6 +591,8 @@ export default function GroupDetailPage({
         method: 'DELETE',
       });
       if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to remove member');
         deletedMemberIdsRef.current.delete(memberId);
         fetchGroup(true);
       }
@@ -591,18 +603,40 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant optimistic member addition
+  // Member addition with MANDATORY phone number
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMemberError('');
     const cleanName = newMemberName.trim();
-    if (!cleanName || !group) return;
+    const cleanPhone = newMemberPhone.replace(/\D/g, '');
+
+    if (!cleanName) {
+      setMemberError("Please enter friend's name");
+      return;
+    }
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setMemberError('Valid 10-digit phone number is mandatory');
+      return;
+    }
+    if (!group) return;
+
+    if (group.members.some((m) => m.name.toLowerCase() === cleanName.toLowerCase())) {
+      setMemberError('A member with this name already exists in the group');
+      return;
+    }
+    if (group.members.some((m) => m.phone && m.phone.replace(/\D/g, '') === cleanPhone)) {
+      setMemberError('A member with this phone number already exists in the group');
+      return;
+    }
+
     setNewMemberName('');
+    setNewMemberPhone('');
 
     const optimisticMember: Member = {
       id: `temp_m_${Date.now()}`,
       name: cleanName,
+      phone: cleanPhone,
       isOwner: false,
-      phone: null,
       upiId: null,
     };
     const updatedMembers = [...group.members, optimisticMember];
@@ -617,14 +651,21 @@ export default function GroupDetailPage({
 
     setAddingMember(true);
     try {
-      await fetch(`/api/groups/${id}/members`, {
+      const res = await fetch(`/api/groups/${id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanName }),
+        body: JSON.stringify({ name: cleanName, phone: cleanPhone }),
       });
-      fetchGroup(true);
-    } catch (e) {
+      const data = await res.json();
+      if (!res.ok) {
+        setMemberError(data.error || 'Failed to add member');
+        fetchGroup(true);
+      } else {
+        fetchGroup(true);
+      }
+    } catch (e: any) {
       console.error(e);
+      setMemberError(e.message || 'Error adding member');
       fetchGroup(true);
     } finally {
       setAddingMember(false);
@@ -633,10 +674,10 @@ export default function GroupDetailPage({
 
   if (loading && !group) {
     return (
-      <div className="p-4 space-y-4 animate-pulse">
-        <div className="h-12 bg-slate-100 rounded-2xl w-3/4"></div>
-        <div className="h-32 bg-slate-100 rounded-3xl"></div>
-        <div className="h-44 bg-slate-100 rounded-3xl"></div>
+      <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen">
+        <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
+        <div className="h-32 bg-slate-200 rounded-3xl"></div>
+        <div className="h-44 bg-slate-200 rounded-3xl"></div>
       </div>
     );
   }
@@ -652,7 +693,7 @@ export default function GroupDetailPage({
     ? group.simplifiedTransfers
     : group.directTransfers;
 
-  // Calculate what the current user lent or borrowed for an expense
+  // Calculate user share for an expense
   const getExpenseUserShare = (exp: Expense, currentMemberId?: string) => {
     const myPaid = exp.payers?.find((p) => p.memberId === currentMemberId)?.amountPaisa || 0;
     const mySplit = exp.splits?.find((s) => s.memberId === currentMemberId)?.amountPaisa || 0;
@@ -661,8 +702,8 @@ export default function GroupDetailPage({
     if (myPaid === 0 && mySplit === 0) {
       return {
         status: 'not involved',
-        color: 'text-slate-500',
-        amountColor: 'text-slate-500',
+        color: 'text-slate-400',
+        amountColor: 'text-slate-400',
         amountText: '0.00',
       };
     }
@@ -670,8 +711,8 @@ export default function GroupDetailPage({
     if (diff > 0) {
       return {
         status: 'you lent',
-        color: 'text-emerald-400',
-        amountColor: 'text-emerald-400',
+        color: 'text-emerald-600',
+        amountColor: 'text-emerald-600',
         amountText: (diff / 100).toFixed(2),
       };
     }
@@ -679,8 +720,8 @@ export default function GroupDetailPage({
     if (diff < 0) {
       return {
         status: 'you borrowed',
-        color: 'text-orange-400',
-        amountColor: 'text-orange-400',
+        color: 'text-amber-600',
+        amountColor: 'text-amber-600',
         amountText: (Math.abs(diff) / 100).toFixed(2),
       };
     }
@@ -699,16 +740,16 @@ export default function GroupDetailPage({
     if (st.payerId === currentMemberId) {
       return {
         status: 'you paid',
-        color: 'text-emerald-400',
-        amountColor: 'text-emerald-400',
+        color: 'text-emerald-600',
+        amountColor: 'text-emerald-600',
         amountText: amount,
       };
     }
     if (st.receiverId === currentMemberId) {
       return {
         status: 'paid to you',
-        color: 'text-emerald-400',
-        amountColor: 'text-emerald-400',
+        color: 'text-emerald-600',
+        amountColor: 'text-emerald-600',
         amountText: amount,
       };
     }
@@ -720,7 +761,7 @@ export default function GroupDetailPage({
     };
   };
 
-  // Human-friendly subtitle for expenses matching Screenshot 1
+  // Human-friendly subtitle for expenses
   const getExpenseSubtitle = (exp: Expense, currentMemberId?: string) => {
     const payers = exp.payers || [];
     if (payers.length === 1) {
@@ -735,7 +776,7 @@ export default function GroupDetailPage({
     return `Total ₹${(exp.totalAmountPaisa / 100).toFixed(2)}`;
   };
 
-  // Category Icon helper matching Screenshot 1 (Fuel, Food, Drinks, etc.)
+  // Category Icon helper matching Lena Dena design
   const getExpenseItemIcon = (category?: string, description?: string) => {
     const text = `${category || ''} ${description || ''}`.toLowerCase();
     if (text.includes('fuel') || text.includes('petrol') || text.includes('diesel') || text.includes('gas')) {
@@ -807,7 +848,7 @@ export default function GroupDetailPage({
     });
   }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
 
-  // Group activity by Month Year (e.g. "October 2024", "September 2026") matching Screenshot 1
+  // Group activity by Month Year
   const groupedActivity = useMemo(() => {
     const groups: { monthYear: string; items: typeof activityItems }[] = [];
     const map = new Map<string, typeof activityItems>();
@@ -827,79 +868,138 @@ export default function GroupDetailPage({
     return groups;
   }, [activityItems]);
 
-  // Overall standing calculations using the user's plain language dictionary:
-  // "You are owed $45" -> "3 people need to pay you back $45"
+  // Overall standing calculations:
+  // "3 people need to pay you back $45" or "You are owed $45 overall" (Never outputs 0 people!)
   const peopleOwingMe = displayedTransfers.filter((t) => t.toId === ownerMember?.id);
   const peopleIOwe = displayedTransfers.filter((t) => t.fromId === ownerMember?.id);
+  const membersOwingMe = group.balances.filter(
+    (b) => b.memberId !== ownerMember?.id && b.netBalancePaisa < 0
+  );
+  const membersIowe = group.balances.filter(
+    (b) => b.memberId !== ownerMember?.id && b.netBalancePaisa > 0
+  );
 
   let standingSentenceNode: React.ReactNode;
   if (userBalance > 0) {
-    const count = peopleOwingMe.length;
-    const countLabel = count === 1 ? '1 person needs' : `${count} people need`;
-    standingSentenceNode = (
-      <span>
-        {countLabel} to pay you back{' '}
-        <span className="text-emerald-400 font-extrabold">
-          ₹{(userBalance / 100).toFixed(2)}
-        </span>{' '}
-        overall
-      </span>
-    );
+    const count = peopleOwingMe.length > 0 ? peopleOwingMe.length : membersOwingMe.length;
+    if (count > 0) {
+      const countLabel = count === 1 ? '1 person needs' : `${count} people need`;
+      standingSentenceNode = (
+        <span>
+          {countLabel} to pay you back{' '}
+          <span className="text-emerald-600 font-extrabold">
+            ₹{(userBalance / 100).toFixed(2)}
+          </span>{' '}
+          overall
+        </span>
+      );
+    } else {
+      standingSentenceNode = (
+        <span>
+          You are owed{' '}
+          <span className="text-emerald-600 font-extrabold">
+            ₹{(userBalance / 100).toFixed(2)}
+          </span>{' '}
+          overall
+        </span>
+      );
+    }
   } else if (userBalance < 0) {
-    standingSentenceNode = (
-      <span>
-        You need to pay back{' '}
-        <span className="text-orange-400 font-extrabold">
-          ₹{(Math.abs(userBalance) / 100).toFixed(2)}
-        </span>{' '}
-        overall
-      </span>
-    );
+    const count = peopleIOwe.length > 0 ? peopleIOwe.length : membersIowe.length;
+    if (count > 0) {
+      standingSentenceNode = (
+        <span>
+          You need to pay back{' '}
+          <span className="text-amber-600 font-extrabold">
+            ₹{(Math.abs(userBalance) / 100).toFixed(2)}
+          </span>{' '}
+          overall
+        </span>
+      );
+    } else {
+      standingSentenceNode = (
+        <span>
+          You need to pay back{' '}
+          <span className="text-amber-600 font-extrabold">
+            ₹{(Math.abs(userBalance) / 100).toFixed(2)}
+          </span>{' '}
+          overall
+        </span>
+      );
+    }
   } else {
     standingSentenceNode = (
-      <span className="text-slate-300">
+      <span className="text-slate-600 font-bold">
         You are all squared away overall
       </span>
     );
   }
 
-  // Sub-breakdown items matching Screenshot 1 ("Togo owes you ₹501.18", "Mantu owes you ₹501.17")
+  // Sub-breakdown items
   const subBalances = useMemo(() => {
     if (userBalance > 0) {
-      return peopleOwingMe.map((t) => ({
-        text: (
-          <span>
-            {t.fromName} owes you{' '}
-            <span className="text-emerald-400 font-bold">
-              ₹{(t.amountPaisa / 100).toFixed(2)}
+      if (peopleOwingMe.length > 0) {
+        return peopleOwingMe.map((t) => ({
+          text: (
+            <span>
+              {t.fromName} owes you{' '}
+              <span className="text-emerald-600 font-bold">
+                ₹{(t.amountPaisa / 100).toFixed(2)}
+              </span>
             </span>
-          </span>
-        ),
-      }));
+          ),
+        }));
+      }
+      if (membersOwingMe.length > 0) {
+        return membersOwingMe.map((m) => ({
+          text: (
+            <span>
+              {m.name} owes{' '}
+              <span className="text-emerald-600 font-bold">
+                ₹{(Math.abs(m.netBalancePaisa) / 100).toFixed(2)}
+              </span>
+            </span>
+          ),
+        }));
+      }
     }
     if (userBalance < 0) {
-      return peopleIOwe.map((t) => ({
-        text: (
-          <span>
-            You owe {t.toName}{' '}
-            <span className="text-orange-400 font-bold">
-              ₹{(t.amountPaisa / 100).toFixed(2)}
+      if (peopleIOwe.length > 0) {
+        return peopleIOwe.map((t) => ({
+          text: (
+            <span>
+              You owe {t.toName}{' '}
+              <span className="text-amber-600 font-bold">
+                ₹{(t.amountPaisa / 100).toFixed(2)}
+              </span>
             </span>
-          </span>
-        ),
-      }));
+          ),
+        }));
+      }
+      if (membersIowe.length > 0) {
+        return membersIowe.map((m) => ({
+          text: (
+            <span>
+              You owe {m.name}{' '}
+              <span className="text-amber-600 font-bold">
+                ₹{(m.netBalancePaisa / 100).toFixed(2)}
+              </span>
+            </span>
+          ),
+        }));
+      }
     }
     return [];
-  }, [userBalance, peopleOwingMe, peopleIOwe]);
+  }, [userBalance, peopleOwingMe, peopleIOwe, membersOwingMe, membersIowe]);
 
   const displayedSubBalances = subBalances.slice(0, 2);
   const remainingCount = Math.max(0, subBalances.length - displayedSubBalances.length);
 
   return (
-    <div className="w-full min-h-screen bg-[#141416] text-white select-none pb-28 relative">
-      {/* Group Header Banner with Emerald Gradient Pattern matching Screenshot 1 */}
+    <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-28 relative">
+      {/* Group Header Banner with Emerald Gradient Pattern */}
       <div className="relative bg-gradient-to-b from-teal-700 via-emerald-700 to-emerald-800 text-white px-4 pt-4 pb-5 overflow-hidden">
-        {/* Decorative geometric overlay matching Screenshot 1 */}
+        {/* Decorative geometric overlay */}
         <div className="absolute inset-0 pointer-events-none opacity-15">
           <div className="absolute -top-12 -right-8 w-44 h-44 rounded-3xl bg-white/20 rotate-12" />
           <div className="absolute top-10 left-1/3 w-36 h-8 rounded-full bg-white/30 -rotate-6" />
@@ -907,11 +1007,11 @@ export default function GroupDetailPage({
           <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
         </div>
 
-        {/* Top Navigation Row: Back Button on left (NO SETTING BUTTON AT THE TOP per user constraint) */}
+        {/* Top Navigation Row: Back Button on left (NO SETTING BUTTON AT THE TOP) */}
         <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/groups"
-            className="w-10 h-10 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors"
+            className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors"
             aria-label="Back to Groups"
           >
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
@@ -927,20 +1027,20 @@ export default function GroupDetailPage({
                   <button
                     type="button"
                     onClick={() => setShowIconPicker(!showIconPicker)}
-                    className="w-10 h-10 rounded-full bg-black/30 hover:bg-black/40 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors cursor-pointer"
                     title="Change Group Theme"
                   >
                     <GroupCatIcon className="w-5 h-5" />
                   </button>
 
                   {showIconPicker && (
-                    <div className="absolute right-0 top-12 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2.5 z-50 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95">
-                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1">
-                        <span className="text-[11px] font-bold text-white">Select Group Theme</span>
+                    <div className="absolute right-0 top-12 bg-white border border-slate-200 rounded-2xl shadow-xl p-2.5 z-50 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95 text-slate-900">
+                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
+                        <span className="text-[11px] font-bold text-slate-800">Select Group Theme</span>
                         <button
                           type="button"
                           onClick={() => setShowIconPicker(false)}
-                          className="text-slate-400 hover:text-white cursor-pointer"
+                          className="text-slate-400 hover:text-slate-700 cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -955,14 +1055,14 @@ export default function GroupDetailPage({
                             onClick={() => handleUpdateCategory(cat.id)}
                             className={`p-1.5 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
                               isSelected
-                                ? 'ring-2 ring-emerald-500 bg-emerald-950/60 shadow-2xs'
-                                : 'hover:bg-slate-800'
+                                ? 'ring-2 ring-emerald-600 bg-emerald-50 shadow-2xs'
+                                : 'hover:bg-slate-50'
                             }`}
                           >
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
                               <Icon className="w-3.5 h-3.5" />
                             </div>
-                            <span className="text-[9px] font-bold text-slate-200 truncate w-full text-center">
+                            <span className="text-[9px] font-bold text-slate-700 truncate w-full text-center">
                               {cat.id}
                             </span>
                           </button>
@@ -976,14 +1076,14 @@ export default function GroupDetailPage({
           </div>
         </div>
 
-        {/* Large Title & People Pill matching Screenshot 1 */}
+        {/* Large Title & People Pill */}
         <div className="relative z-10 mt-4 space-y-2">
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight truncate">
             {group.name}
           </h1>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 backdrop-blur-md text-white/90 text-xs font-bold">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 backdrop-blur-md text-white/90 text-xs font-bold">
               <Users className="w-3.5 h-3.5" />
               <span>{group.members.length} people</span>
             </div>
@@ -992,7 +1092,7 @@ export default function GroupDetailPage({
             <button
               type="button"
               onClick={handleCopyCode}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
               title="Tap to copy invite code"
             >
               <span>Code: <span className="font-mono font-bold text-white">{group.joinCode}</span></span>
@@ -1008,18 +1108,18 @@ export default function GroupDetailPage({
         </div>
       </div>
 
-      {/* Overall Standing & Action Pills matching Screenshot 1 */}
-      <div className="bg-[#18181b] border-b border-slate-800/80 px-4 py-4 text-white">
+      {/* Overall Standing & Action Pills (White Theme) */}
+      <div className="bg-white border-b border-slate-200/80 px-4 py-4 text-slate-900 shadow-xs">
         {/* Collapsible Standing Sentence */}
         <button
           type="button"
           onClick={() => setIsStandingExpanded(!isStandingExpanded)}
           className="w-full flex items-center justify-between gap-2 text-left cursor-pointer group"
         >
-          <div className="text-base sm:text-lg font-bold text-slate-100">
+          <div className="text-base sm:text-lg font-bold text-slate-900">
             {standingSentenceNode}
           </div>
-          <div className="w-7 h-7 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400 group-hover:text-white shrink-0 transition-colors">
+          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:text-slate-900 shrink-0 transition-colors">
             {isStandingExpanded ? (
               <ChevronUp className="w-4 h-4 stroke-[2.5]" />
             ) : (
@@ -1028,11 +1128,11 @@ export default function GroupDetailPage({
           </div>
         </button>
 
-        {/* Expanded Breakdown with left line matching Screenshot 1 */}
+        {/* Expanded Breakdown with left line */}
         {isStandingExpanded && subBalances.length > 0 && (
-          <div className="mt-3 pl-3 border-l-2 border-slate-700/80 space-y-1 text-xs sm:text-sm">
+          <div className="mt-3 pl-3 border-l-2 border-slate-200 space-y-1 text-xs sm:text-sm text-slate-600 font-medium">
             {displayedSubBalances.map((b, idx) => (
-              <div key={idx} className="text-slate-300 font-medium">
+              <div key={idx}>
                 {b.text}
               </div>
             ))}
@@ -1040,7 +1140,7 @@ export default function GroupDetailPage({
               <button
                 type="button"
                 onClick={() => setActiveTab('balances')}
-                className="text-xs text-slate-400 hover:text-slate-200 font-semibold pt-0.5 cursor-pointer block"
+                className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold pt-0.5 cursor-pointer block"
               >
                 Plus {remainingCount} more balances
               </button>
@@ -1048,65 +1148,65 @@ export default function GroupDetailPage({
           </div>
         )}
 
-        {/* Horizontal Action Pills matching Screenshot 1 */}
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1 no-scrollbar text-xs">
+        {/* Horizontal Action Pills with scrollbar line removed */}
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1 scrollbar-none no-scrollbar text-xs [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => {
               setSettlePreload({});
               setIsSettleOpen(true);
             }}
-            className="px-4 py-2 rounded-full border border-slate-700 bg-slate-800 hover:bg-slate-700 text-white font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs"
+            className="px-4 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs"
           >
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
             <span>Mark this as paid</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'balances' ? 'activity' : 'balances')}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
               activeTab === 'balances'
-                ? 'bg-emerald-600 border-emerald-500 text-white'
-                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200'
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
             }`}
           >
-            <Scale className="w-3.5 h-3.5 text-indigo-300 stroke-[2.5]" />
+            <Scale className="w-3.5 h-3.5 text-indigo-500 stroke-[2.5]" />
             <span>Who owes who</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleToggleSimplify(!group.simplifyDebts)}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
               group.simplifyDebts
-                ? 'border-emerald-700 bg-emerald-950/70 text-emerald-300'
-                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
             }`}
             title="Clean up who pays who (minimize transactions)"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 stroke-[2.5]" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-500 stroke-[2.5]" />
             <span>Clean up who pays who: {group.simplifyDebts ? 'ON' : 'OFF'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'members' ? 'activity' : 'members')}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs ${
+            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
               activeTab === 'members'
-                ? 'bg-emerald-600 border-emerald-500 text-white'
-                : 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200'
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
             }`}
           >
-            <Users className="w-3.5 h-3.5 text-sky-300 stroke-[2.5]" />
+            <Users className="w-3.5 h-3.5 text-sky-600 stroke-[2.5]" />
             <span>People</span>
           </button>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area (Clean Light Theme) */}
       <div className="px-4 pt-4 pb-28">
-        {/* ================= TAB 1: ACTIVITY LIST (Screenshot 1) ================= */}
+        {/* ================= TAB 1: ACTIVITY LIST ================= */}
         {activeTab === 'activity' && (
           <div className="space-y-4">
             {/* Search Input */}
@@ -1117,13 +1217,13 @@ export default function GroupDetailPage({
                 placeholder="Search expenses by title, person..."
                 value={activitySearch}
                 onChange={(e) => setActivitySearch(e.target.value)}
-                className="w-full pl-10 pr-8 py-2.5 text-sm font-medium bg-[#1e1e22] border border-slate-800 rounded-xl focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-500 text-white transition-colors"
+                className="w-full pl-10 pr-8 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-emerald-600 placeholder:text-slate-400 text-slate-900 shadow-2xs transition-colors"
               />
               {activitySearch && (
                 <button
                   type="button"
                   onClick={() => setActivitySearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1133,26 +1233,26 @@ export default function GroupDetailPage({
             {/* Empty State */}
             {activityItems.length === 0 ? (
               <div className="py-16 text-center space-y-2">
-                <ReceiptText className="w-10 h-10 text-slate-600 mx-auto" />
-                <h4 className="font-bold text-slate-300 text-base">
+                <ReceiptText className="w-10 h-10 text-slate-400 mx-auto" />
+                <h4 className="font-bold text-slate-700 text-base">
                   {activitySearch ? 'No matching expenses' : 'No expenses yet'}
                 </h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
                   {activitySearch
                     ? 'Try searching with a different term.'
-                    : 'Tap the button below to record what you spent money on.'}
+                    : 'Tap "Add expense" below to record what you spent money on.'}
                 </p>
               </div>
             ) : (
-              /* Monthly Grouped Activity matching Screenshot 1 */
-              <div className="space-y-6">
+              /* Monthly Grouped Activity */
+              <div className="space-y-5">
                 {groupedActivity.map((groupMonth) => (
                   <div key={groupMonth.monthYear} className="space-y-2">
-                    <h3 className="text-base sm:text-lg font-bold text-white tracking-tight px-1">
+                    <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider px-1">
                       {groupMonth.monthYear}
                     </h3>
 
-                    <div className="divide-y divide-slate-800/80">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
                       {groupMonth.items.map((item) => {
                         const monthShort = item.date.toLocaleDateString('en-US', { month: 'short' });
                         const dayNum = item.date.getDate();
@@ -1170,38 +1270,38 @@ export default function GroupDetailPage({
                                 setEditingExpense(item.raw);
                                 setIsAddExpenseOpen(true);
                               }}
-                              className="py-3 px-1 flex items-center justify-between gap-3 hover:bg-slate-900/40 rounded-xl transition-colors cursor-pointer group"
+                              className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer group"
                             >
                               {/* Left Column: Date Block + Category Icon Tile */}
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <div className="w-9 text-center shrink-0">
-                                  <span className="text-[11px] font-bold text-slate-400 block uppercase leading-none">
+                                  <span className="text-[10px] font-bold text-slate-400 block uppercase leading-none">
                                     {monthShort}
                                   </span>
-                                  <span className="text-base font-bold text-slate-200 block leading-tight mt-0.5">
+                                  <span className="text-base font-black text-slate-800 block leading-tight mt-0.5">
                                     {dayNum}
                                   </span>
                                 </div>
 
-                                <div className="w-12 h-12 rounded-xl bg-[#222226] border border-slate-700/80 flex items-center justify-center text-slate-200 shrink-0 group-hover:border-emerald-600/60 transition-colors shadow-2xs">
-                                  <ItemIcon className="w-6 h-6" />
+                                <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700 shrink-0 group-hover:border-emerald-600/60 transition-colors shadow-2xs">
+                                  <ItemIcon className="w-5 h-5" />
                                 </div>
 
                                 {/* Middle Column: Title & Subtitle */}
                                 <div className="min-w-0 flex-1">
-                                  <h4 className="text-base font-bold text-white truncate leading-snug">
+                                  <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate leading-snug">
                                     {item.title}
                                   </h4>
-                                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                                  <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
                                     {subtitle}
                                   </p>
                                 </div>
                               </div>
 
-                              {/* Right Column: User Share (you lent / you borrowed) */}
+                              {/* Right Column: User Share */}
                               <div className="flex items-center gap-2 shrink-0">
                                 <div className="text-right shrink-0">
-                                  <span className={`text-[11px] font-semibold block ${share.color}`}>
+                                  <span className={`text-[11px] font-bold block ${share.color}`}>
                                     {share.status}
                                   </span>
                                   <span className={`text-base sm:text-lg font-black block tracking-tight ${share.amountColor}`}>
@@ -1215,7 +1315,7 @@ export default function GroupDetailPage({
                                     e.stopPropagation();
                                     handleDeleteExpense(item.id);
                                   }}
-                                  className="p-1.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
+                                  className="p-1.5 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
                                   title="Delete Expense"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1231,27 +1331,27 @@ export default function GroupDetailPage({
                           return (
                             <div
                               key={item.id}
-                              className="py-3 px-1 flex items-center justify-between gap-3 hover:bg-slate-900/40 rounded-xl transition-colors cursor-pointer group"
+                              className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer group"
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <div className="w-9 text-center shrink-0">
-                                  <span className="text-[11px] font-bold text-slate-400 block uppercase leading-none">
+                                  <span className="text-[10px] font-bold text-slate-400 block uppercase leading-none">
                                     {monthShort}
                                   </span>
-                                  <span className="text-base font-bold text-slate-200 block leading-tight mt-0.5">
+                                  <span className="text-base font-black text-slate-800 block leading-tight mt-0.5">
                                     {dayNum}
                                   </span>
                                 </div>
 
-                                <div className="w-12 h-12 rounded-xl bg-emerald-950/50 border border-emerald-700/60 flex items-center justify-center text-emerald-400 shrink-0 shadow-2xs">
-                                  <CheckCircle2 className="w-6 h-6" />
+                                <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0 shadow-2xs">
+                                  <CheckCircle2 className="w-5 h-5" />
                                 </div>
 
                                 <div className="min-w-0 flex-1">
-                                  <h4 className="text-base font-bold text-white truncate leading-snug">
+                                  <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate leading-snug">
                                     {item.title}
                                   </h4>
-                                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
+                                  <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
                                     Payment recorded
                                   </p>
                                 </div>
@@ -1259,7 +1359,7 @@ export default function GroupDetailPage({
 
                               <div className="flex items-center gap-2 shrink-0">
                                 <div className="text-right shrink-0">
-                                  <span className={`text-[11px] font-semibold block ${share.color}`}>
+                                  <span className={`text-[11px] font-bold block ${share.color}`}>
                                     {share.status}
                                   </span>
                                   <span className={`text-base sm:text-lg font-black block tracking-tight ${share.amountColor}`}>
@@ -1273,7 +1373,7 @@ export default function GroupDetailPage({
                                     e.stopPropagation();
                                     handleDeleteSettlement(item.id);
                                   }}
-                                  className="p-1.5 text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
+                                  className="p-1.5 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
                                   title="Delete Settlement"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1295,21 +1395,21 @@ export default function GroupDetailPage({
         {activeTab === 'balances' && (
           <div className="space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">Who owes who</h3>
+              <h3 className="text-base font-bold text-slate-900">Who owes who</h3>
               <button
                 type="button"
                 onClick={() => setActiveTab('activity')}
-                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+                className="text-xs text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer"
               >
                 Back to Activity
               </button>
             </div>
 
             {displayedTransfers.length === 0 ? (
-              <div className="bg-[#1e1e22] rounded-2xl p-8 border border-slate-800 text-center space-y-2">
-                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-                <h4 className="font-bold text-white text-base">All settled up!</h4>
-                <p className="text-xs text-slate-400">Nobody owes anyone anything in this group.</p>
+              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2 shadow-xs">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h4 className="font-bold text-slate-900 text-base">All settled up!</h4>
+                <p className="text-xs text-slate-500">Nobody owes anyone anything in this group.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -1327,7 +1427,7 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={idx}
-                      className="bg-[#1e1e22] p-4 rounded-2xl border border-slate-800 shadow-2xs space-y-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -1339,25 +1439,25 @@ export default function GroupDetailPage({
                             {t.fromName.charAt(0).toUpperCase()}
                           </div>
                           <div className="text-sm truncate">
-                            <span className="font-bold text-white">{t.fromName}</span>
-                            <span className="text-slate-400 mx-1 text-xs">owes</span>
-                            <span className="font-bold text-emerald-400">{t.toName}</span>
+                            <span className="font-bold text-slate-900">{t.fromName}</span>
+                            <span className="text-slate-500 mx-1 text-xs">owes</span>
+                            <span className="font-bold text-emerald-700">{t.toName}</span>
                           </div>
                         </div>
-                        <div className="font-black text-orange-400 text-lg tracking-tight shrink-0">
+                        <div className="font-black text-amber-600 text-lg tracking-tight shrink-0">
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-800">
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
                         {upiUrl && (
                           <a
                             href={upiUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 py-2 px-3 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
-                            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                            <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
                             <span>Pay UPI</span>
                           </a>
                         )}
@@ -1390,44 +1490,70 @@ export default function GroupDetailPage({
         {activeTab === 'members' && (
           <div className="space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">People ({group.members.length})</h3>
+              <h3 className="text-base font-bold text-slate-900">People ({group.members.length})</h3>
               <button
                 type="button"
                 onClick={() => setActiveTab('activity')}
-                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+                className="text-xs text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer"
               >
                 Back to Activity
               </button>
             </div>
 
-            {/* Quick Add Friend */}
-            <form onSubmit={handleAddMember} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Friend's name (e.g. Amit)..."
-                value={newMemberName}
-                onChange={(e) => setNewMemberName(e.target.value)}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl border border-slate-800 bg-[#1e1e22] text-white focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-500 transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={addingMember || !newMemberName.trim()}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
-              >
-                {addingMember ? 'Adding...' : 'Add'}
-              </button>
-            </form>
+            {/* Quick Add Friend with Mandatory Phone Number */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Add Friend to Group</h4>
+              {memberError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{memberError}</span>
+                </div>
+              )}
+              <form onSubmit={handleAddMember} className="space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Friend's name (e.g. Amit)..."
+                    value={newMemberName}
+                    onChange={(e) => {
+                      setNewMemberName(e.target.value);
+                      if (memberError) setMemberError('');
+                    }}
+                    className="w-full px-3.5 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-hidden focus:bg-white focus:border-emerald-600 placeholder:text-slate-400 transition-colors"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="10-digit phone number *"
+                    value={newMemberPhone}
+                    maxLength={10}
+                    onChange={(e) => {
+                      setNewMemberPhone(e.target.value.replace(/\D/g, ''));
+                      if (memberError) setMemberError('');
+                    }}
+                    className="w-full px-3.5 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-hidden focus:bg-white focus:border-emerald-600 placeholder:text-slate-400 transition-colors"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={addingMember || !newMemberName.trim() || newMemberPhone.trim().length < 10}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{addingMember ? 'Adding Friend...' : 'Add Friend'}</span>
+                </button>
+              </form>
+            </div>
 
             {/* Members List */}
-            <div className="divide-y divide-slate-800 rounded-2xl border border-slate-800 bg-[#1e1e22] overflow-hidden">
+            <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
               {group.balances.map((b) => (
                 <div
                   key={b.memberId}
-                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors"
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`w-11 h-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border border-white/10 ${getAvatarBg(
+                      className={`w-11 h-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border border-slate-200 ${getAvatarBg(
                         b.name
                       )}`}
                     >
@@ -1435,25 +1561,32 @@ export default function GroupDetailPage({
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-white text-base truncate">
+                        <span className="font-bold text-slate-900 text-base truncate">
                           {b.name}
                         </span>
                         {b.isOwner ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
                             Creator & Admin
                           </span>
                         ) : b.isAdmin ? (
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
                             Admin
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-xs font-medium text-slate-400 block mt-0.5">
+
+                      {b.phone && (
+                        <span className="text-xs text-slate-500 block font-medium">
+                          {b.phone}
+                        </span>
+                      )}
+
+                      <span className="text-xs font-medium text-slate-500 block mt-0.5">
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
 
-                      {/* Creator Admin Controls */}
+                      {/* Creator Admin Controls & Safe Deletion */}
                       {!b.isOwner && (
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <button
@@ -1461,22 +1594,32 @@ export default function GroupDetailPage({
                             onClick={() => handleToggleAdmin(b.memberId, Boolean(b.isAdmin))}
                             className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                               b.isAdmin
-                                ? 'text-slate-400 border-slate-700 hover:bg-rose-950/60 hover:text-rose-300 hover:border-rose-800'
-                                : 'text-indigo-300 border-indigo-800 bg-indigo-950/60 hover:bg-indigo-900'
+                                ? 'text-slate-600 border-slate-200 hover:bg-slate-100'
+                                : 'text-indigo-700 border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
                             }`}
                           >
                             {b.isAdmin ? 'Revoke Admin' : 'Make Admin'}
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMember(b.memberId)}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-950/60 border border-rose-800 transition-all cursor-pointer flex items-center gap-1"
-                            title={`Remove ${b.name} from group`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Remove</span>
-                          </button>
+                          {/* Deletion constraint: "The user cannot delete anyone inside the group unless they have settled everything" */}
+                          {Math.abs(b.netBalancePaisa) === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(b.memberId)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-all cursor-pointer flex items-center gap-1"
+                              title={`Remove ${b.name} from group`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          ) : (
+                            <span
+                              className="px-2 py-0.5 rounded-lg text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200"
+                              title="Member cannot be deleted until all dues are settled"
+                            >
+                              Settle ₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(0)} to remove
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1484,17 +1627,17 @@ export default function GroupDetailPage({
 
                   <div className="text-right shrink-0 pl-2">
                     {b.netBalancePaisa > 0 ? (
-                      <span className="text-base sm:text-lg font-black text-emerald-400 block">
+                      <span className="text-base sm:text-lg font-black text-emerald-600 block">
                         +₹{(b.netBalancePaisa / 100).toFixed(2)}
                       </span>
                     ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-base sm:text-lg font-black text-orange-400 block">
+                      <span className="text-base sm:text-lg font-black text-amber-600 block">
                         -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
                       </span>
                     ) : (
                       <span className="text-base sm:text-lg font-black text-slate-400 block">₹0</span>
                     )}
-                    <span className="text-[11px] font-medium text-slate-400 block mt-0.5">
+                    <span className="text-[11px] font-medium text-slate-500 block mt-0.5">
                       {b.netBalancePaisa > 0
                         ? 'Gets back'
                         : b.netBalancePaisa < 0
@@ -1509,7 +1652,7 @@ export default function GroupDetailPage({
         )}
       </div>
 
-      {/* Floating Action Button: smooth animated morphing like ledger fab-add-person */}
+      {/* Floating Action Button: Add expense */}
       <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
         <button
           type="button"
@@ -1517,7 +1660,7 @@ export default function GroupDetailPage({
             setEditingExpense(null);
             setIsAddExpenseOpen(true);
           }}
-          className={`pointer-events-auto fab-add-person flex items-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-2xl shadow-black/50 overflow-hidden cursor-pointer ${
+          className={`pointer-events-auto fab-add-person flex items-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-950/20 overflow-hidden cursor-pointer ${
             isScrolledDown ? 'w-[52px]' : 'w-[156px]'
           }`}
           title="What did you spend money on?"
@@ -1535,6 +1678,86 @@ export default function GroupDetailPage({
           </span>
         </button>
       </div>
+
+      {/* Group Dedicated Bottom Dock: Different from the global Ledger/Split dock */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-1.5 shadow-lg">
+        <div className="flex items-center justify-around">
+          {/* Tab 1: Activity */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('activity')}
+            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'activity'
+                ? 'text-emerald-700 font-bold'
+                : 'text-slate-500 font-medium hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1 rounded-xl transition-colors ${
+                activeTab === 'activity' ? 'bg-emerald-100 text-emerald-800' : ''
+              }`}
+            >
+              <ReceiptText className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] mt-0.5">Activity</span>
+          </button>
+
+          {/* Tab 2: Who owes who */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('balances')}
+            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'balances'
+                ? 'text-emerald-700 font-bold'
+                : 'text-slate-500 font-medium hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1 rounded-xl transition-colors ${
+                activeTab === 'balances' ? 'bg-emerald-100 text-emerald-800' : ''
+              }`}
+            >
+              <Scale className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] mt-0.5">Who owes who</span>
+          </button>
+
+          {/* Tab 3: People */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('members')}
+            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'members'
+                ? 'text-emerald-700 font-bold'
+                : 'text-slate-500 font-medium hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1 rounded-xl transition-colors ${
+                activeTab === 'members' ? 'bg-emerald-100 text-emerald-800' : ''
+              }`}
+            >
+              <Users className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] mt-0.5">People</span>
+          </button>
+
+          {/* Tab 4: Mark as paid */}
+          <button
+            type="button"
+            onClick={() => {
+              setSettlePreload({});
+              setIsSettleOpen(true);
+            }}
+            className="flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer text-slate-600 hover:text-emerald-700 font-medium"
+          >
+            <div className="p-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] mt-0.5">Mark as paid</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Modals */}
       <AddExpenseScreen

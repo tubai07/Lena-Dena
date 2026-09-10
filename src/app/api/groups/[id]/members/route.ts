@@ -15,6 +15,15 @@ export async function POST(
       return NextResponse.json({ error: 'Member name is required' }, { status: 400 });
     }
 
+    // Phone number is mandatory
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    if (!cleanPhone || cleanPhone.length < 10) {
+      return NextResponse.json(
+        { error: 'Valid 10-digit phone number is mandatory' },
+        { status: 400 }
+      );
+    }
+
     const group = await db.group.findUnique({
       where: { id },
       include: { members: true },
@@ -24,18 +33,25 @@ export async function POST(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Check duplicate name in group
+    // Check duplicate name or phone in group
     const trimmed = name.trim();
-    const exists = group.members.some((m) => m.name.toLowerCase() === trimmed.toLowerCase());
+    const exists = group.members.some(
+      (m) =>
+        m.name.toLowerCase() === trimmed.toLowerCase() ||
+        (m.phone && m.phone.replace(/\D/g, '') === cleanPhone)
+    );
     if (exists) {
-      return NextResponse.json({ error: 'A member with this name already exists in the group' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'A member with this name or phone already exists in the group' },
+        { status: 400 }
+      );
     }
 
     const member = await db.groupMember.create({
       data: {
         groupId: id,
         name: trimmed,
-        phone: phone?.trim() || null,
+        phone: cleanPhone,
         upiId: upiId?.trim() || null,
         isOwner: false,
       },

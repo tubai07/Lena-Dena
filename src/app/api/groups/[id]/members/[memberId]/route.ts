@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
+import { calculateMemberNetBalances } from '@/lib/splitwise';
 
 export async function PATCH(
   req: Request,
@@ -60,7 +61,16 @@ export async function DELETE(
 
     const group = await db.group.findUnique({
       where: { id },
-      include: { members: true },
+      include: {
+        members: true,
+        expenses: {
+          include: {
+            payers: true,
+            splits: true,
+          },
+        },
+        settlements: true,
+      },
     });
 
     if (!group) {
@@ -76,6 +86,21 @@ export async function DELETE(
     if (member.isOwner) {
       return NextResponse.json(
         { error: 'The creator cannot be removed from the group' },
+        { status: 400 }
+      );
+    }
+
+    // Rule: User cannot delete anyone unless they have settled everything
+    const balances = calculateMemberNetBalances(group.members, group.expenses, group.settlements);
+    const memberBalance = balances.find((b) => b.memberId === memberId);
+
+    if (memberBalance && Math.abs(memberBalance.netBalancePaisa) > 0) {
+      const amountRupees = (Math.abs(memberBalance.netBalancePaisa) / 100).toFixed(2);
+      const direction = memberBalance.netBalancePaisa > 0 ? 'is owed' : 'owes';
+      return NextResponse.json(
+        {
+          error: `Cannot remove ${member.name} because they have an unsettled balance (${direction} ₹${amountRupees}). Settle all dues first.`,
+        },
         { status: 400 }
       );
     }
