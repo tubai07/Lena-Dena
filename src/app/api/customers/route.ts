@@ -120,7 +120,7 @@ export async function POST(req: Request) {
         email: email?.trim() || null,
         address: address?.trim() || null,
         notes: notes?.trim() || null,
-        openingBalancePaisa: openingPaisa,
+        openingBalancePaisa: 0,
         currentBalancePaisa: openingPaisa,
         status: 'ACTIVE',
         transactions: {

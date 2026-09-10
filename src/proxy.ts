@@ -31,8 +31,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Not authenticated: redirect to /login
+  // Not authenticated: return 401 JSON for API calls, or redirect to /login for pages
   if (!sessionCookie?.value) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!isAuthPage) {
       const loginUrl = new URL('/login', request.url);
       return NextResponse.redirect(loginUrl);

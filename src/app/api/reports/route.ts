@@ -27,7 +27,7 @@ export async function GET(req: Request) {
       }),
       getBusinessDashboardSummary(session.businessId),
       db.transaction.findMany({
-        where: { businessId: session.businessId },
+        where: { businessId: session.businessId, isDeleted: false },
         orderBy: { date: 'desc' },
         take: 6,
         include: {
@@ -45,6 +45,7 @@ export async function GET(req: Request) {
         take: 6,
         include: {
           transactions: {
+            where: { isDeleted: false },
             orderBy: { date: 'desc' },
             take: 1,
           },
@@ -53,6 +54,7 @@ export async function GET(req: Request) {
       db.transaction.findMany({
         where: {
           businessId: session.businessId,
+          isDeleted: false,
           date: { gte: sixMonthsAgo },
         },
         select: { type: true, amountPaisa: true, date: true },

@@ -222,6 +222,7 @@ export async function getBusinessDashboardSummary(businessId: string) {
     where: {
       businessId,
       type: 'PAYMENT',
+      isDeleted: false,
       date: { gte: startOfMonth },
     },
     _sum: { amountPaisa: true },

@@ -27,15 +27,16 @@ export function formatINR(amount: number, isPaisa: boolean = false): string {
 
 export function formatINRShort(amount: number, isPaisa: boolean = false): string {
   const rupees = isPaisa ? toRupees(amount) : amount;
+  const sign = rupees < 0 ? '-' : '';
   const abs = Math.abs(rupees);
   if (abs >= 10000000) {
-    return `₹${(rupees / 10000000).toFixed(2)} Cr`;
+    return `${sign}₹${(abs / 10000000).toFixed(2)} Cr`;
   }
   if (abs >= 100000) {
-    return `₹${(rupees / 100000).toFixed(2)} L`;
+    return `${sign}₹${(abs / 100000).toFixed(2)} L`;
   }
   if (abs >= 1000) {
-    return `₹${(rupees / 1000).toFixed(1)}k`;
+    return `${sign}₹${(abs / 1000).toFixed(1)}k`;
   }
   return formatINR(rupees, false);
 }

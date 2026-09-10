@@ -43,6 +43,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Customer and message are required' }, { status: 400 });
     }
 
+    const customer = await db.customer.findFirst({
+      where: { id: customerId, businessId: business.id },
+    });
+
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
     const reminder = await db.reminder.create({
       data: {
         businessId: business.id,

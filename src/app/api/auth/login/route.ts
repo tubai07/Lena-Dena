@@ -7,8 +7,8 @@ export async function POST(req: Request) {
   try {
     const { identifier, password, rememberMe = true } = await req.json();
 
-    if (!identifier) {
-      return NextResponse.json({ error: 'Phone or email is required' }, { status: 400 });
+    if (!identifier || !password) {
+      return NextResponse.json({ error: 'Phone or email and password are required' }, { status: 400 });
     }
 
     const cleanIdentifier = identifier.trim();
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (user.passwordHash && password && user.passwordHash !== password) {
+    if (user.passwordHash && user.passwordHash !== password) {
       return NextResponse.json(
         { error: 'Incorrect password. Please check and try again.' },
         { status: 401 }

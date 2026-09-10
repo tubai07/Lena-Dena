@@ -59,6 +59,12 @@ export function generatePaymentReceiptMessage(params: {
 }): string {
   const paidStr = formatINR(params.amountPaidPaisa, true);
   const balanceStr = formatINR(params.newBalancePaisa, true);
+  const balanceLabel =
+    params.newBalancePaisa > 0
+      ? `${balanceStr} due`
+      : params.newBalancePaisa < 0
+      ? `${balanceStr} advance`
+      : `${balanceStr} settled`;
 
-  return `Hi ${params.customerName}, received payment of ${paidStr}${params.note ? ` for ${params.note}` : ''}. Updated balance: ${params.newBalancePaisa > 0 ? `${balanceStr} due` : `${balanceStr} settled`}. Thanks!`;
+  return `Hi ${params.customerName}, received payment of ${paidStr}${params.note ? ` for ${params.note}` : ''}. Updated balance: ${balanceLabel}. Thanks!`;
 }

@@ -4,6 +4,7 @@ import {
   toPaisa,
   toRupees,
   formatINR,
+  formatINRShort,
   computeLedgerRunningBalances,
 } from '../src/lib/ledger';
 import {
@@ -13,7 +14,7 @@ import {
   recalculateCustomerBalance,
   getBusinessDashboardSummary,
 } from '../src/lib/ledger-server';
-import { generateReminderMessage } from '../src/lib/reminders';
+import { generateReminderMessage, generatePaymentReceiptMessage } from '../src/lib/reminders';
 
 describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () => {
   let testUser: any;
@@ -294,5 +295,93 @@ describe('Lena Dena Financial Ledger Accounting Engine', { timeout: 30000 }, () 
     await expect(
       updateLedgerTransaction(tx2.transaction.id, testBusinessA.id, { description: 'New Note' })
     ).rejects.toThrow('Cannot edit a deleted transaction');
+  });
+
+  it('correctly handles opening balance and ensures subsequent transactions do not double count', async () => {
+    // Simulate customer created with ₹500 opening balance
+    const openingPaisa = toPaisa(500);
+    const cust = await db.customer.create({
+      data: {
+        businessId: testBusinessB.id,
+        name: 'Opening Balance Test',
+        phone: '9888777666',
+        openingBalancePaisa: 0,
+        currentBalancePaisa: openingPaisa,
+        status: 'ACTIVE',
+        transactions: {
+          create: {
+            businessId: testBusinessB.id,
+            type: 'CREDIT',
+            amountPaisa: openingPaisa,
+            paymentMethod: 'OTHER',
+            description: 'Opening Balance',
+          },
+        },
+      },
+      include: { transactions: true },
+    });
+
+    expect(cust.currentBalancePaisa).toBe(openingPaisa);
+
+    // Timeline calculation starts with openingBalancePaisa (0) and adds initial tx (500) = 500
+    const running = computeLedgerRunningBalances(cust.openingBalancePaisa, cust.transactions);
+    expect(running[0].runningBalancePaisa).toBe(toPaisa(500));
+
+    // Merchant receives payment of ₹200
+    const payment = await recordLedgerTransaction({
+      businessId: testBusinessB.id,
+      customerId: cust.id,
+      type: 'PAYMENT',
+      amountPaisa: toPaisa(200),
+    });
+
+    // Net balance must be ₹500 - ₹200 = ₹300 (NOT ₹500 + ₹500 - ₹200 = ₹800)
+    expect(payment.newBalancePaisa).toBe(toPaisa(300));
+  });
+
+  it('excludes cancelled payments from monthly collections summary', async () => {
+    const cust = await db.customer.create({
+      data: {
+        businessId: testBusinessB.id,
+        name: 'Collection Summary Test',
+        phone: '9888111222',
+      },
+    });
+
+    const summaryBefore = await getBusinessDashboardSummary(testBusinessB.id);
+
+    const paymentTx = await recordLedgerTransaction({
+      businessId: testBusinessB.id,
+      customerId: cust.id,
+      type: 'PAYMENT',
+      amountPaisa: toPaisa(2500),
+      date: new Date(),
+    });
+
+    const summaryAfter = await getBusinessDashboardSummary(testBusinessB.id);
+    expect(summaryAfter.collectedThisMonthPaisa).toBe(
+      summaryBefore.collectedThisMonthPaisa + toPaisa(2500)
+    );
+
+    // Cancel / delete the payment
+    await deleteLedgerTransaction(paymentTx.transaction.id, testBusinessB.id);
+
+    // Collections must drop back down, ignoring the cancelled payment
+    const summaryAfterCancel = await getBusinessDashboardSummary(testBusinessB.id);
+    expect(summaryAfterCancel.collectedThisMonthPaisa).toBe(summaryBefore.collectedThisMonthPaisa);
+  });
+
+  it('properly formats negative amounts and advance balances', () => {
+    expect(formatINRShort(-500000)).toBe('-₹5.00 L');
+    expect(formatINRShort(-25000)).toBe('-₹25.0k');
+    expect(formatINRShort(-50000000)).toBe('-₹5.00 Cr');
+
+    const receiptMsg = generatePaymentReceiptMessage({
+      customerName: 'Aman',
+      amountPaidPaisa: toPaisa(1500),
+      newBalancePaisa: -toPaisa(500),
+    });
+    expect(receiptMsg).toContain('advance');
+    expect(receiptMsg).not.toContain('settled');
   });
 });

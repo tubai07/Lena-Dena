@@ -223,13 +223,14 @@ export default function PersonChatLedgerPage({
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['Date', 'Type', 'Amount (INR)', 'Note', 'Running Balance (INR)'];
+    const headers = ['Date', 'Type', 'Status', 'Amount (INR)', 'Note', 'Running Balance (INR)'];
     const rows = chronologicalTx.map((tx: any) => [
       new Date(tx.date).toLocaleDateString('en-IN'),
       tx.type,
+      tx.isDeleted ? 'CANCELLED' : 'ACTIVE',
       (tx.amountPaisa / 100).toFixed(2),
       `"${(tx.description || '').replace(/"/g, '""')}"`,
-      (tx.runningBalancePaisa / 100).toFixed(2),
+      tx.isDeleted ? '-' : (tx.runningBalancePaisa / 100).toFixed(2),
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');

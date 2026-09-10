@@ -42,8 +42,10 @@ export async function GET(
     let totalGivenPaisa = 0;
     let totalReceivedPaisa = 0;
     for (const tx of customer.transactions) {
-      if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
-      if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
+      if (!tx.isDeleted) {
+        if (tx.type === 'CREDIT') totalGivenPaisa += tx.amountPaisa;
+        if (tx.type === 'PAYMENT') totalReceivedPaisa += tx.amountPaisa;
+      }
     }
 
     return NextResponse.json({
@@ -81,8 +83,16 @@ export async function PUT(
     const body = await req.json();
     const { name, phone, email, address, notes } = body;
 
-    const customer = await db.customer.updateMany({
+    const existing = await db.customer.findFirst({
       where: { id, businessId: session.businessId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    const updatedCustomer = await db.customer.update({
+      where: { id },
       data: {
         ...(name && { name: name.trim() }),
         ...(phone && { phone: phone.trim() }),
@@ -90,9 +100,15 @@ export async function PUT(
         ...(address !== undefined && { address: address?.trim() || null }),
         ...(notes !== undefined && { notes: notes?.trim() || null }),
       },
+      include: {
+        transactions: {
+          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
+      },
     });
 
-    return NextResponse.json({ success: true, customer });
+    return NextResponse.json({ success: true, customer: updatedCustomer });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Failed to update customer' }, { status: 500 });
   }
