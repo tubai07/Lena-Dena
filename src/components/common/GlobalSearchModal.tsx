@@ -5,7 +5,10 @@ import { Search, User, Receipt, ArrowRight, X, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { formatINR } from '@/lib/ledger';
 
+import { useApp } from './AppContext';
+
 export function GlobalSearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { allCustomers, allTransactions } = useApp();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ customers: any[]; transactions: any[] }>({
     customers: [],
@@ -24,29 +27,50 @@ export function GlobalSearchModal({ isOpen, onClose }: { isOpen: boolean; onClos
   }, [isOpen]);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    const q = query.trim().toLowerCase();
+    if (!q) {
       setResults({ customers: [], transactions: [] });
       return;
     }
+
+    // Instant local results (0ms)
+    const localCustomers = allCustomers.filter((c) =>
+      c.name?.toLowerCase().includes(q) || c.phone?.toLowerCase().includes(q) || c.notes?.toLowerCase().includes(q)
+    );
+    const localTransactions = allTransactions.filter((tx) =>
+      !tx.isDeleted && (
+        tx.description?.toLowerCase().includes(q) ||
+        (tx.amountPaisa / 100).toString().includes(q) ||
+        tx.billNumber?.toLowerCase().includes(q) ||
+        tx.customer?.name?.toLowerCase().includes(q)
+      )
+    );
+
+    setResults({
+      customers: localCustomers,
+      transactions: localTransactions,
+    });
 
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setResults({
-          customers: data.customers || [],
-          transactions: (data.transactions || []).filter((tx: any) => !tx.isDeleted),
-        });
+        if (data.customers || data.transactions) {
+          setResults({
+            customers: data.customers || localCustomers,
+            transactions: (data.transactions || localTransactions).filter((tx: any) => !tx.isDeleted),
+          });
+        }
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
-    }, 200);
+    }, 150);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, allCustomers, allTransactions]);
 
   if (!isOpen) return null;
 

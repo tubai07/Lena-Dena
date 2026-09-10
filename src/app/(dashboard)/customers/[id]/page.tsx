@@ -13,6 +13,9 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  X,
   Check,
   Download,
   Trash2,
@@ -92,6 +95,19 @@ export default function PersonChatLedgerPage({
   const [deleteConfirmCust, setDeleteConfirmCust] = useState(false);
   const [deleteConfirmTx, setDeleteConfirmTx] = useState<any>(null);
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<any>(null);
+
+  // In-ledger transaction search state
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus search input when searching starts
+  useEffect(() => {
+    if (isSearching) {
+      setTimeout(() => searchInputRef.current?.focus(), 60);
+    }
+  }, [isSearching]);
 
   // Auto-redirect if URL has a temp ID that has been resolved to a real ID
   useEffect(() => {
@@ -188,12 +204,65 @@ export default function PersonChatLedgerPage({
     });
   }, [custTransactions]);
 
-  // Smooth scroll to latest transaction at bottom when entries change
+  // Real-time matching for search inside transaction timeline
+  const matchingTxIds = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.trim().toLowerCase();
+    const matched: string[] = [];
+
+    for (const tx of chronologicalTx) {
+      if (tx.isDeleted) continue;
+      // Match note / description
+      const noteMatch = tx.description && tx.description.toLowerCase().includes(q);
+      // Match amount (raw e.g. "2000" or formatted "2,000")
+      const amountRaw = (tx.amountPaisa / 100).toString();
+      const amountLocale = (tx.amountPaisa / 100).toLocaleString('en-IN');
+      const amountMatch = amountRaw.includes(q) || amountLocale.includes(q);
+      // Match bill number
+      const billMatch = tx.billNumber && tx.billNumber.toLowerCase().includes(q);
+
+      if (noteMatch || amountMatch || billMatch) {
+        matched.push(tx.id);
+      }
+    }
+    return matched;
+  }, [chronologicalTx, searchQuery]);
+
+  const scrollToTx = (txId: string) => {
+    const el = document.getElementById(`tx-bubble-${txId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleNextMatch = () => {
+    if (matchingTxIds.length === 0) return;
+    const nextIdx = (currentMatchIndex + 1) % matchingTxIds.length;
+    setCurrentMatchIndex(nextIdx);
+    scrollToTx(matchingTxIds[nextIdx]);
+  };
+
+  const handlePrevMatch = () => {
+    if (matchingTxIds.length === 0) return;
+    const prevIdx = (currentMatchIndex - 1 + matchingTxIds.length) % matchingTxIds.length;
+    setCurrentMatchIndex(prevIdx);
+    scrollToTx(matchingTxIds[prevIdx]);
+  };
+
+  // When query changes or matches change, scroll to current active match
   useEffect(() => {
-    if (chronologicalTx.length > 0) {
+    if (matchingTxIds.length > 0) {
+      const activeId = matchingTxIds[currentMatchIndex] || matchingTxIds[0];
+      scrollToTx(activeId);
+    }
+  }, [matchingTxIds, currentMatchIndex]);
+
+  // Smooth scroll to latest transaction at bottom when entries change and not searching
+  useEffect(() => {
+    if (chronologicalTx.length > 0 && !isSearching) {
       timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chronologicalTx.length]);
+  }, [chronologicalTx.length, isSearching]);
 
   if (loading && !data) {
     return (
@@ -294,49 +363,129 @@ export default function PersonChatLedgerPage({
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col justify-between pb-36 relative">
-      {/* Top Bar matching Screenshot 1 */}
-      <header className="px-4 py-3 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-40 border-b border-slate-100 shadow-xs">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="p-1 text-slate-700 hover:text-black tap-effect">
+      {/* Top Bar - switches to Search Toolbar matching Images 1 & 2 when isSearching */}
+      {isSearching ? (
+        <header className="px-3 py-2.5 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-40 border-b border-slate-100 shadow-xs gap-2">
+          <button
+            onClick={() => {
+              setIsSearching(false);
+              setSearchQuery('');
+              setCurrentMatchIndex(0);
+            }}
+            className="p-1.5 text-slate-700 hover:text-black rounded-full hover:bg-slate-100 tap-effect cursor-pointer shrink-0"
+            aria-label="Back"
+          >
             <ArrowLeft className="w-6 h-6" />
-          </Link>
+          </button>
 
-          {/* Avatar with initial or emoji */}
-          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-base">
-            {customer.name.includes('🐰') ? '🐰' : customer.name.slice(0, 1).toUpperCase()}
+          <div className="flex-1 flex items-center min-w-0">
+            <input
+              ref={searchInputRef}
+              autoFocus
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentMatchIndex(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleNextMatch();
+                } else if (e.key === 'Escape') {
+                  setIsSearching(false);
+                  setSearchQuery('');
+                  setCurrentMatchIndex(0);
+                }
+              }}
+              placeholder="Search amount, notes etc"
+              className="w-full text-slate-800 placeholder:text-teal-700/60 text-sm sm:text-base outline-none bg-transparent font-medium caret-emerald-600 truncate"
+            />
           </div>
 
-          <div>
-            <h2 className="font-bold text-slate-900 text-lg leading-tight">
-              {customer.name}
-            </h2>
+          <div className="flex items-center gap-1 shrink-0">
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentMatchIndex(0);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+
+            <span className="text-xs font-semibold text-slate-500 select-none px-1">
+              {matchingTxIds.length > 0 ? `${currentMatchIndex + 1}/${matchingTxIds.length}` : '0/0'}
+            </span>
+
             <button
-              onClick={() => openCustomerModal(customer)}
-              className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-0.5"
+              type="button"
+              onClick={handlePrevMatch}
+              disabled={matchingTxIds.length === 0}
+              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 tap-effect cursor-pointer"
+              title="Previous match"
             >
-              View Profile
+              <ChevronUp className="w-5 h-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNextMatch}
+              disabled={matchingTxIds.length === 0}
+              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 tap-effect cursor-pointer"
+              title="Next match"
+            >
+              <ChevronDown className="w-5 h-5" />
             </button>
           </div>
-        </div>
+        </header>
+      ) : (
+        <header className="px-4 py-3 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-40 border-b border-slate-100 shadow-xs">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="p-1 text-slate-700 hover:text-black tap-effect">
+              <ArrowLeft className="w-6 h-6" />
+            </Link>
 
-        {/* Right Icons: Statement PDF & Search */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCSV}
-            className="p-2 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 tap-effect"
-            title="Download Statement"
-          >
-            <FileText className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => router.push('/')}
-            className="p-2 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 tap-effect"
-            title="Search"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+            {/* Avatar with initial or emoji */}
+            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-base">
+              {customer.name.includes('🐰') ? '🐰' : customer.name.slice(0, 1).toUpperCase()}
+            </div>
+
+            <div>
+              <h2 className="font-bold text-slate-900 text-lg leading-tight">
+                {customer.name}
+              </h2>
+              <button
+                onClick={() => openCustomerModal(customer)}
+                className="text-xs font-semibold text-emerald-700 hover:underline flex items-center gap-0.5"
+              >
+                View Profile
+              </button>
+            </div>
+          </div>
+
+          {/* Right Icons: Statement PDF & Search */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportCSV}
+              className="p-2 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 tap-effect"
+              title="Download Statement"
+            >
+              <FileText className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setIsSearching(true)}
+              className="p-2 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-100 tap-effect cursor-pointer"
+              title="Search"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Chat-like Transaction Timeline matching Screenshot 1 */}
       <main className="p-4 space-y-6 flex-1">
@@ -350,6 +499,8 @@ export default function PersonChatLedgerPage({
             const dateStr = formatDate(tx.date);
             const prevTx = idx > 0 ? chronologicalTx[idx - 1] : null;
             const showDateHeader = !prevTx || formatDate(prevTx.date) !== dateStr;
+            const isMatch = matchingTxIds.includes(tx.id);
+            const isCurrentMatch = isMatch && matchingTxIds[currentMatchIndex] === tx.id;
 
             return (
               <div key={tx.id} className="space-y-2">
@@ -362,7 +513,7 @@ export default function PersonChatLedgerPage({
                   </div>
                 )}
 
-                {/* Transaction Bubble matching Screenshot 1 */}
+                {/* Transaction Bubble matching Screenshot 1 & 2 */}
                 <div
                   className={`flex flex-col ${
                     isReceived ? 'items-start' : 'items-end'
@@ -370,10 +521,15 @@ export default function PersonChatLedgerPage({
                 >
                   {/* Bubble Card */}
                   <div
+                    id={`tx-bubble-${tx.id}`}
                     onClick={tx.isDeleted ? undefined : () => setSelectedTxForDetail(tx)}
                     className={`border rounded-2xl p-3.5 shadow-xs max-w-[82%] transition-all ${
                       tx.isDeleted
                         ? 'bg-slate-100/90 border-slate-300 cursor-not-allowed select-none'
+                        : isCurrentMatch
+                        ? 'bg-white border-2 border-emerald-600 ring-4 ring-emerald-500/20 shadow-md cursor-pointer tap-effect scale-[1.01]'
+                        : isMatch
+                        ? 'bg-white border-2 border-emerald-300 cursor-pointer tap-effect'
                         : 'bg-white border-slate-200/90 hover:border-slate-300 cursor-pointer tap-effect'
                     }`}
                   >

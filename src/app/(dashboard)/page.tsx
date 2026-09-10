@@ -11,18 +11,28 @@ import {
   Check,
   UserPlus,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { formatINR } from '@/lib/ledger';
 import { useApp } from '@/components/common/AppContext';
-import { GlobalSearchModal } from '@/components/common/GlobalSearchModal';
 import { SwipeableCustomerRow } from '@/components/customer/SwipeableCustomerRow';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
+
+function WhatsAppIcon({ className = 'w-6 h-6' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0012.04 2zm0 18.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.16 8.16 0 01-1.25-4.38c0-4.51 3.67-8.18 8.18-8.18 2.19 0 4.24.85 5.79 2.4 1.55 1.55 2.4 3.6 2.4 5.79 0 4.51-3.67 8.18-8.18 8.18zm4.49-6.13c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.84-.86 2.05 0 1.21.88 2.38 1 2.54.12.17 1.74 2.65 4.21 3.72.59.25 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z" />
+    </svg>
+  );
+}
 
 export default function SimplifiedDashboardPage() {
   const { openCustomerModal, allCustomers, deleteCustomerFromApp, business } = useApp();
 
   const [showBalance, setShowBalance] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'due' | 'advance' | 'settled'>('all');
   const [sortOption, setSortOption] = useState<'amount_desc' | 'amount_asc' | 'name_asc' | 'name_desc'>('amount_desc');
@@ -30,6 +40,25 @@ export default function SimplifiedDashboardPage() {
   const [deletingCustomer, setDeletingCustomer] = useState(false);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
   const lastScrollY = useRef(0);
+
+  // Auto-focus search input when search is opened
+  useEffect(() => {
+    if (searchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 60);
+    }
+  }, [searchOpen]);
+
+  // Keyboard shortcut for Escape to exit search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [searchOpen]);
 
   // Scroll detection: collapse Add Person button to icon-only smoothly on scroll down
   useEffect(() => {
@@ -148,6 +177,151 @@ export default function SimplifiedDashboardPage() {
     }
     return `✓ ${formatINR(tx.amountPaisa, true)} Credit Added`;
   };
+
+  const getSearchAvatarStyle = (name: string) => {
+    if (name.includes('🐰')) return 'bg-pink-100 text-slate-800 text-xl';
+    const firstChar = name.charAt(0).toUpperCase();
+    if (['R', 'P'].includes(firstChar)) return 'bg-amber-500 text-white';
+    if (['T', 'D'].includes(firstChar)) return 'bg-slate-400 text-white';
+    if (['S'].includes(firstChar)) return 'bg-stone-500 text-white';
+    if (['B', 'M'].includes(firstChar)) return 'bg-amber-800 text-white';
+    if (['A', 'K'].includes(firstChar)) return 'bg-emerald-600 text-white';
+    return 'bg-blue-500 text-white';
+  };
+
+  const searchedCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return allCustomers;
+    const q = searchQuery.trim().toLowerCase();
+    return allCustomers.filter((c) => {
+      const matchName = c.name?.toLowerCase().includes(q);
+      const matchPhone = c.phone?.toLowerCase().includes(q);
+      const matchNotes = c.notes?.toLowerCase().includes(q);
+      return matchName || matchPhone || matchNotes;
+    });
+  }, [allCustomers, searchQuery]);
+
+  if (searchOpen) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-white pb-20 relative">
+        {/* Top Header matching Screenshot 3 */}
+        <header className="px-3 py-3 flex items-center gap-2 sticky top-0 bg-white z-30 border-b border-slate-100 shadow-2xs">
+          <button
+            onClick={() => {
+              setSearchOpen(false);
+              setSearchQuery('');
+            }}
+            className="p-1.5 text-slate-700 hover:text-black rounded-full hover:bg-slate-100 tap-effect cursor-pointer shrink-0"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+
+          <div className="flex-1 flex items-center min-w-0">
+            <input
+              ref={searchInputRef}
+              autoFocus
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search Accounts"
+              className="w-full text-slate-800 placeholder:text-teal-700/60 font-semibold text-base sm:text-lg outline-none bg-transparent caret-emerald-600 truncate"
+            />
+          </div>
+
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 shrink-0"
+              aria-label="Clear search"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </header>
+
+        {/* Searched Accounts List matching Screenshot 3 */}
+        <div className="divide-y divide-slate-100">
+          {searchedCustomers.length === 0 ? (
+            <div className="py-20 px-4 text-center">
+              <p className="text-sm font-semibold text-slate-600">
+                No accounts found matching &ldquo;{searchQuery}&rdquo;
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Check spelling or search by phone number
+              </p>
+            </div>
+          ) : (
+            searchedCustomers.map((c) => {
+              const isDue = c.currentBalancePaisa > 0;
+              const isAdvance = c.currentBalancePaisa < 0;
+              const isSettled = c.currentBalancePaisa === 0;
+
+              return (
+                <Link
+                  key={c.id}
+                  href={`/customers/${c.id}`}
+                  className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors tap-effect cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Circle Avatar matching Screenshot 3 */}
+                    <div
+                      className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-base shrink-0 shadow-2xs ${getSearchAvatarStyle(
+                        c.name
+                      )}`}
+                    >
+                      {c.name.includes('🐰') ? '🐰' : c.name.slice(0, 1).toUpperCase()}
+                    </div>
+
+                    {/* Name & Balance Subtext matching Screenshot 3 */}
+                    <div className="min-w-0">
+                      <div className="text-sm sm:text-base font-bold text-slate-900 leading-tight truncate">
+                        {c.name}
+                      </div>
+                      <div className="text-xs font-medium text-slate-500 mt-0.5">
+                        Balance{' '}
+                        {isDue && (
+                          <span className="text-rose-600 font-bold">
+                            {formatINR(c.currentBalancePaisa, true)} Due
+                          </span>
+                        )}
+                        {isAdvance && (
+                          <span className="text-emerald-700 font-bold">
+                            {formatINR(Math.abs(c.currentBalancePaisa), true)} Advance
+                          </span>
+                        )}
+                        {isSettled && (
+                          <span className="text-slate-600 font-semibold">₹0 Settled</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Icon if phone exists matching Screenshot 3 */}
+                  {c.phone && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const cleanPhone = c.phone.replace(/[^0-9]/g, '');
+                        const formattedPhone = cleanPhone.startsWith('91')
+                          ? cleanPhone
+                          : `91${cleanPhone}`;
+                        window.open(`https://wa.me/${formattedPhone}`, '_blank');
+                      }}
+                      className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors shrink-0 tap-effect"
+                      title="Open WhatsApp chat"
+                    >
+                      <WhatsAppIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                </Link>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white pb-32 relative">
@@ -448,9 +622,6 @@ export default function SimplifiedDashboardPage() {
           </div>
         </div>
       )}
-
-      {/* Global Search Dialog */}
-      <GlobalSearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* Delete Customer Confirmation Dialog */}
       <ConfirmationDialog
