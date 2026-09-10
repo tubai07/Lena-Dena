@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { setSession } from '@/lib/auth';
 import { normalizePhone, getPhoneLookupVariants } from '@/lib/phone';
+import { hashPassword } from '@/lib/security';
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,10 @@ export async function POST(req: Request) {
 
     if (!name || !phone || !password) {
       return NextResponse.json({ error: 'Name, mobile number, and password are required' }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
     }
 
     const normalized = normalizePhone(phone);
@@ -28,12 +33,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'An account with this mobile number already exists' }, { status: 400 });
     }
 
+    const hashedPassword = await hashPassword(password);
+
     // Atomic single insert creating User, Business, and Settings in 1 fast query!
     const user = await db.user.create({
       data: {
         name: cleanName,
         phone: cleanPhone,
-        passwordHash: password,
+        passwordHash: hashedPassword,
         businesses: {
           create: {
             name: `${cleanName}'s Khata`,

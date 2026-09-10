@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { hashPassword } from '@/lib/security';
 
 export async function GET() {
   try {
@@ -41,13 +42,16 @@ export async function PUT(req: Request) {
       preferredLanguage,
     } = body;
 
-    // Update user profile and/or change password without requiring old password
+    // Update user profile and/or change password
     if (session.userId) {
       const userUpdates: any = {};
       if (name) userUpdates.name = name.trim();
       if (phone) userUpdates.phone = phone.trim();
       if (body.newPassword && body.newPassword.trim()) {
-        userUpdates.passwordHash = body.newPassword.trim();
+        if (body.newPassword.trim().length < 6) {
+          return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
+        }
+        userUpdates.passwordHash = await hashPassword(body.newPassword.trim());
       }
 
       if (Object.keys(userUpdates).length > 0) {
