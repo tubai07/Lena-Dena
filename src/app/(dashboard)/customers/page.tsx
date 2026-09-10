@@ -30,15 +30,16 @@ export default function CustomersPage() {
   const [filter, setFilter] = useState('all'); // all, owes_me, i_owe, settled
   const [sort, setSort] = useState('highest_balance'); // highest_balance, oldest_due, recently_active, name
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const queryParams = new URLSearchParams({
         q: search,
         filter,
         sort,
+        t: Date.now().toString(),
       });
-      const res = await fetch(`/api/customers?${queryParams.toString()}`);
+      const res = await fetch(`/api/customers?${queryParams.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.customers) {
         setCustomers(data.customers);
@@ -46,13 +47,36 @@ export default function CustomersPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    const timer = setTimeout(fetchCustomers, 150);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => fetchCustomers(false), 150);
+
+    // Silent background auto-polling every 4 seconds
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomers(true);
+      }
+    }, 4000);
+
+    // Instant re-sync on tab focus
+    const handleFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomers(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [search, filter, sort]);
 
   const filterTabs = [

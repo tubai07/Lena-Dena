@@ -59,7 +59,7 @@ export function AppProvider({
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers?filter=all');
+      const res = await fetch(`/api/customers?filter=all&t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.customers) {
         setAllCustomers((prev) => {
@@ -95,10 +95,16 @@ export function AppProvider({
 
   const fetchTransactions = async () => {
     try {
-      const res = await fetch('/api/transactions');
+      const res = await fetch(`/api/transactions?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.transactions) {
-        setAllTransactions(data.transactions);
+        setAllTransactions((prev) => {
+          // Preserve any in-flight optimistic transactions (starts with temp_tx_) that haven't landed yet
+          const pendingTemps = prev.filter((t: any) => t.id?.startsWith('temp_tx_'));
+          const serverIds = new Set(data.transactions.map((t: any) => t.id));
+          const stillPending = pendingTemps.filter((t: any) => !serverIds.has(t.id));
+          return [...stillPending, ...data.transactions];
+        });
       }
     } catch (e) {
       console.error(e);
@@ -107,7 +113,7 @@ export function AppProvider({
 
   const fetchBusiness = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch(`/api/settings?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.business) {
         setBusiness(data.business);
@@ -124,6 +130,31 @@ export function AppProvider({
     if (!initialTransactions || initialTransactions.length === 0) {
       fetchTransactions();
     }
+
+    // Silent background auto-polling every 4 seconds when tab is visible
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomers();
+        fetchTransactions();
+      }
+    }, 4000);
+
+    // Instant re-sync when switching back to this tab / app
+    const handleFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomers();
+        fetchTransactions();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, []);
 
   const refreshAppData = () => {

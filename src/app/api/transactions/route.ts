@@ -63,7 +63,14 @@ export async function GET(req: Request) {
       take: 100,
     });
 
-    return NextResponse.json({ transactions });
+    return NextResponse.json(
+      { transactions },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Failed to fetch transactions' }, { status: 500 });
   }

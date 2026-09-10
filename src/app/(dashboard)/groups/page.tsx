@@ -41,7 +41,7 @@ export default function GroupsPage() {
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch('/api/groups');
+      const res = await fetch(`/api/groups?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok && data.groups) {
         setGroups(data.groups);
@@ -56,6 +56,27 @@ export default function GroupsPage() {
 
   useEffect(() => {
     fetchGroups();
+
+    // Live auto-polling every 4 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchGroups();
+      }
+    }, 4000);
+
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGroups();
+      }
+    };
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+    };
   }, []);
 
   // Proactive background pre-warm for group details so tapping ANY group opens in 0ms!

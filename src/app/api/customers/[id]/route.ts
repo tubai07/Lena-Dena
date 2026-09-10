@@ -48,22 +48,29 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
-      customer: {
-        ...customer,
-        transactions: ledgerWithBalances.reverse(), // most recent on top for display
+    return NextResponse.json(
+      {
+        customer: {
+          ...customer,
+          transactions: ledgerWithBalances.reverse(), // most recent on top for display
+        },
+        stats: {
+          totalGivenPaisa,
+          totalReceivedPaisa,
+          currentBalancePaisa: customer.currentBalancePaisa,
+        },
+        business: {
+          id: session.businessId,
+          name: session.businessName,
+          phone: session.phone,
+        },
       },
-      stats: {
-        totalGivenPaisa,
-        totalReceivedPaisa,
-        currentBalancePaisa: customer.currentBalancePaisa,
-      },
-      business: {
-        id: session.businessId,
-        name: session.businessName,
-        phone: session.phone,
-      },
-    });
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Failed to fetch customer details' }, { status: 500 });
   }

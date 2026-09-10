@@ -183,11 +183,48 @@ export default function GroupDetailPage({
   const fetchGroup = async (isBackground = false) => {
     try {
       if (!isBackground && !group) setLoading(true);
-      const res = await fetch(`/api/groups/${id}`);
+      const res = await fetch(`/api/groups/${id}?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Group not found');
       const data = await res.json();
-      setGroup(data.group);
-      setCachedItem(`group_${id}`, data.group);
+      
+      setGroup((prev) => {
+        if (!prev) return data.group;
+
+        // Preserve in-flight optimistic expenses that server hasn't returned yet
+        const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
+        const pendingOptimisticExpenses = prev.expenses.filter(
+          (e) => e.id.startsWith('temp_exp_') && !serverExpIds.has(e.id)
+        );
+        const mergedExpenses = [...pendingOptimisticExpenses, ...data.group.expenses];
+
+        // Preserve in-flight optimistic settlements
+        const serverStIds = new Set(data.group.settlements.map((s: any) => s.id));
+        const pendingOptimisticSettlements = prev.settlements.filter(
+          (s) => s.id.startsWith('temp_st_') && !serverStIds.has(s.id)
+        );
+        const mergedSettlements = [...pendingOptimisticSettlements, ...data.group.settlements];
+
+        const balances = calculateMemberNetBalances(data.group.members, mergedExpenses, mergedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(data.group.members, mergedExpenses, mergedSettlements);
+        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+        const updated = {
+          ...data.group,
+          expenses: mergedExpenses,
+          settlements: mergedSettlements,
+          totalSpendPaisa,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+
+        setCachedItem(`group_${id}`, updated);
+        return updated;
+      });
     } catch (e) {
       console.error(e);
       if (!group) router.push('/groups');
@@ -197,7 +234,30 @@ export default function GroupDetailPage({
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchGroup();
+
+    // 1. Silent live polling every 3.5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchGroup(true);
+      }
+    }, 3500);
+
+    // 2. Instant re-validation when returning to app/tab
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGroup(true);
+      }
+    };
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+    };
   }, [id]);
 
   const handleCopyCode = () => {
@@ -231,54 +291,74 @@ export default function GroupDetailPage({
 
   // Instant optimistic expense addition
   const handleExpenseAdded = (newExpense?: any) => {
-    if (newExpense && group) {
-      const filtered = group.expenses.filter(
-        (e) => e.id !== newExpense.id && (!e.id.startsWith('temp_') || newExpense.id.startsWith('temp_'))
-      );
-      const updatedExpenses = [newExpense, ...filtered];
-      const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
-      const simplifiedTransfers = simplifyDebts(balances);
-      const directTransfers = calculateDirectPairwiseDebts(group.members, updatedExpenses, group.settlements);
-      const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+    if (newExpense) {
+      setGroup((prev) => {
+        if (!prev) return null;
+        const filtered = prev.expenses.filter((e) => {
+          if (e.id === newExpense.id) return false;
+          // When real confirmed expense arrives from server, remove the temp one
+          if (!newExpense.id.startsWith('temp_') && e.id.startsWith('temp_')) {
+            return false;
+          }
+          return true;
+        });
+        const updatedExpenses = [newExpense, ...filtered];
+        const balances = calculateMemberNetBalances(prev.members, updatedExpenses, prev.settlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, updatedExpenses, prev.settlements);
+        const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
 
-      const updated = {
-        ...group,
-        expenses: updatedExpenses,
-        totalSpendPaisa,
-        balances,
-        simplifiedTransfers,
-        directTransfers,
-        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
-      };
-      setGroup(updated);
-      setCachedItem(`group_${id}`, updated);
+        const updated = {
+          ...prev,
+          expenses: updatedExpenses,
+          totalSpendPaisa,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+        setCachedItem(`group_${id}`, updated);
+        return updated;
+      });
     }
-    fetchGroup(true);
+    // Only re-sync with server after confirmed save, avoiding race conditions
+    if (newExpense && !newExpense.id.startsWith('temp_')) {
+      setTimeout(() => fetchGroup(true), 150);
+    }
   };
 
   // Instant optimistic settlement addition
   const handleSettled = (newSettlement?: any) => {
-    if (newSettlement && group) {
-      const filtered = group.settlements.filter(
-        (s) => s.id !== newSettlement.id && (!s.id.startsWith('temp_') || newSettlement.id.startsWith('temp_'))
-      );
-      const updatedSettlements = [newSettlement, ...filtered];
-      const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
-      const simplifiedTransfers = simplifyDebts(balances);
-      const directTransfers = calculateDirectPairwiseDebts(group.members, group.expenses, updatedSettlements);
+    if (newSettlement) {
+      setGroup((prev) => {
+        if (!prev) return null;
+        const filtered = prev.settlements.filter((s) => {
+          if (s.id === newSettlement.id) return false;
+          if (!newSettlement.id.startsWith('temp_') && s.id.startsWith('temp_')) {
+            return false;
+          }
+          return true;
+        });
+        const updatedSettlements = [newSettlement, ...filtered];
+        const balances = calculateMemberNetBalances(prev.members, prev.expenses, updatedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, prev.expenses, updatedSettlements);
 
-      const updated = {
-        ...group,
-        settlements: updatedSettlements,
-        balances,
-        simplifiedTransfers,
-        directTransfers,
-        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
-      };
-      setGroup(updated);
-      setCachedItem(`group_${id}`, updated);
+        const updated = {
+          ...prev,
+          settlements: updatedSettlements,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+        setCachedItem(`group_${id}`, updated);
+        return updated;
+      });
     }
-    fetchGroup(true);
+    if (newSettlement && !newSettlement.id.startsWith('temp_')) {
+      setTimeout(() => fetchGroup(true), 150);
+    }
   };
 
   // Instant optimistic expense deletion

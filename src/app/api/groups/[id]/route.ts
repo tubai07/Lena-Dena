@@ -25,7 +25,7 @@ export async function GET(
     const cached = getCachedServerDetail(id);
     if (cached) {
       return NextResponse.json(cached, {
-        headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=30' },
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       });
     }
 
@@ -89,7 +89,7 @@ export async function GET(
     setCachedServerDetail(id, payload);
 
     return NextResponse.json(payload, {
-      headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=30' },
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     });
   } catch (err: any) {
     console.error('Error fetching group:', err);

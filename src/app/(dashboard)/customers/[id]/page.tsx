@@ -119,7 +119,7 @@ export default function PersonChatLedgerPage({
     }
   }, [resolvedParams.id, allCustomers, cachedCustomer, router]);
 
-  const fetchCustomerDetails = async () => {
+  const fetchCustomerDetails = async (isSilent = false) => {
     try {
       if (pendingCustomerCreations.has(resolvedParams.id)) {
         try {
@@ -129,8 +129,8 @@ export default function PersonChatLedgerPage({
         }
       }
 
-      if (!data) setLoading(true);
-      const res = await fetch(`/api/customers/${resolvedParams.id}`);
+      if (!data && !isSilent) setLoading(true);
+      const res = await fetch(`/api/customers/${resolvedParams.id}?t=${Date.now()}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.customer) {
         const prepared = prepareCustomerLedgerData(json.customer, allTransactions);
@@ -153,12 +153,35 @@ export default function PersonChatLedgerPage({
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCustomerDetails();
+
+    // Auto-polling every 3.5s while viewing this customer ledger
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomerDetails(true);
+      }
+    }, 3500);
+
+    // Instant re-sync on tab focus or app switch
+    const handleFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchCustomerDetails(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [resolvedParams.id, lastUpdated]);
 
   // Instant optimistic timeline update when transactions or customer data update

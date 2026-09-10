@@ -61,7 +61,14 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json({ customers });
+    return NextResponse.json(
+      { customers },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Failed to fetch customers' }, { status: 500 });
   }

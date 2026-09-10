@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     const cached = groupsServerCache.get(session.businessId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cached.data, {
-        headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' },
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       });
     }
 
@@ -113,7 +113,7 @@ export async function GET(req: Request) {
     groupsServerCache.set(session.businessId, { data: responsePayload, timestamp: Date.now() });
 
     return NextResponse.json(responsePayload, {
-      headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' },
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     });
   } catch (err: any) {
     console.error('Error fetching groups:', err);

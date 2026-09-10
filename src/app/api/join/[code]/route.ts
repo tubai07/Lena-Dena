@@ -61,22 +61,27 @@ export async function GET(
     );
     const totalSpendPaisa = group.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
 
-    return NextResponse.json({
-      group: {
-        id: group.id,
-        name: group.name,
-        category: group.category,
-        currencySymbol: group.currencySymbol,
-        joinCode: group.joinCode,
-        simplifyDebts: group.simplifyDebts,
-        totalSpendPaisa,
-        members: group.members,
-        balances,
-        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
-        expenses: group.expenses,
-        settlements: group.settlements,
+    return NextResponse.json(
+      {
+        group: {
+          id: group.id,
+          name: group.name,
+          category: group.category,
+          currencySymbol: group.currencySymbol,
+          joinCode: group.joinCode,
+          simplifyDebts: group.simplifyDebts,
+          totalSpendPaisa,
+          members: group.members,
+          balances,
+          activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+          expenses: group.expenses,
+          settlements: group.settlements,
+        },
       },
-    });
+      {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      }
+    );
   } catch (err: any) {
     console.error('Error looking up group by code:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });

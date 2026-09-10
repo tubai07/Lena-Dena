@@ -19,16 +19,46 @@ export default function ActivityPage() {
     return allTransactions.filter((tx) => tx.type === typeFilter);
   }, [allTransactions, typeFilter]);
 
-  // Background sync on mount without blocking the UI
+  // Live sync and auto-polling
   useEffect(() => {
-    fetch('/api/transactions')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.transactions) {
-          setAllTransactions(data.transactions);
-        }
-      })
-      .catch(() => {});
+    const fetchTxs = () => {
+      fetch(`/api/transactions?t=${Date.now()}`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.transactions) {
+            setAllTransactions((prev) => {
+              const pendingTemps = prev.filter((t: any) => t.id?.startsWith('temp_tx_'));
+              const serverIds = new Set(data.transactions.map((t: any) => t.id));
+              const stillPending = pendingTemps.filter((t: any) => !serverIds.has(t.id));
+              return [...stillPending, ...data.transactions];
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchTxs();
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchTxs();
+      }
+    }, 4000);
+
+    const handleFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchTxs();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, []);
 
   const handleDelete = async () => {

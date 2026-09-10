@@ -16,14 +16,19 @@ import {
 } from 'lucide-react';
 import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
-import { generateUpiUrl } from '@/lib/splitwise';
+import {
+  generateUpiUrl,
+  calculateMemberNetBalances,
+  simplifyDebts,
+  calculateDirectPairwiseDebts,
+} from '@/lib/splitwise';
 
 interface Member {
   id: string;
   name: string;
   phone?: string | null;
   upiId?: string | null;
-  isOwner?: boolean;
+  isOwner: boolean;
 }
 
 interface MemberBalance {
@@ -88,12 +93,43 @@ export default function JoinGroupDetailPage({
 
   const storageKey = `lena_dena_member_${upperCode}`;
 
-  const fetchGroup = async () => {
+  const fetchGroup = async (isBackground = false) => {
     try {
-      const res = await fetch(`/api/join/${upperCode}`);
+      if (!isBackground && !group) setLoading(true);
+      const res = await fetch(`/api/join/${upperCode}?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Group not found');
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Group not found');
-      setGroup(data.group);
+      
+      setGroup((prev) => {
+        if (!prev) return data.group;
+        const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
+        const pendingOptimisticExpenses = prev.expenses.filter(
+          (e) => e.id.startsWith('temp_exp_') && !serverExpIds.has(e.id)
+        );
+        const mergedExpenses = [...pendingOptimisticExpenses, ...data.group.expenses];
+
+        const serverStIds = new Set(data.group.settlements.map((s: any) => s.id));
+        const pendingOptimisticSettlements = prev.settlements.filter(
+          (s) => s.id.startsWith('temp_st_') && !serverStIds.has(s.id)
+        );
+        const mergedSettlements = [...pendingOptimisticSettlements, ...data.group.settlements];
+
+        const balances = calculateMemberNetBalances(data.group.members, mergedExpenses, mergedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(data.group.members, mergedExpenses, mergedSettlements);
+        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+        return {
+          ...data.group,
+          expenses: mergedExpenses,
+          settlements: mergedSettlements,
+          totalSpendPaisa,
+          balances,
+          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+      });
     } catch (e: any) {
       setError(e.message || 'Failed to load group');
     } finally {
@@ -113,6 +149,27 @@ export default function JoinGroupDetailPage({
     } catch {
       // ignore
     }
+
+    // Live auto-polling every 3.5 seconds
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchGroup(true);
+      }
+    }, 3500);
+
+    const handleSync = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGroup(true);
+      }
+    };
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+    };
   }, [upperCode]);
 
   const handleClaimExisting = (member: Member) => {
@@ -250,6 +307,62 @@ export default function JoinGroupDetailPage({
   // Transfers involving current user
   const transfersIOwe = group.activeTransfers.filter((t) => t.fromId === claimedMember.id);
   const transfersOwedToMe = group.activeTransfers.filter((t) => t.toId === claimedMember.id);
+
+  const handleExpenseAdded = (newExpense?: any) => {
+    if (newExpense) {
+      setGroup((prev) => {
+        if (!prev) return null;
+        const filtered = prev.expenses.filter((e) => {
+          if (e.id === newExpense.id) return false;
+          if (!newExpense.id.startsWith('temp_') && e.id.startsWith('temp_')) return false;
+          return true;
+        });
+        const updatedExpenses = [newExpense, ...filtered];
+        const balances = calculateMemberNetBalances(prev.members, updatedExpenses, prev.settlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, updatedExpenses, prev.settlements);
+        const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+        return {
+          ...prev,
+          expenses: updatedExpenses,
+          totalSpendPaisa,
+          balances,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+      });
+    }
+    if (newExpense && !newExpense.id.startsWith('temp_')) {
+      setTimeout(() => fetchGroup(true), 150);
+    }
+  };
+
+  const handleSettled = (newSettlement?: any) => {
+    if (newSettlement) {
+      setGroup((prev) => {
+        if (!prev) return null;
+        const filtered = prev.settlements.filter((s) => {
+          if (s.id === newSettlement.id) return false;
+          if (!newSettlement.id.startsWith('temp_') && s.id.startsWith('temp_')) return false;
+          return true;
+        });
+        const updatedSettlements = [newSettlement, ...filtered];
+        const balances = calculateMemberNetBalances(prev.members, prev.expenses, updatedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, prev.expenses, updatedSettlements);
+
+        return {
+          ...prev,
+          settlements: updatedSettlements,
+          balances,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+      });
+    }
+    if (newSettlement && !newSettlement.id.startsWith('temp_')) {
+      setTimeout(() => fetchGroup(true), 150);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
@@ -439,7 +552,7 @@ export default function JoinGroupDetailPage({
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}
         members={group.members}
-        onExpenseAdded={fetchGroup}
+        onExpenseAdded={handleExpenseAdded}
         defaultPayerId={claimedMember.id}
       />
 
@@ -448,7 +561,7 @@ export default function JoinGroupDetailPage({
         onClose={() => setIsSettleOpen(false)}
         groupId={group.id}
         members={group.members}
-        onSettled={fetchGroup}
+        onSettled={handleSettled}
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}
         initialAmountPaisa={settlePreload.amountPaisa}
