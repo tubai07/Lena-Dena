@@ -79,6 +79,14 @@ interface GroupData {
   settlements: any[];
 }
 
+const getAvatarBg = (name: string) => {
+  if (name.includes('🐰')) return 'bg-pink-100 text-pink-700';
+  const firstChar = name.charAt(0).toUpperCase();
+  if (['R', 'S', 'P'].includes(firstChar)) return 'bg-blue-100 text-blue-700';
+  if (['T', 'B', 'A'].includes(firstChar)) return 'bg-orange-100 text-orange-700';
+  return 'bg-emerald-100 text-emerald-700';
+};
+
 export default function JoinGroupDetailPage({
   params,
 }: {
@@ -184,10 +192,22 @@ export default function JoinGroupDetailPage({
     };
   }, [upperCode]);
 
+  const recordJoinedCode = () => {
+    try {
+      const existing = JSON.parse(localStorage.getItem('lena_dena_joined_groups') || '[]');
+      if (!existing.includes(upperCode)) {
+        localStorage.setItem('lena_dena_joined_groups', JSON.stringify([...existing, upperCode]));
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
   const handleClaimExisting = (member: Member) => {
     const ident = { id: member.id, name: member.name };
     setClaimedMember(ident);
     localStorage.setItem(storageKey, JSON.stringify(ident));
+    recordJoinedCode();
   };
 
   const handleClaimNew = async (e: React.FormEvent) => {
@@ -207,6 +227,7 @@ export default function JoinGroupDetailPage({
       const ident = { id: data.member.id, name: data.member.name };
       setClaimedMember(ident);
       localStorage.setItem(storageKey, JSON.stringify(ident));
+      recordJoinedCode();
       fetchGroup();
     } catch (err: any) {
       alert(err.message);
@@ -249,16 +270,16 @@ export default function JoinGroupDetailPage({
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
           <div className="text-center space-y-1">
-            <span className="text-xs font-normal text-amber-700 font-mono tracking-wider">
+            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
               Code: {group.joinCode}
             </span>
-            <h1 className="text-2xl font-normal text-slate-900">{group.name}</h1>
-            <p className="text-xs text-slate-400">Who are you in this group?</p>
+            <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
+            <p className="text-xs font-medium text-slate-400">Who are you in this group?</p>
           </div>
 
           {/* Existing Member List */}
           <div className="space-y-2">
-            <label className="block text-xs font-normal text-slate-400 text-center">
+            <label className="block text-xs font-bold text-slate-500 text-center uppercase tracking-wider">
               Select Your Name
             </label>
             <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
@@ -266,17 +287,17 @@ export default function JoinGroupDetailPage({
                 <button
                   key={m.id}
                   onClick={() => handleClaimExisting(m)}
-                  className="w-full p-3 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200/70 hover:border-emerald-300 rounded-2xl text-left flex items-center justify-between transition-colors group cursor-pointer"
+                  className="w-full p-3 bg-slate-50 hover:bg-emerald-50/70 border border-slate-200/80 hover:border-emerald-300 rounded-2xl text-left flex items-center justify-between transition-colors group cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-700 font-normal text-xs flex items-center justify-center">
+                    <div className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${getAvatarBg(m.name)}`}>
                       {m.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-normal text-slate-800 text-sm group-hover:text-emerald-700">
+                    <span className="font-bold text-slate-900 text-sm group-hover:text-emerald-800">
                       {m.name}
                     </span>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-700" />
                 </button>
               ))}
             </div>
@@ -295,12 +316,12 @@ export default function JoinGroupDetailPage({
                   placeholder="Your Name (e.g. Siddharth)"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="flex-1 px-4 py-2.5 text-xs font-semibold rounded-2xl border border-slate-200 bg-slate-50/50"
+                  className="flex-1 px-4 py-2.5 text-xs font-semibold rounded-2xl border border-slate-200 bg-slate-50/50 focus:outline-hidden focus:border-emerald-600"
                 />
                 <button
                   type="submit"
                   disabled={claiming || !newMemberName.trim()}
-                  className="px-4 py-2.5 bg-indigo-600 text-white rounded-2xl text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shrink-0"
+                  className="px-4 py-2.5 bg-emerald-700 text-white rounded-2xl text-xs font-bold hover:bg-emerald-800 disabled:opacity-50 transition-colors shrink-0 cursor-pointer"
                 >
                   {claiming ? 'Joining...' : 'Join Group'}
                 </button>
@@ -448,17 +469,17 @@ export default function JoinGroupDetailPage({
       {/* Top Mobile Bar */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-normal text-slate-900">{group.name}</span>
-            <span className="text-[10px] font-mono font-normal bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-bold text-slate-900">{group.name}</span>
+            <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
               {group.joinCode}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-normal mt-0.5">
-            <span>You are: <strong className="font-medium text-slate-700">{claimedMember.name}</strong></span>
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-0.5">
+            <span>You are: <strong className="font-bold text-slate-800">{claimedMember.name}</strong></span>
             <button
               onClick={handleSwitchIdentity}
-              className="text-[10px] text-emerald-600 font-normal hover:underline cursor-pointer"
+              className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
             >
               (Switch)
             </button>
@@ -467,34 +488,34 @@ export default function JoinGroupDetailPage({
 
         <button
           onClick={() => setIsAddExpenseOpen(true)}
-          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
+          className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-xs cursor-pointer transition-all"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           Add Bill
         </button>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
-        {/* Personal Standing Card */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs text-center space-y-1">
-          <span className="text-xs font-normal text-slate-400">
+        {/* Personal Standing Card matching Screenshot 2 */}
+        <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200/80 shadow-2xs text-center space-y-1">
+          <span className="text-xs font-bold text-slate-500">
             Your Balance in this group
           </span>
-          <div className="text-3xl font-light tracking-tight">
+          <div className="text-3xl font-black tracking-tight">
             {myBalance > 0 ? (
-              <span className="text-emerald-600">+₹{(myBalance / 100).toFixed(2)}</span>
+              <span className="text-emerald-700">+₹{(myBalance / 100).toFixed(2)}</span>
             ) : myBalance < 0 ? (
-              <span className="text-rose-600">-₹{(Math.abs(myBalance) / 100).toFixed(2)}</span>
+              <span className="text-orange-600">-₹{(Math.abs(myBalance) / 100).toFixed(2)}</span>
             ) : (
               <span className="text-slate-800">₹0.00</span>
             )}
           </div>
-          <p className="text-xs font-normal text-slate-400">
+          <p className="text-[11px] font-bold text-slate-400">
             {myBalance > 0
-              ? 'You are owed money back'
+              ? 'You Get Back'
               : myBalance < 0
-              ? 'You need to settle up with friends'
-              : 'You are all settled up!'}
+              ? 'You Give'
+              : 'All Settled Up!'}
           </p>
         </div>
 

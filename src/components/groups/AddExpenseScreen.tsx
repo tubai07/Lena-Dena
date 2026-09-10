@@ -17,6 +17,15 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { distributeEqualSplits } from '@/lib/splitwise';
+import { WheelDatePickerModal } from '@/components/common/WheelDatePickerModal';
+
+const getAvatarBg = (name: string) => {
+  if (name.includes('🐰')) return 'bg-pink-100 text-pink-700';
+  const firstChar = name.charAt(0).toUpperCase();
+  if (['R', 'S', 'P'].includes(firstChar)) return 'bg-blue-100 text-blue-700';
+  if (['T', 'B', 'A'].includes(firstChar)) return 'bg-orange-100 text-orange-700';
+  return 'bg-emerald-100 text-emerald-700';
+};
 
 interface Member {
   id: string;
@@ -65,7 +74,7 @@ export function AddExpenseScreen({
   // Date selection (default today YYYY-MM-DD)
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [expenseDate, setExpenseDate] = useState(todayStr);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showWheelDatePicker, setShowWheelDatePicker] = useState(false);
 
   // Notes
   const [notes, setNotes] = useState('');
@@ -90,7 +99,7 @@ export function AddExpenseScreen({
       setCategory('General');
       setShowCategoryPicker(false);
       setExpenseDate(new Date().toISOString().split('T')[0]);
-      setShowDatePicker(false);
+      setShowWheelDatePicker(false);
       setNotes('');
 
       const targetPayer =
@@ -446,60 +455,21 @@ export function AddExpenseScreen({
 
               {/* Transaction Date Row */}
               <div className="pt-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/70 text-slate-700 text-sm font-normal transition-all cursor-pointer"
-                  >
-                    <Calendar className="w-4 h-4 text-emerald-600" />
-                    <span>Date: <strong className="font-medium text-slate-900">{formattedDateLabel}</strong></span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWheelDatePicker(true)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-sm font-medium transition-all cursor-pointer shadow-2xs hover:border-slate-300"
+                >
+                  <Calendar className="w-4 h-4 text-emerald-700" />
+                  <span>Date: <strong className="font-bold text-slate-900">{formattedDateLabel}</strong></span>
+                </button>
 
-                  {/* Date Popover */}
-                  {showDatePicker && (
-                    <div className="absolute left-0 top-12 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-20 space-y-2 animate-in fade-in zoom-in-95 w-56">
-                      <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpenseDate(new Date().toISOString().split('T')[0]);
-                            setShowDatePicker(false);
-                          }}
-                          className="flex-1 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors cursor-pointer"
-                        >
-                          Today
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                            setExpenseDate(yesterday);
-                            setShowDatePicker(false);
-                          }}
-                          className="flex-1 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-normal hover:bg-slate-200 transition-colors cursor-pointer"
-                        >
-                          Yesterday
-                        </button>
-                      </div>
-
-                      <div className="pt-1 border-t border-slate-100">
-                        <label className="text-[10px] text-slate-400 font-normal block mb-1">
-                          Custom Date:
-                        </label>
-                        <input
-                          type="date"
-                          value={expenseDate}
-                          onChange={(e) => {
-                            setExpenseDate(e.target.value);
-                            setShowDatePicker(false);
-                          }}
-                          className="w-full text-xs font-normal p-1.5 border border-slate-200 rounded-lg focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <WheelDatePickerModal
+                  isOpen={showWheelDatePicker}
+                  onClose={() => setShowWheelDatePicker(false)}
+                  onConfirm={(d) => setExpenseDate(d)}
+                  initialDate={expenseDate}
+                />
               </div>
 
               {/* Optional Notes */}
@@ -523,14 +493,14 @@ export function AddExpenseScreen({
                 type="button"
                 onClick={handleGoToStep2}
                 disabled={!isStep1Ready}
-                className={`w-full py-3.5 rounded-2xl text-sm font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`w-full py-3.5 rounded-full text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   isStep1Ready
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs active:scale-[0.99]'
+                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 active:scale-[0.99]'
                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                 }`}
               >
                 <span>Next: Choose who paid & split</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </button>
             </footer>
           </div>
@@ -545,57 +515,70 @@ export function AddExpenseScreen({
                 onClick={() => setStep(1)}
                 type="button"
                 aria-label="Back to Step 1"
-                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-1"
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs"
               >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-xs font-normal text-slate-500">Back</span>
+                <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+                <span>Back</span>
               </button>
 
               <div className="text-center">
-                <h2 className="text-base font-medium text-slate-800">Who paid & split</h2>
-                <span className="text-[11px] text-slate-400 font-normal">Step 2 of 2: Allocation</span>
+                <h2 className="text-base font-bold text-slate-900">Who paid & split</h2>
+                <span className="text-[11px] text-slate-400 font-medium">Step 2 of 2: Allocation</span>
               </div>
 
               <button
                 onClick={handleSubmit}
                 type="button"
                 disabled={loading}
-                className="text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 rounded-xl shadow-2xs transition-all active:scale-95 cursor-pointer"
+                className="text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
               >
                 Save
               </button>
             </header>
 
-            {/* Summary Tag */}
-            <div className="bg-emerald-50/50 border-b border-emerald-100/60 px-5 py-2.5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeCategory.color} shrink-0`}>
-                  <CategoryIcon className="w-3.5 h-3.5" />
+            {/* Vibrant Summary Banner */}
+            <div className="bg-slate-50 border-b border-slate-200/80 px-5 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 rounded-2xl flex items-center justify-center ${activeCategory.color} shrink-0 shadow-2xs`}>
+                  <CategoryIcon className="w-4 h-4" />
                 </div>
-                <span className="text-sm font-medium text-slate-900 truncate">
-                  {description}
-                </span>
+                <div className="min-w-0">
+                  <span className="text-sm font-bold text-slate-900 truncate block">
+                    {description}
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-400 block">
+                    {activeCategory.label} • {formattedDateLabel}
+                  </span>
+                </div>
               </div>
 
-              <span className="text-sm font-medium text-emerald-800 shrink-0">
-                ₹{Number(amountRupees).toFixed(2)}
-              </span>
+              <div className="text-right shrink-0">
+                <span className="text-lg font-black text-emerald-700 block">
+                  ₹{Number(amountRupees).toFixed(2)}
+                </span>
+              </div>
             </div>
 
             {/* Form Body */}
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
               {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-normal rounded-2xl flex items-center gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Section 1: Who Paid */}
-              <div className="space-y-2">
-                <label className="text-xs text-slate-400 font-normal">
-                  Who paid for this?
-                </label>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Who paid for this?
+                  </label>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {members.find((m) => m.id === payerId)?.name || 'Select payer'}
+                  </span>
+                </div>
+
                 <div className="flex gap-2 flex-wrap">
                   {members.map((m) => {
                     const isSelected = payerId === m.id;
@@ -604,14 +587,21 @@ export function AddExpenseScreen({
                         key={m.id}
                         type="button"
                         onClick={() => setPayerId(m.id)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-normal transition-all flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                           isSelected
-                            ? 'bg-emerald-600 text-white font-medium shadow-xs'
-                            : 'bg-slate-50 text-slate-700 border border-slate-200/70 hover:bg-slate-100'
+                            ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20 ring-2 ring-emerald-600 active:scale-95'
+                            : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
                         }`}
                       >
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                        <div
+                          className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] shrink-0 ${
+                            isSelected ? 'bg-white/25 text-white' : getAvatarBg(m.name)
+                          }`}
+                        >
+                          {m.name.charAt(0).toUpperCase()}
+                        </div>
                         <span>{m.name}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </button>
                     );
                   })}
@@ -621,18 +611,18 @@ export function AddExpenseScreen({
               {/* Section 2: Split Mode */}
               <div className="space-y-3 pt-3 border-t border-slate-100">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs text-slate-400 font-normal">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                     How should it be split?
                   </label>
 
-                  <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
+                  <div className="bg-slate-100/90 p-1 rounded-2xl flex gap-1 border border-slate-200/60">
                     <button
                       type="button"
                       onClick={() => setSplitMode('EQUAL')}
-                      className={`px-3 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         splitMode === 'EQUAL'
-                          ? 'bg-white text-slate-900 font-medium shadow-2xs'
-                          : 'text-slate-500 hover:text-slate-900 font-normal'
+                          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
+                          : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
                       Equally
@@ -640,10 +630,10 @@ export function AddExpenseScreen({
                     <button
                       type="button"
                       onClick={handleSwitchToCustom}
-                      className={`px-3 py-1 rounded-lg text-xs transition-all cursor-pointer ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         splitMode === 'CUSTOM'
-                          ? 'bg-white text-slate-900 font-medium shadow-2xs'
-                          : 'text-slate-500 hover:text-slate-900 font-normal'
+                          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
+                          : 'text-slate-500 hover:text-slate-900'
                       }`}
                     >
                       Custom (₹)
@@ -653,19 +643,21 @@ export function AddExpenseScreen({
 
                 {/* EQUAL SPLIT LIST */}
                 {splitMode === 'EQUAL' && (
-                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-2xl p-3 space-y-2">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 text-xs text-slate-400 font-normal">
-                      <span>Included ({selectedMemberIds.length}/{members.length})</span>
+                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-xs font-bold">
+                      <span className="text-slate-500">
+                        Included ({selectedMemberIds.length} of {members.length})
+                      </span>
                       <button
                         type="button"
                         onClick={handleSelectAll}
-                        className="text-emerald-600 hover:underline cursor-pointer font-medium"
+                        className="text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer font-bold"
                       >
                         Select All
                       </button>
                     </div>
 
-                    <div className="space-y-1.5 pt-1">
+                    <div className="space-y-2 pt-0.5">
                       {members.map((m) => {
                         const isSelected = selectedMemberIds.includes(m.id);
                         const equalSplit = computedEqualSplits.find((s) => s.memberId === m.id);
@@ -675,26 +667,40 @@ export function AddExpenseScreen({
                           <div
                             key={m.id}
                             onClick={() => toggleMemberSelection(m.id)}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                            className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
                               isSelected
                                 ? 'bg-white border-slate-200 text-slate-900 shadow-2xs'
-                                : 'bg-transparent border-transparent text-slate-400'
+                                : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => {}}
-                                className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer pointer-events-none"
-                              />
-                              <span className="text-sm font-normal">{m.name}</span>
+                            <div className="flex items-center gap-3">
+                              {/* Styled Checkbox */}
+                              <div
+                                className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
+                                  isSelected
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'border-2 border-slate-300 bg-white'
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                              </div>
+
+                              {/* Avatar */}
+                              <div
+                                className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                                  m.name
+                                )}`}
+                              >
+                                {m.name.charAt(0).toUpperCase()}
+                              </div>
+
+                              <span className="text-sm font-bold text-slate-900">{m.name}</span>
                             </div>
 
                             {isSelected && totalAmountPaisa > 0 && (
-                              <span className="text-xs font-medium text-slate-600">
+                              <div className="bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-xl text-xs font-black text-emerald-800">
                                 ₹{shareRupees}
-                              </span>
+                              </div>
                             )}
                           </div>
                         );
@@ -705,29 +711,41 @@ export function AddExpenseScreen({
 
                 {/* CUSTOM SPLIT LIST */}
                 {splitMode === 'CUSTOM' && (
-                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-2xl p-3 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 text-xs font-normal">
-                      <span className="text-slate-400">
-                        Allocated: ₹{(customSumPaisa / 100).toFixed(2)} / ₹{(totalAmountPaisa / 100).toFixed(2)}
+                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-xs font-bold">
+                      <span className="text-slate-600">
+                        Allocated: <strong className="text-slate-900">₹{(customSumPaisa / 100).toFixed(2)}</strong> of ₹{(totalAmountPaisa / 100).toFixed(2)}
                       </span>
-                      {diffPaisa !== 0 && (
-                        <span className={diffPaisa > 0 ? 'text-amber-600 font-medium' : 'text-rose-600 font-medium'}>
+                      {diffPaisa !== 0 ? (
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${diffPaisa > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
                           {diffPaisa > 0 ? `₹${(diffPaisa / 100).toFixed(2)} left` : `₹${(Math.abs(diffPaisa) / 100).toFixed(2)} over`}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <Check className="w-3 h-3 stroke-[3]" /> Balanced
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {members.map((m) => {
                         const val = customAmounts[m.id] || '';
                         return (
-                          <div key={m.id} className="flex items-center gap-2">
-                            <span className="text-sm font-normal text-slate-700 w-24 truncate">
+                          <div key={m.id} className="flex items-center gap-2.5 bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                            <div
+                              className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                                m.name
+                              )}`}
+                            >
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+
+                            <span className="text-sm font-bold text-slate-800 w-24 truncate">
                               {m.name}
                             </span>
 
                             <div className="relative flex-1">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-normal">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold">
                                 ₹
                               </span>
                               <input
@@ -741,14 +759,14 @@ export function AddExpenseScreen({
                                     [m.id]: e.target.value,
                                   });
                                 }}
-                                className="w-full pl-6 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-normal text-slate-900 focus:outline-hidden focus:border-emerald-500 bg-white"
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-slate-50/50"
                               />
                             </div>
 
                             <button
                               type="button"
                               onClick={() => handleAutoFillRemainder(m.id)}
-                              className="p-1.5 text-[11px] font-normal text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors shrink-0 cursor-pointer"
+                              className="px-2.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors shrink-0 cursor-pointer active:scale-95"
                               title="Fill Remaining"
                             >
                               Fill rest
@@ -762,13 +780,13 @@ export function AddExpenseScreen({
               </div>
             </div>
 
-            {/* Bottom Save Button */}
+            {/* Bottom Save Button matching Screenshot 1 pill button */}
             <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="w-full py-3.5 rounded-2xl text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer active:scale-[0.99]"
+                className="w-full py-3.5 rounded-full text-base font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-[0.99]"
               >
                 Save Expense
               </button>

@@ -35,6 +35,15 @@ export function JoinCodeModal({ isOpen, onClose }: JoinCodeModalProps) {
         throw new Error(data.error || 'Invalid code');
       }
 
+      try {
+        const existing = JSON.parse(localStorage.getItem('lena_dena_joined_groups') || '[]');
+        if (!existing.includes(clean)) {
+          localStorage.setItem('lena_dena_joined_groups', JSON.stringify([...existing, clean]));
+        }
+      } catch {
+        // Ignore
+      }
+
       onClose();
       router.push(`/join/${clean}`);
     } catch (err: any) {

@@ -43,10 +43,57 @@ export default function GroupsPage() {
     try {
       const res = await fetch(`/api/groups?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok && data.groups) {
-        setGroups(data.groups);
-        setCachedItem('all_groups', data.groups);
+      let combined: GroupSummary[] = res.ok && data.groups ? [...data.groups] : [];
+
+      // Merge joined groups stored in localStorage
+      try {
+        const joinedCodes: string[] = JSON.parse(localStorage.getItem('lena_dena_joined_groups') || '[]');
+        const existingCodes = new Set(combined.map((g) => g.joinCode.toUpperCase()));
+        const missingCodes = joinedCodes.filter((c) => !existingCodes.has(c.toUpperCase()));
+
+        if (missingCodes.length > 0) {
+          const joinedResults = await Promise.all(
+            missingCodes.map(async (c) => {
+              try {
+                const jRes = await fetch(`/api/join/${c}`);
+                if (!jRes.ok) return null;
+                const jData = await jRes.json();
+                if (!jData?.group) return null;
+                const g = jData.group;
+                const ownerMember = g.members?.find((m: any) => m.isOwner) || g.members?.[0];
+                const mySaved = localStorage.getItem(`lena_dena_member_${c.toUpperCase()}`);
+                const myId = mySaved ? JSON.parse(mySaved).id : null;
+                const targetMemberId = myId || ownerMember?.id;
+                const ownerBalance = targetMemberId
+                  ? g.balances?.find((b: any) => b.memberId === targetMemberId)?.netBalancePaisa || 0
+                  : 0;
+
+                return {
+                  id: g.id,
+                  name: g.name,
+                  category: g.category || 'Trip',
+                  currencySymbol: g.currencySymbol || '₹',
+                  joinCode: g.joinCode,
+                  simplifyDebts: g.simplifyDebts,
+                  createdAt: g.createdAt || new Date().toISOString(),
+                  memberCount: g.members?.length || 0,
+                  totalSpendPaisa: g.totalSpendPaisa || 0,
+                  ownerBalancePaisa: ownerBalance,
+                } as GroupSummary;
+              } catch {
+                return null;
+              }
+            })
+          );
+          const validJoined = joinedResults.filter(Boolean) as GroupSummary[];
+          combined = [...combined, ...validJoined];
+        }
+      } catch {
+        // Ignore localStorage errors
       }
+
+      setGroups(combined);
+      setCachedItem('all_groups', combined);
     } catch (e) {
       console.error(e);
     } finally {

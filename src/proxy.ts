@@ -40,8 +40,9 @@ export function proxy(request: NextRequest) {
   const isAuthPage =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
-    pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/join');
+    pathname.startsWith('/onboarding');
+
+  const isPublicPage = pathname.startsWith('/join');
 
   const isPublicApi =
     pathname.startsWith('/api/auth') ||
@@ -63,7 +64,7 @@ export function proxy(request: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!isAuthPage) {
+    if (!isAuthPage && !isPublicPage) {
       const loginUrl = new URL('/login', request.url);
       const res = NextResponse.redirect(loginUrl);
       if (sessionCookie) {
@@ -74,7 +75,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Authenticated user trying to visit /login or /register: redirect to /
+  // Authenticated user trying to visit /login, /register, or /onboarding: redirect to /
   if (isAuthPage) {
     const homeUrl = new URL('/', request.url);
     return NextResponse.redirect(homeUrl);

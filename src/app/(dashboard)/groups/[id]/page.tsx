@@ -42,6 +42,14 @@ interface Member {
   isOwner: boolean;
 }
 
+const getAvatarBg = (name: string) => {
+  if (name.includes('🐰')) return 'bg-pink-100 text-pink-700';
+  const firstChar = name.charAt(0).toUpperCase();
+  if (['R', 'S', 'P'].includes(firstChar)) return 'bg-blue-100 text-blue-700';
+  if (['T', 'B', 'A'].includes(firstChar)) return 'bg-orange-100 text-orange-700';
+  return 'bg-emerald-100 text-emerald-700';
+};
+
 interface ExpensePayer {
   id: string;
   memberId: string;
@@ -563,7 +571,7 @@ export default function GroupDetailPage({
       {/* Top Header */}
       <header className="px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
             <Link
               href="/groups"
               className="p-1 -ml-1 rounded-xl text-slate-400 hover:text-slate-700 transition-colors shrink-0"
@@ -573,7 +581,7 @@ export default function GroupDetailPage({
             </Link>
 
             <div className="min-w-0">
-              <h1 className="text-lg font-medium text-slate-900 tracking-tight truncate">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight truncate">
                 {group.name}
               </h1>
 
@@ -583,10 +591,10 @@ export default function GroupDetailPage({
                 className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 title="Tap to copy code"
               >
-                <span>Code: <span className="font-mono text-slate-600">{group.joinCode}</span></span>
+                <span>Code: <span className="font-mono font-bold text-slate-700">{group.joinCode}</span></span>
                 {copiedCode ? (
-                  <span className="text-xs text-emerald-600 font-normal flex items-center gap-0.5">
-                    <Check className="w-3 h-3" /> Copied
+                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-0.5">
+                    <Check className="w-3 h-3 stroke-[3]" /> Copied
                   </span>
                 ) : (
                   <Copy className="w-3 h-3 opacity-50" />
@@ -595,24 +603,24 @@ export default function GroupDetailPage({
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons matching Ledger */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => {
                 setSettlePreload({});
                 setIsSettleOpen(true);
               }}
-              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-normal rounded-xl text-xs border border-slate-200/70 transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
               <span>Settle</span>
             </button>
 
             <button
               onClick={() => setIsAddExpenseOpen(true)}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+              className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all flex items-center gap-1 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Bill</span>
             </button>
           </div>
@@ -621,20 +629,20 @@ export default function GroupDetailPage({
 
       {/* Main Content Area */}
       <div className="px-4 pt-3.5 space-y-4">
-        {/* Clean, Uncluttered Summary Card with light typography */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-xs">
-          <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
+        {/* Net Balance Summary Card matching Screenshot 2 (Ledger) */}
+        <div className="p-4 sm:p-5 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="grid grid-cols-2 gap-4 divide-x divide-slate-200/60">
             {/* Left: Your Standing */}
-            <div className="space-y-1">
-              <span className="text-xs font-normal text-slate-400 block">
-                Your balance
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-slate-500 block">
+                Your Balance
               </span>
               <div
-                className={`text-3xl font-light tracking-tight ${
+                className={`text-2xl sm:text-3xl font-black tracking-tight ${
                   userBalance > 0
-                    ? 'text-emerald-600'
+                    ? 'text-emerald-700'
                     : userBalance < 0
-                    ? 'text-rose-600'
+                    ? 'text-orange-600'
                     : 'text-slate-800'
                 }`}
               >
@@ -644,32 +652,32 @@ export default function GroupDetailPage({
                   ? `-₹${(Math.abs(userBalance) / 100).toFixed(2)}`
                   : '₹0.00'}
               </div>
-              <span className="text-xs font-normal text-slate-400 block">
+              <span className="text-[11px] font-bold text-slate-400 block">
                 {userBalance > 0
-                  ? 'You get back'
+                  ? 'You Get'
                   : userBalance < 0
-                  ? 'You owe'
-                  : 'All settled'}
+                  ? 'You Give'
+                  : 'All Settled'}
               </span>
             </div>
 
             {/* Right: Total Spend */}
-            <div className="pl-5 space-y-1">
-              <span className="text-xs font-normal text-slate-400 block">
-                Total spend
+            <div className="pl-4 sm:pl-5 space-y-0.5">
+              <span className="text-xs font-bold text-slate-500 block">
+                Total Spend
               </span>
-              <div className="text-3xl font-light text-slate-800 tracking-tight">
-                ₹{(group.totalSpendPaisa / 100).toFixed(0)}
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                ₹{(group.totalSpendPaisa / 100).toFixed(2)}
               </div>
-              <span className="text-xs font-normal text-slate-400 block">
-                {group.members.length} members
+              <span className="text-[11px] font-bold text-slate-400 block">
+                {group.members.length} Members
               </span>
             </div>
           </div>
         </div>
 
-        {/* Clean Tabs */}
-        <div className="flex border-b border-slate-100 gap-6 pt-1">
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200/80 gap-6 pt-1">
           {[
             { key: 'activity', label: `Activity (${group.expenses.length + group.settlements.length})` },
             { key: 'balances', label: `Balances (${displayedTransfers.length})` },
@@ -682,8 +690,8 @@ export default function GroupDetailPage({
                 onClick={() => setActiveTab(tab.key as any)}
                 className={`pb-2.5 text-sm transition-all cursor-pointer ${
                   isActive
-                    ? 'border-b-2 border-emerald-600 text-emerald-600 font-medium'
-                    : 'border-b-2 border-transparent text-slate-400 hover:text-slate-700 font-normal'
+                    ? 'border-b-2 border-emerald-700 text-emerald-800 font-bold'
+                    : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-semibold'
                 }`}
               >
                 <span>{tab.label}</span>
@@ -698,13 +706,13 @@ export default function GroupDetailPage({
             {/* Search & Filter Bar */}
             <div className="space-y-2.5">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search activity by name, description, amount..."
                   value={activitySearch}
                   onChange={(e) => setActivitySearch(e.target.value)}
-                  className="w-full pl-9.5 pr-8 py-2.5 text-sm font-normal bg-slate-50/70 border border-slate-200/60 rounded-xl focus:outline-hidden focus:border-emerald-500 placeholder:text-slate-400 transition-colors"
+                  className="w-full pl-9.5 pr-8 py-2.5 text-sm font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-emerald-600 placeholder:text-slate-400 transition-colors"
                 />
                 {activitySearch && (
                   <button
@@ -728,8 +736,8 @@ export default function GroupDetailPage({
                     onClick={() => setActivityFilter(f.id as any)}
                     className={`px-3 py-1 rounded-full text-xs transition-all shrink-0 cursor-pointer ${
                       activityFilter === f.id
-                        ? 'bg-slate-800 text-white font-medium'
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200/70 font-normal'
+                        ? 'bg-slate-800 text-white font-bold'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold'
                     }`}
                   >
                     {f.label}
@@ -769,28 +777,28 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className={`w-11 h-11 rounded-2xl ${badge.bg} flex items-center justify-center shrink-0 shadow-2xs`}>
                           <CategoryIcon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
-                          <h4 className="text-base font-normal text-slate-900 truncate">
+                          <h4 className="text-base font-bold text-slate-900 truncate leading-snug">
                             {item.title}
                           </h4>
-                          <p className="text-xs font-normal text-slate-400 truncate mt-0.5">
-                            Paid by <span className="text-slate-600">{item.payerNames}</span> • {dateStr}
+                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                            Paid by <span className="font-bold text-slate-700">{item.payerNames}</span> • {dateStr}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
                         <div className="text-right">
-                          <span className="text-base font-normal text-slate-900 block">
+                          <span className="text-base sm:text-lg font-black text-slate-900 block">
                             ₹{totalRupees.toFixed(2)}
                           </span>
-                          <span className="text-xs font-normal text-slate-400 capitalize">
+                          <span className="text-xs font-semibold text-slate-400 capitalize">
                             {item.raw.splitType.toLowerCase()}
                           </span>
                         </div>
@@ -901,33 +909,37 @@ export default function GroupDetailPage({
                   return (
                     <div
                       key={idx}
-                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs space-y-3"
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="text-base min-w-0 truncate">
-                          <span className="font-normal text-slate-900">{t.fromName}</span>
-                          <span className="text-slate-400 font-light mx-1.5 text-xs">owes</span>
-                          <span className="font-normal text-emerald-700">{t.toName}</span>
+                        <div className="flex items-center gap-2 min-w-0 truncate">
+                          <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(t.fromName)}`}>
+                            {t.fromName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="text-sm sm:text-base truncate">
+                            <span className="font-bold text-slate-900">{t.fromName}</span>
+                            <span className="text-slate-400 font-medium mx-1.5 text-xs">owes</span>
+                            <span className="font-bold text-emerald-700">{t.toName}</span>
+                          </div>
                         </div>
-                        <div className="font-light text-slate-900 text-xl tracking-tight shrink-0">
+                        <div className="font-black text-orange-600 text-lg sm:text-xl tracking-tight shrink-0">
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-slate-50">
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
                         {upiUrl && (
                           <a
                             href={upiUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-normal rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
-                            <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                            <Smartphone className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
                             <span>Pay UPI</span>
                           </a>
                         )}
 
-                        {/* Individual Settle button: Prefills debtor, creditor, and exact amount! */}
                         <button
                           onClick={() => {
                             setSettlePreload({
@@ -937,9 +949,9 @@ export default function GroupDetailPage({
                             });
                             setIsSettleOpen(true);
                           }}
-                          className="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-normal rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                           <span>Settle</span>
                         </button>
                       </div>
@@ -1008,44 +1020,47 @@ export default function GroupDetailPage({
               </button>
             </form>
 
-            {/* Members List with clean typography */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-2xs divide-y divide-slate-100 overflow-hidden">
+            {/* Members List matching Screenshot 2 (Ledger) */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
               {group.balances.map((b) => (
-                <div key={b.memberId} className="p-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-normal text-sm shrink-0">
+                <div key={b.memberId} className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className={`w-12 h-12 rounded-full font-bold flex items-center justify-center text-base shrink-0 shadow-2xs ${getAvatarBg(b.name)}`}>
                       {b.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-normal text-slate-900 text-base truncate">
+                        <span className="font-bold text-slate-900 text-base sm:text-lg truncate">
                           {b.name}
                         </span>
                         {b.isOwner && (
-                          <span className="px-2 py-0.5 text-[10px] font-normal bg-emerald-50 text-emerald-700 rounded-full">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full">
                             You
                           </span>
                         )}
                       </div>
-                      <span className="text-xs font-normal text-slate-400 block mt-0.5">
+                      <span className="text-[13px] font-medium text-slate-500 block mt-0.5">
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 pl-3">
                     {b.netBalancePaisa > 0 ? (
-                      <span className="text-base font-light text-emerald-600 block">
+                      <span className="text-lg sm:text-xl font-black text-emerald-700 block">
                         +₹{(b.netBalancePaisa / 100).toFixed(2)}
                       </span>
                     ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-base font-light text-rose-600 block">
+                      <span className="text-lg sm:text-xl font-black text-orange-600 block">
                         -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-sm font-normal text-slate-400 block">Settled</span>
+                      <span className="text-lg sm:text-xl font-black text-emerald-600 block">₹0</span>
                     )}
+                    <span className="text-xs font-semibold text-slate-400 block mt-0.5">
+                      {b.netBalancePaisa > 0 ? 'Gets back' : b.netBalancePaisa < 0 ? 'Owes' : 'Settled'}
+                    </span>
                   </div>
                 </div>
               ))}
