@@ -120,8 +120,50 @@ export default function GroupDetailPage({
 
   // Instant render from cache (0ms)
   const [group, setGroup] = useState<GroupDetail | null>(() => {
-    return getCachedItem<GroupDetail>(`group_${id}`);
+    const cachedFull = getCachedItem<GroupDetail>(`group_${id}`);
+    if (cachedFull) return cachedFull;
+
+    // Instant provisional render from groups list summary
+    const allGroups = getCachedItem<any[]>('all_groups');
+    const summary = allGroups?.find((g: any) => g.id === id);
+    if (summary) {
+      return {
+        id: summary.id,
+        name: summary.name,
+        joinCode: summary.joinCode,
+        simplifyDebts: true,
+        totalSpendPaisa: summary.totalSpendPaisa || 0,
+        members: [
+          {
+            id: 'current_user',
+            name: 'You',
+            isOwner: true,
+            phone: null,
+            upiId: null,
+          },
+        ],
+        expenses: [],
+        settlements: [],
+        balances: [
+          {
+            memberId: 'current_user',
+            name: 'You',
+            isOwner: true,
+            totalPaidPaisa: 0,
+            totalOwedPaisa: 0,
+            settlementsPaidPaisa: 0,
+            settlementsReceivedPaisa: 0,
+            netBalancePaisa: summary.ownerBalancePaisa || 0,
+          },
+        ],
+        simplifiedTransfers: [],
+        directTransfers: [],
+        activeTransfers: [],
+      };
+    }
+    return null;
   });
+
   const [loading, setLoading] = useState(() => {
     return !getCachedItem<GroupDetail>(`group_${id}`);
   });
@@ -497,7 +539,12 @@ export default function GroupDetailPage({
         {/* TAB 1: EXPENSES LIST */}
         {activeTab === 'expenses' && (
           <div className="space-y-2.5 pt-1">
-            {group.expenses.length === 0 ? (
+            {loading && group.expenses.length === 0 ? (
+              <div className="space-y-2.5 pt-1 animate-pulse">
+                <div className="h-16 bg-slate-100 rounded-2xl"></div>
+                <div className="h-16 bg-slate-100 rounded-2xl"></div>
+              </div>
+            ) : group.expenses.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2.5 shadow-2xs">
                 <Receipt className="w-10 h-10 text-slate-300 mx-auto" />
                 <h4 className="font-extrabold text-slate-800 text-sm">No expenses yet</h4>

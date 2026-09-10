@@ -58,6 +58,31 @@ export default function GroupsPage() {
     fetchGroups();
   }, []);
 
+  // Proactive background pre-warm for group details so tapping ANY group opens in 0ms!
+  const prefetchGroupDetail = (groupId: string) => {
+    if (!getCachedItem(`group_${groupId}`)) {
+      fetch(`/api/groups/${groupId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.group) {
+            setCachedItem(`group_${groupId}`, data.group);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    if (groups.length > 0) {
+      const timer = setTimeout(() => {
+        groups.slice(0, 6).forEach((g) => {
+          prefetchGroupDetail(g.id);
+        });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [groups]);
+
   const handleCopyCode = (e: React.MouseEvent, code: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -202,6 +227,9 @@ export default function GroupsPage() {
                 <Link
                   key={group.id}
                   href={`/groups/${group.id}`}
+                  prefetch={true}
+                  onMouseEnter={() => prefetchGroupDetail(group.id)}
+                  onPointerDown={() => prefetchGroupDetail(group.id)}
                   className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-indigo-300 shadow-2xs hover:shadow-xs transition-all block group"
                 >
                   <div className="flex items-center justify-between gap-3">

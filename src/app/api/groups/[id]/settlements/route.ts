@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function POST(
   req: Request,
@@ -37,6 +38,8 @@ export async function POST(
         receiver: { select: { id: true, name: true } },
       },
     });
+
+    invalidateAllGroupServerCaches(id);
 
     return NextResponse.json({ settlement });
   } catch (err: any) {

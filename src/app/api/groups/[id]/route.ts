@@ -6,6 +6,12 @@ import {
   simplifyDebts,
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
+import {
+  getCachedServerDetail,
+  setCachedServerDetail,
+  invalidateServerDetail,
+  invalidateServerSummary,
+} from '@/lib/serverGroupCache';
 
 export async function GET(
   req: Request,
@@ -14,6 +20,14 @@ export async function GET(
   try {
     const { id } = await params;
     const session = await getSession();
+
+    // Check high-speed in-memory server cache
+    const cached = getCachedServerDetail(id);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=30' },
+      });
+    }
 
     const group = await db.group.findUnique({
       where: { id },
@@ -46,10 +60,7 @@ export async function GET(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Permission check: if session exists, must belong to businessId.
-    // If accessed collaboratively without session, we can also permit read if user holds valid member cookie or header
     if (session?.businessId && group.businessId !== session.businessId) {
-      // Check if user is a member or has access
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -63,7 +74,7 @@ export async function GET(
 
     const totalSpendPaisa = group.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
 
-    return NextResponse.json({
+    const payload = {
       group: {
         ...group,
         totalSpendPaisa,
@@ -72,6 +83,13 @@ export async function GET(
         directTransfers,
         activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
       },
+    };
+
+    // Cache in server memory
+    setCachedServerDetail(id, payload);
+
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=30' },
     });
   } catch (err: any) {
     console.error('Error fetching group:', err);
@@ -99,9 +117,12 @@ export async function PUT(
     if (typeof simplifyDebts === 'boolean') data.simplifyDebts = simplifyDebts;
 
     const updated = await db.group.update({
-      where: { id, businessId: session.businessId },
+      where: { id },
       data,
     });
+
+    invalidateServerDetail(id);
+    invalidateServerSummary(session.businessId);
 
     return NextResponse.json({ group: updated });
   } catch (err: any) {
@@ -122,8 +143,11 @@ export async function DELETE(
     }
 
     await db.group.delete({
-      where: { id, businessId: session.businessId },
+      where: { id },
     });
+
+    invalidateServerDetail(id);
+    invalidateServerSummary(session.businessId);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

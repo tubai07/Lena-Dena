@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function POST(
   req: Request,
@@ -120,6 +121,8 @@ export async function POST(
 
       return createdExpense;
     });
+
+    invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ expense });
   } catch (err: any) {
