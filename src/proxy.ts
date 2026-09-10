@@ -40,11 +40,19 @@ export function proxy(request: NextRequest) {
   const isAuthPage =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
-    pathname.startsWith('/onboarding');
-  const isApiAuth = pathname.startsWith('/api/auth');
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/join');
 
-  // Public auth API routes
-  if (isApiAuth) {
+  const isPublicApi =
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/api/join') ||
+    (request.method === 'POST' && pathname.includes('/expenses')) ||
+    (request.method === 'POST' && pathname.includes('/settlements')) ||
+    (request.method === 'GET' && pathname.startsWith('/api/groups/'));
+
+  // Public API routes
+  if (isPublicApi) {
     return NextResponse.next();
   }
 

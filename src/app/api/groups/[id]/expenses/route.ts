@@ -12,7 +12,7 @@ export async function POST(
     const {
       description,
       totalAmountPaisa,
-      category = 'GENERAL',
+      category = 'General',
       splitType = 'EQUAL',
       notes,
       date,
@@ -37,11 +37,43 @@ export async function POST(
       return NextResponse.json({ error: 'At least one split member is required' }, { status: 400 });
     }
 
+    // Verify group exists and get members
+    const group = await db.group.findUnique({
+      where: { id },
+      include: { members: true },
+    });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const groupMemberIds = new Set(group.members.map((m) => m.id));
+
+    // Verify all payers are valid group members
+    for (const p of payers) {
+      if (!p.memberId || !groupMemberIds.has(p.memberId)) {
+        return NextResponse.json(
+          { error: 'Payer must be a valid member of this group' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Verify all split members are valid group members
+    for (const s of splits) {
+      if (!s.memberId || !groupMemberIds.has(s.memberId)) {
+        return NextResponse.json(
+          { error: 'Split person must be a valid member of this group' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Verify payer sum matches total
     const payersSum = payers.reduce((sum: number, p: any) => sum + Math.round(Number(p.amountPaisa) || 0), 0);
     if (payersSum !== parsedTotal) {
       return NextResponse.json(
-        { error: `Payer amounts (₹${payersSum / 100}) must match total expense (₹${parsedTotal / 100})` },
+        { error: `Payer amounts (₹${(payersSum / 100).toFixed(2)}) must match total (₹${(parsedTotal / 100).toFixed(2)})` },
         { status: 400 }
       );
     }
@@ -50,7 +82,7 @@ export async function POST(
     const splitsSum = splits.reduce((sum: number, s: any) => sum + Math.round(Number(s.amountPaisa) || 0), 0);
     if (splitsSum !== parsedTotal) {
       return NextResponse.json(
-        { error: `Split amounts (₹${splitsSum / 100}) must match total expense (₹${parsedTotal / 100})` },
+        { error: `Split amounts (₹${(splitsSum / 100).toFixed(2)}) must match total (₹${(parsedTotal / 100).toFixed(2)})` },
         { status: 400 }
       );
     }

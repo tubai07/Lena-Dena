@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Check, Receipt } from 'lucide-react';
 import { distributeEqualSplits } from '@/lib/splitwise';
 
@@ -31,18 +31,29 @@ export function AddExpenseModal({
   const [amountRupees, setAmountRupees] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [payerId, setPayerId] = useState<string>('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
-  // Single payer (defaults to first or owner)
-  const [payerId, setPayerId] = useState<string>(
-    defaultPayerId || members.find((m) => m.isOwner)?.id || members[0]?.id || ''
-  );
+  // Synchronize state whenever modal opens or members change
+  useEffect(() => {
+    if (isOpen && members && members.length > 0) {
+      setDescription('');
+      setAmountRupees('');
+      setError('');
+      setLoading(false);
 
-  // Selected members to split equally among
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(
-    members.map((m) => m.id)
-  );
+      // Default payer: owner or first member or defaultPayerId
+      const targetPayer =
+        (defaultPayerId && members.some((m) => m.id === defaultPayerId) && defaultPayerId) ||
+        members.find((m) => m.isOwner)?.id ||
+        members[0]?.id ||
+        '';
+      setPayerId(targetPayer);
 
-  if (!isOpen) return null;
+      // Default split: all members
+      setSelectedMemberIds(members.map((m) => m.id));
+    }
+  }, [isOpen, members, defaultPayerId]);
 
   const totalAmountPaisa = Math.round(Number(amountRupees || 0) * 100);
 
@@ -51,6 +62,8 @@ export function AddExpenseModal({
     if (totalAmountPaisa <= 0 || selectedMemberIds.length === 0) return [];
     return distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
   }, [totalAmountPaisa, selectedMemberIds]);
+
+  if (!isOpen) return null;
 
   const toggleMemberSelection = (id: string) => {
     if (selectedMemberIds.includes(id)) {
@@ -67,33 +80,48 @@ export function AddExpenseModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) {
-      setError('Please enter a description');
+    setError('');
+
+    const trimmedDesc = description.trim();
+    if (!trimmedDesc) {
+      setError('Please enter a description (e.g. Dinner)');
       return;
     }
-    if (totalAmountPaisa <= 0) {
-      setError('Please enter an amount greater than 0');
+
+    if (totalAmountPaisa <= 0 || isNaN(totalAmountPaisa)) {
+      setError('Please enter a valid amount');
       return;
     }
+
+    if (!payerId) {
+      setError('Please select who paid the bill');
+      return;
+    }
+
     if (selectedMemberIds.length === 0) {
       setError('Please select at least one member to split with');
       return;
     }
 
+    const splitsToSend = distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
+    if (!splitsToSend.length) {
+      setError('Could not calculate splits');
+      return;
+    }
+
     setLoading(true);
-    setError('');
 
     try {
       const res = await fetch(`/api/groups/${groupId}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: description.trim(),
+          description: trimmedDesc,
           totalAmountPaisa,
           category: 'General',
           splitType: 'EQUAL',
           payers: [{ memberId: payerId, amountPaisa: totalAmountPaisa }],
-          splits: computedSplits,
+          splits: splitsToSend,
         }),
       });
 
@@ -168,7 +196,7 @@ export function AddExpenseModal({
             <input
               type="text"
               required
-              placeholder="e.g. Dinner, Cab fare, Groceries"
+              placeholder="e.g. Dinner, Cab, Groceries"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs font-semibold text-slate-900 bg-slate-50/50"
