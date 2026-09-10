@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, ArrowRight, Smartphone, Banknote } from 'lucide-react';
 import { generateUpiUrl } from '@/lib/splitwise';
 
@@ -17,7 +17,7 @@ interface SettleUpModalProps {
   onClose: () => void;
   groupId: string;
   members: Member[];
-  onSettled: () => void;
+  onSettled: (settlement?: any) => void;
   initialPayerId?: string;
   initialReceiverId?: string;
   initialAmountPaisa?: number;
@@ -33,19 +33,44 @@ export function SettleUpModal({
   initialReceiverId,
   initialAmountPaisa,
 }: SettleUpModalProps) {
-  const [payerId, setPayerId] = useState(
-    initialPayerId || members[0]?.id || ''
-  );
-  const [receiverId, setReceiverId] = useState(
-    initialReceiverId || members[1]?.id || members[0]?.id || ''
-  );
-  const [amountRupees, setAmountRupees] = useState(
-    initialAmountPaisa ? (initialAmountPaisa / 100).toFixed(2) : ''
-  );
-  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
+  const [payerId, setPayerId] = useState<string>('');
+  const [receiverId, setReceiverId] = useState<string>('');
+  const [amountRupees, setAmountRupees] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CASH'>('UPI');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Synchronize and prefill whenever modal opens or props change
+  useEffect(() => {
+    if (isOpen && members && members.length > 0) {
+      setError('');
+      setLoading(false);
+      setNotes('');
+
+      // Prefill Payer (Who owes / is paying)
+      const pId =
+        (initialPayerId && members.some((m) => m.id === initialPayerId) && initialPayerId) ||
+        members[0]?.id ||
+        '';
+      setPayerId(pId);
+
+      // Prefill Receiver (Who is owed / receives)
+      const rId =
+        (initialReceiverId && members.some((m) => m.id === initialReceiverId) && initialReceiverId) ||
+        members.find((m) => m.id !== pId)?.id ||
+        members[1]?.id ||
+        '';
+      setReceiverId(rId);
+
+      // Prefill Amount
+      if (initialAmountPaisa && initialAmountPaisa > 0) {
+        setAmountRupees((initialAmountPaisa / 100).toFixed(2));
+      } else {
+        setAmountRupees('');
+      }
+    }
+  }, [isOpen, initialPayerId, initialReceiverId, initialAmountPaisa, members]);
 
   if (!isOpen) return null;
 
@@ -71,14 +96,34 @@ export function SettleUpModal({
       return;
     }
     const amountPaisa = Math.round(numAmount * 100);
-    if (amountPaisa <= 0) {
+    if (amountPaisa <= 0 || isNaN(amountPaisa)) {
       setError('Please enter a valid payment amount');
       return;
     }
 
-    setLoading(true);
-    setError('');
+    // ⚡ INSTANT OPTIMISTIC SUBMIT:
+    // Update parent state and close modal in 0ms!
+    const optimisticSettlement = {
+      id: `temp_st_${Date.now()}`,
+      payerId,
+      receiverId,
+      amountPaisa,
+      paymentMethod,
+      notes: notes.trim() || undefined,
+      date: new Date().toISOString(),
+      payer: { id: payer?.id || payerId, name: payer?.name || 'Payer' },
+      receiver: {
+        id: receiver?.id || receiverId,
+        name: receiver?.name || 'Receiver',
+        upiId: receiver?.upiId,
+        phone: receiver?.phone,
+      },
+    };
 
+    onSettled(optimisticSettlement);
+    onClose();
+
+    // Persist to server in background
     try {
       const res = await fetch(`/api/groups/${groupId}/settlements`, {
         method: 'POST',
@@ -93,59 +138,69 @@ export function SettleUpModal({
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to record settlement');
+      if (res.ok && data.settlement) {
+        onSettled(data.settlement);
+      } else {
+        console.error('Failed to save settlement:', data.error);
       }
-
-      onSettled();
-      onClose();
     } catch (err: any) {
-      setError(err.message || 'Something went wrong');
-    } finally {
-      setLoading(false);
+      console.error('Error recording settlement:', err);
     }
   };
 
+  const isPreloadedDebt = Boolean(initialPayerId && initialReceiverId && initialAmountPaisa);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-5 h-5" />
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-lg">Settle Up Debt</h3>
-              <p className="text-xs text-slate-500">Record a payment between friends</p>
-            </div>
+            <h3 className="font-extrabold text-slate-900 text-base">Settle Up</h3>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Preloaded Debt Highlight Banner */}
+        {isPreloadedDebt && payer && receiver && (
+          <div className="mx-5 mt-4 p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+            <div className="text-emerald-900">
+              <span className="font-bold">{payer.name}</span>
+              <span className="text-emerald-600 mx-1">pays</span>
+              <span className="font-bold">{receiver.name}</span>
+            </div>
+            <span className="font-black text-emerald-800 text-sm">
+              ₹{(Number(initialAmountPaisa || 0) / 100).toFixed(2)}
+            </span>
+          </div>
+        )}
+
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl">
+            <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl">
               {error}
             </div>
           )}
 
-          {/* Payer and Receiver visual selector */}
+          {/* Payer and Receiver prefilled selector */}
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Payer (Who paid)
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Payer (Who Paid)
               </label>
               <select
                 value={payerId}
                 onChange={(e) => setPayerId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/50 truncate"
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -155,18 +210,18 @@ export function SettleUpModal({
               </select>
             </div>
 
-            <div className="pt-5 text-slate-400">
-              <ArrowRight className="w-4 h-4" />
+            <div className="pt-4 text-slate-300">
+              <ArrowRight className="w-3.5 h-3.5" />
             </div>
 
             <div className="flex-1">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Recipient (Who received)
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Receiver (Got Money)
               </label>
               <select
                 value={receiverId}
                 onChange={(e) => setReceiverId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50/50"
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/50 truncate"
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -177,13 +232,13 @@ export function SettleUpModal({
             </div>
           </div>
 
-          {/* Amount */}
+          {/* Amount (Prefilled from debt transfer) */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Amount (₹) *
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Settlement Amount (₹) *
             </label>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base">
                 ₹
               </span>
               <input
@@ -193,32 +248,31 @@ export function SettleUpModal({
                 placeholder="0.00"
                 value={amountRupees}
                 onChange={(e) => setAmountRupees(e.target.value)}
-                className="w-full pl-8 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-extrabold text-slate-900 text-xl bg-slate-50/50"
-                autoFocus
+                className="w-full pl-7 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-black text-slate-900 text-xl bg-slate-50/50"
+                autoFocus={!isPreloadedDebt}
               />
             </div>
           </div>
 
-          {/* Payment Method */}
+          {/* Payment Method: Bank removed! Only UPI & Cash */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Payment Method
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              Payment Mode
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {(
                 [
                   { label: 'UPI 📱', value: 'UPI' },
                   { label: 'Cash 💵', value: 'CASH' },
-                  { label: 'Bank 🏦', value: 'BANK_TRANSFER' },
                 ] as const
               ).map((method) => (
                 <button
                   key={method.value}
                   type="button"
                   onClick={() => setPaymentMethod(method.value)}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center cursor-pointer ${
                     paymentMethod === method.value
-                      ? 'bg-emerald-600 text-white shadow-xs'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -228,41 +282,27 @@ export function SettleUpModal({
             </div>
           </div>
 
-          {/* Instant UPI Launch Button if upiId available */}
+          {/* Instant UPI Launch Button if receiver upiId available */}
           {upiLink && paymentMethod === 'UPI' && (
             <a
               href={upiLink}
               target="_blank"
               rel="noreferrer"
-              className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+              className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
             >
-              <Smartphone className="w-4 h-4 text-emerald-600" />
-              <span>Open UPI App (GPay / PhonePe / Paytm)</span>
+              <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Launch UPI App (GPay / PhonePe)</span>
             </a>
           )}
-
-          {/* Notes */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Note (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Sent via Google Pay"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50/50"
-            />
-          </div>
 
           {/* Submit */}
           <div className="pt-2">
             <button
               type="submit"
               disabled={loading || numAmount <= 0}
-              className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-md transition-all text-sm flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all text-xs flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {loading ? 'Recording...' : 'Record Settlement'}
+              Record Settle Up
             </button>
           </div>
         </form>

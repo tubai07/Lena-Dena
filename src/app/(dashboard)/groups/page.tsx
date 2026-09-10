@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { CreateGroupModal } from '@/components/groups/CreateGroupModal';
 import { JoinCodeModal } from '@/components/groups/JoinCodeModal';
+import { getCachedItem, setCachedItem } from '@/lib/groupCache';
 
 interface GroupSummary {
   id: string;
@@ -26,8 +27,14 @@ interface GroupSummary {
 }
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Instant render from cache (0ms)
+  const [groups, setGroups] = useState<GroupSummary[]>(() => {
+    return getCachedItem<GroupSummary[]>('all_groups') || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getCachedItem<GroupSummary[]>('all_groups');
+    return !cached || cached.length === 0;
+  });
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
@@ -39,6 +46,7 @@ export default function GroupsPage() {
       const data = await res.json();
       if (res.ok && data.groups) {
         setGroups(data.groups);
+        setCachedItem('all_groups', data.groups);
       }
     } catch (e) {
       console.error(e);
@@ -59,9 +67,10 @@ export default function GroupsPage() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const filteredGroups = groups.filter((g) =>
-    g.name.toLowerCase().includes(search.toLowerCase()) ||
-    g.joinCode.toLowerCase().includes(search.toLowerCase())
+  const filteredGroups = groups.filter(
+    (g) =>
+      g.name.toLowerCase().includes(search.toLowerCase()) ||
+      g.joinCode.toLowerCase().includes(search.toLowerCase())
   );
 
   const netBalancePaisa = groups.reduce((sum, g) => sum + g.ownerBalancePaisa, 0);
@@ -113,13 +122,21 @@ export default function GroupsPage() {
                 }`}
               >
                 {isPositive
-                  ? `+₹${(netBalancePaisa / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                  ? `+₹${(netBalancePaisa / 100).toLocaleString('en-IN', {
+                      maximumFractionDigits: 2,
+                    })}`
                   : isNegative
-                  ? `-₹${(Math.abs(netBalancePaisa) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                  ? `-₹${(Math.abs(netBalancePaisa) / 100).toLocaleString('en-IN', {
+                      maximumFractionDigits: 2,
+                    })}`
                   : '₹0.00'}
               </div>
               <span className="text-[11px] font-semibold text-slate-400 block mt-0.5">
-                {isPositive ? 'You get back' : isNegative ? 'You owe friends' : 'All groups settled'}
+                {isPositive
+                  ? 'You get back'
+                  : isNegative
+                  ? 'You owe friends'
+                  : 'All groups settled'}
               </span>
             </div>
 
@@ -152,9 +169,10 @@ export default function GroupsPage() {
         )}
 
         {/* Groups List */}
-        {loading ? (
-          <div className="py-16 text-center text-slate-400 text-xs font-semibold">
-            Loading groups...
+        {loading && groups.length === 0 ? (
+          <div className="space-y-2.5 pt-1 animate-pulse">
+            <div className="h-16 bg-slate-100 rounded-2xl"></div>
+            <div className="h-16 bg-slate-100 rounded-2xl"></div>
           </div>
         ) : filteredGroups.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-3 shadow-2xs mt-2">

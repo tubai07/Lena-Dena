@@ -17,7 +17,13 @@ import {
 } from 'lucide-react';
 import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
-import { generateUpiUrl } from '@/lib/splitwise';
+import {
+  generateUpiUrl,
+  calculateMemberNetBalances,
+  simplifyDebts,
+  calculateDirectPairwiseDebts,
+} from '@/lib/splitwise';
+import { getCachedItem, setCachedItem } from '@/lib/groupCache';
 
 interface Member {
   id: string;
@@ -112,8 +118,14 @@ export default function GroupDetailPage({
   const { id } = use(params);
   const router = useRouter();
 
-  const [group, setGroup] = useState<GroupDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Instant render from cache (0ms)
+  const [group, setGroup] = useState<GroupDetail | null>(() => {
+    return getCachedItem<GroupDetail>(`group_${id}`);
+  });
+  const [loading, setLoading] = useState(() => {
+    return !getCachedItem<GroupDetail>(`group_${id}`);
+  });
+
   const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'members'>('expenses');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
@@ -126,15 +138,17 @@ export default function GroupDetailPage({
   const [newMemberName, setNewMemberName] = useState('');
   const [addingMember, setAddingMember] = useState(false);
 
-  const fetchGroup = async () => {
+  const fetchGroup = async (isBackground = false) => {
     try {
+      if (!isBackground && !group) setLoading(true);
       const res = await fetch(`/api/groups/${id}`);
       if (!res.ok) throw new Error('Group not found');
       const data = await res.json();
       setGroup(data.group);
+      setCachedItem(`group_${id}`, data.group);
     } catch (e) {
       console.error(e);
-      router.push('/groups');
+      if (!group) router.push('/groups');
     } finally {
       setLoading(false);
     }
@@ -151,69 +165,184 @@ export default function GroupDetailPage({
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  // Instant optimistic simplify toggle
   const handleToggleSimplify = async (enabled: boolean) => {
     if (!group) return;
+    const updated = {
+      ...group,
+      simplifyDebts: enabled,
+      activeTransfers: enabled ? group.simplifiedTransfers : group.directTransfers,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
     try {
       await fetch(`/api/groups/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ simplifyDebts: enabled }),
       });
-      fetchGroup();
     } catch (e) {
       console.error(e);
     }
   };
 
+  // Instant optimistic expense addition
+  const handleExpenseAdded = (newExpense?: any) => {
+    if (newExpense && group) {
+      const filtered = group.expenses.filter(
+        (e) => e.id !== newExpense.id && (!e.id.startsWith('temp_') || newExpense.id.startsWith('temp_'))
+      );
+      const updatedExpenses = [newExpense, ...filtered];
+      const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
+      const simplifiedTransfers = simplifyDebts(balances);
+      const directTransfers = calculateDirectPairwiseDebts(group.members, updatedExpenses, group.settlements);
+      const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+      const updated = {
+        ...group,
+        expenses: updatedExpenses,
+        totalSpendPaisa,
+        balances,
+        simplifiedTransfers,
+        directTransfers,
+        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+      };
+      setGroup(updated);
+      setCachedItem(`group_${id}`, updated);
+    }
+    fetchGroup(true);
+  };
+
+  // Instant optimistic settlement addition
+  const handleSettled = (newSettlement?: any) => {
+    if (newSettlement && group) {
+      const filtered = group.settlements.filter(
+        (s) => s.id !== newSettlement.id && (!s.id.startsWith('temp_') || newSettlement.id.startsWith('temp_'))
+      );
+      const updatedSettlements = [newSettlement, ...filtered];
+      const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
+      const simplifiedTransfers = simplifyDebts(balances);
+      const directTransfers = calculateDirectPairwiseDebts(group.members, group.expenses, updatedSettlements);
+
+      const updated = {
+        ...group,
+        settlements: updatedSettlements,
+        balances,
+        simplifiedTransfers,
+        directTransfers,
+        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+      };
+      setGroup(updated);
+      setCachedItem(`group_${id}`, updated);
+    }
+    fetchGroup(true);
+  };
+
+  // Instant optimistic expense deletion
   const handleDeleteExpense = async (expenseId: string) => {
     if (!confirm('Delete this expense? Group balances will recalculate.')) return;
+    if (group) {
+      const updatedExpenses = group.expenses.filter((e) => e.id !== expenseId);
+      const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
+      const simplifiedTransfers = simplifyDebts(balances);
+      const directTransfers = calculateDirectPairwiseDebts(group.members, updatedExpenses, group.settlements);
+      const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+      const updated = {
+        ...group,
+        expenses: updatedExpenses,
+        totalSpendPaisa,
+        balances,
+        simplifiedTransfers,
+        directTransfers,
+        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+      };
+      setGroup(updated);
+      setCachedItem(`group_${id}`, updated);
+    }
     try {
-      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) fetchGroup();
+      await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
+      fetchGroup(true);
     }
   };
 
+  // Instant optimistic settlement deletion
   const handleDeleteSettlement = async (settlementId: string) => {
     if (!confirm('Delete this settlement record?')) return;
+    if (group) {
+      const updatedSettlements = group.settlements.filter((s) => s.id !== settlementId);
+      const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
+      const simplifiedTransfers = simplifyDebts(balances);
+      const directTransfers = calculateDirectPairwiseDebts(group.members, group.expenses, updatedSettlements);
+
+      const updated = {
+        ...group,
+        settlements: updatedSettlements,
+        balances,
+        simplifiedTransfers,
+        directTransfers,
+        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+      };
+      setGroup(updated);
+      setCachedItem(`group_${id}`, updated);
+    }
     try {
-      const res = await fetch(`/api/groups/${id}/settlements/${settlementId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) fetchGroup();
+      await fetch(`/api/groups/${id}/settlements/${settlementId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
+      fetchGroup(true);
     }
   };
 
+  // Instant optimistic member addition
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMemberName.trim()) return;
+    const cleanName = newMemberName.trim();
+    if (!cleanName || !group) return;
+    setNewMemberName('');
+
+    const optimisticMember: Member = {
+      id: `temp_m_${Date.now()}`,
+      name: cleanName,
+      isOwner: false,
+      phone: null,
+      upiId: null,
+    };
+    const updatedMembers = [...group.members, optimisticMember];
+    const balances = calculateMemberNetBalances(updatedMembers, group.expenses, group.settlements);
+    const updated = {
+      ...group,
+      members: updatedMembers,
+      balances,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
     setAddingMember(true);
     try {
-      const res = await fetch(`/api/groups/${id}/members`, {
+      await fetch(`/api/groups/${id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newMemberName.trim() }),
+        body: JSON.stringify({ name: cleanName }),
       });
-      if (res.ok) {
-        setNewMemberName('');
-        fetchGroup();
-      }
+      fetchGroup(true);
     } catch (e) {
       console.error(e);
+      fetchGroup(true);
     } finally {
       setAddingMember(false);
     }
   };
 
-  if (loading) {
+  if (loading && !group) {
     return (
-      <div className="py-20 text-center text-slate-400 font-semibold text-xs">
-        Loading group...
+      <div className="p-4 space-y-4 animate-pulse">
+        <div className="h-10 bg-slate-100 rounded-2xl w-3/4"></div>
+        <div className="h-28 bg-slate-100 rounded-3xl"></div>
+        <div className="h-40 bg-slate-100 rounded-3xl"></div>
       </div>
     );
   }
@@ -248,7 +377,7 @@ export default function GroupDetailPage({
                 {group.name}
               </h1>
 
-              {/* Join Code Chip (WhatsApp removed!) */}
+              {/* Join Code Chip */}
               <button
                 onClick={handleCopyCode}
                 className="inline-flex items-center gap-1 text-[11px] font-mono font-extrabold text-amber-800 hover:text-amber-900 transition-colors cursor-pointer"
@@ -292,7 +421,7 @@ export default function GroupDetailPage({
 
       {/* Main Content Area */}
       <div className="px-4 pt-3 space-y-3">
-        {/* Single Unified Summary Card (NO squished 3 columns!) */}
+        {/* Single Unified Summary Card */}
         <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
             {/* Left: Your Standing */}
@@ -365,52 +494,54 @@ export default function GroupDetailPage({
           })}
         </div>
 
-        {/* TAB 1: EXPENSES */}
+        {/* TAB 1: EXPENSES LIST */}
         {activeTab === 'expenses' && (
           <div className="space-y-2 pt-1">
             {group.expenses.length === 0 ? (
-              <div className="bg-white rounded-2xl p-7 border border-slate-200/80 text-center space-y-2.5 shadow-2xs">
+              <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2 shadow-2xs">
                 <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
-                <h3 className="font-extrabold text-slate-800 text-xs">No expenses yet</h3>
-                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                  Tap &quot;Bill&quot; to add a dinner, cab, or shared payment.
+                <h4 className="font-extrabold text-slate-800 text-xs">No expenses yet</h4>
+                <p className="text-[11px] text-slate-400">
+                  Tap '+ Bill' above to add dinner, hotel, or groceries.
                 </p>
-                <button
-                  onClick={() => setIsAddExpenseOpen(true)}
-                  className="px-3.5 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
-                >
-                  Add Bill
-                </button>
               </div>
             ) : (
               group.expenses.map((exp) => {
-                const payerName =
-                  exp.payers.length === 1
-                    ? exp.payers[0].member.name
-                    : `${exp.payers.length} members`;
+                const totalRupees = exp.totalAmountPaisa / 100;
+                const payerNames = exp.payers.map((p) => p.member.name).join(', ');
+                const expDate = new Date(exp.date).toLocaleDateString('en-IN', {
+                  month: 'short',
+                  day: 'numeric',
+                });
 
                 return (
                   <div
                     key={exp.id}
-                    className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-2"
+                    className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
                   >
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-extrabold text-slate-900 text-sm truncate">
-                        {exp.description}
-                      </h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {payerName} paid • {new Date(exp.date).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                      </p>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
+                        ₹
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-slate-900 text-sm truncate">
+                          {exp.description}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          Paid by <span className="font-semibold text-slate-600">{payerNames}</span> •{' '}
+                          {expDate}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <div className="text-right">
-                        <div className="font-black text-slate-900 text-base">
-                          ₹{(exp.totalAmountPaisa / 100).toFixed(2)}
-                        </div>
+                        <span className="font-black text-slate-900 text-sm block">
+                          ₹{totalRupees.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium capitalize">
+                          {exp.splitType.toLowerCase()}
+                        </span>
                       </div>
 
                       <button
@@ -500,6 +631,7 @@ export default function GroupDetailPage({
                           </a>
                         )}
 
+                        {/* Individual Settle button: Prefills debtor, creditor, and exact amount! */}
                         <button
                           onClick={() => {
                             setSettlePreload({
@@ -534,8 +666,9 @@ export default function GroupDetailPage({
                   >
                     <div className="flex items-center gap-1.5 text-[11px]">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="font-bold text-slate-800">
-                        {st.payer.name} paid {st.receiver.name}
+                      <span>
+                        <strong className="text-slate-800">{st.payer.name}</strong> paid{' '}
+                        <strong className="text-slate-800">{st.receiver.name}</strong>
                       </span>
                     </div>
 
@@ -593,14 +726,15 @@ export default function GroupDetailPage({
                           {b.name}
                         </span>
                         {b.isOwner && (
-                          <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-700 shrink-0">
+                          <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-indigo-50 text-indigo-700 rounded-md">
                             You
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400">
-                        Paid ₹{(b.totalPaidPaisa / 100).toFixed(0)}
-                      </p>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
+                        {(b.totalOwedPaisa / 100).toFixed(0)}
+                      </span>
                     </div>
                   </div>
 
@@ -630,7 +764,7 @@ export default function GroupDetailPage({
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}
         members={group.members}
-        onExpenseAdded={fetchGroup}
+        onExpenseAdded={handleExpenseAdded}
       />
 
       <SettleUpModal
@@ -638,7 +772,7 @@ export default function GroupDetailPage({
         onClose={() => setIsSettleOpen(false)}
         groupId={group.id}
         members={group.members}
-        onSettled={fetchGroup}
+        onSettled={handleSettled}
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}
         initialAmountPaisa={settlePreload.amountPaisa}
