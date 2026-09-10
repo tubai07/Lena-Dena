@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
-  Share2,
   Search,
   Eye,
   EyeOff,
@@ -18,13 +17,7 @@ import { useApp } from '@/components/common/AppContext';
 import { SwipeableCustomerRow } from '@/components/customer/SwipeableCustomerRow';
 import { ConfirmationDialog } from '@/components/common/ConfirmationDialog';
 
-function WhatsAppIcon({ className = 'w-6 h-6' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0012.04 2zm0 18.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.16 8.16 0 01-1.25-4.38c0-4.51 3.67-8.18 8.18-8.18 2.19 0 4.24.85 5.79 2.4 1.55 1.55 2.4 3.6 2.4 5.79 0 4.51-3.67 8.18-8.18 8.18zm4.49-6.13c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.84-.86 2.05 0 1.21.88 2.38 1 2.54.12.17 1.74 2.65 4.21 3.72.59.25 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z" />
-    </svg>
-  );
-}
+
 
 export default function SimplifiedDashboardPage() {
   const { openCustomerModal, allCustomers, deleteCustomerFromApp, business } = useApp();
@@ -296,24 +289,7 @@ export default function SimplifiedDashboardPage() {
                     </div>
                   </div>
 
-                  {/* WhatsApp Icon if phone exists matching Screenshot 3 */}
-                  {c.phone && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        const cleanPhone = c.phone.replace(/[^0-9]/g, '');
-                        const formattedPhone = cleanPhone.startsWith('91')
-                          ? cleanPhone
-                          : `91${cleanPhone}`;
-                        window.open(`https://wa.me/${formattedPhone}`, '_blank');
-                      }}
-                      className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors shrink-0 tap-effect"
-                      title="Open WhatsApp chat"
-                    >
-                      <WhatsAppIcon className="w-6 h-6" />
-                    </div>
-                  )}
+
                 </Link>
               );
             })
@@ -346,20 +322,8 @@ export default function SimplifiedDashboardPage() {
           </div>
         </div>
 
-        {/* Right Header Icons: Share, Search */}
+        {/* Right Header Icon: Search */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({ title: 'Lena Dena', text: 'My Personal Digital Khata' });
-              }
-            }}
-            className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center tap-effect"
-            title="Share"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
-
           <button
             onClick={() => setSearchOpen(true)}
             className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center tap-effect"
