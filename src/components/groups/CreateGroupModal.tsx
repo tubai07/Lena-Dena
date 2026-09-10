@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, Users } from 'lucide-react';
+import { X, Plus, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { GROUP_CATEGORIES, getGroupCategoryInfo } from '@/lib/groupIcons';
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -13,12 +14,16 @@ interface CreateGroupModalProps {
 export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGroupModalProps) {
   const router = useRouter();
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('Trip');
   const [memberName, setMemberName] = useState('');
   const [members, setMembers] = useState<{ name: string; phone?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
+
+  const currentCategoryInfo = getGroupCategoryInfo(category);
+  const CurrentIcon = currentCategoryInfo.icon;
 
   const handleAddMemberChip = () => {
     const trimmed = memberName.trim();
@@ -59,7 +64,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          category: 'General',
+          category,
           initialMembers: members,
         }),
       });
@@ -84,17 +89,23 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header with larger text */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-              <Users className="w-5 h-5" />
+            <div className={`w-9 h-9 rounded-xl ${currentCategoryInfo.bg} ${currentCategoryInfo.color} flex items-center justify-center font-bold shadow-2xs`}>
+              <CurrentIcon className="w-5 h-5" />
             </div>
-            <h3 className="font-black text-slate-900 text-lg">New Group</h3>
+            <div>
+              <h3 className="font-black text-slate-900 text-lg leading-tight">New Group</h3>
+              <span className="text-[11px] font-semibold text-slate-400">
+                Type: {currentCategoryInfo.label}
+              </span>
+            </div>
           </div>
           <button
             onClick={onClose}
+            type="button"
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -102,7 +113,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">
               {error}
@@ -123,6 +134,49 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 font-bold text-slate-900 text-sm bg-slate-50/50 placeholder:text-slate-400"
               autoFocus
             />
+          </div>
+
+          {/* Group Icon & Category Picker */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                Group Icon & Theme
+              </label>
+              <span className="text-[11px] font-bold text-emerald-700">
+                {currentCategoryInfo.label}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80">
+              {GROUP_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                const isSelected = category === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategory(cat.id)}
+                    className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
+                      isSelected
+                        ? 'bg-white shadow-xs ring-2 ring-emerald-600'
+                        : 'hover:bg-white/60 text-slate-600 opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-800 truncate w-full text-center">
+                      {cat.id}
+                    </span>
+                    {isSelected && (
+                      <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-emerald-600 text-white rounded-full flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Add Members */}
@@ -157,7 +211,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             <div className="flex flex-wrap gap-2 mt-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/60 rounded-full text-xs font-bold">
                 <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                You (Admin)
+                You (Creator)
               </span>
 
               {members.map((m, idx) => (
@@ -183,7 +237,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             <button
               type="submit"
               disabled={loading || !name.trim()}
-              className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center cursor-pointer"
+              className="w-full py-3 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xs transition-all text-sm flex items-center justify-center cursor-pointer active:scale-[0.99]"
             >
               {loading ? 'Creating...' : 'Create Group'}
             </button>

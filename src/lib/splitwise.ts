@@ -88,6 +88,7 @@ export interface MemberBalance {
   phone?: string | null;
   upiId?: string | null;
   isOwner: boolean;
+  isAdmin?: boolean;
   totalPaidPaisa: number;
   totalOwedPaisa: number;
   settlementsPaidPaisa: number;
@@ -113,7 +114,7 @@ export interface SettlementData {
  * Calculates net balance for every group member based on expenses and settlements.
  */
 export function calculateMemberNetBalances(
-  members: { id: string; name: string; phone?: string | null; upiId?: string | null; isOwner: boolean }[],
+  members: { id: string; name: string; phone?: string | null; upiId?: string | null; isOwner: boolean; isAdmin?: boolean }[],
   expenses: ExpenseData[],
   settlements: SettlementData[]
 ): MemberBalance[] {
@@ -126,6 +127,7 @@ export function calculateMemberNetBalances(
       phone: m.phone,
       upiId: m.upiId,
       isOwner: m.isOwner,
+      isAdmin: Boolean(m.isAdmin || m.isOwner),
       totalPaidPaisa: 0,
       totalOwedPaisa: 0,
       settlementsPaidPaisa: 0,

@@ -14,10 +14,12 @@ import {
 import { CreateGroupModal } from '@/components/groups/CreateGroupModal';
 import { JoinCodeModal } from '@/components/groups/JoinCodeModal';
 import { getCachedItem, setCachedItem } from '@/lib/groupCache';
+import { getGroupCategoryInfo } from '@/lib/groupIcons';
 
 interface GroupSummary {
   id: string;
   name: string;
+  category?: string;
   joinCode: string;
   memberCount: number;
   totalSpendPaisa: number;
@@ -301,31 +303,44 @@ export default function GroupsPage() {
                   className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xs transition-all block group"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-black text-slate-900 text-lg truncate group-hover:text-emerald-700 transition-colors">
-                          {group.name}
-                        </h3>
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      {/* Group Category Icon Tile */}
+                      {(() => {
+                        const catInfo = getGroupCategoryInfo(group.category);
+                        const CatIcon = catInfo.icon;
+                        return (
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs border ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+                            <CatIcon className="w-5 h-5" />
+                          </div>
+                        );
+                      })()}
 
-                        {/* Join Code Chip */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyCode(e, group.joinCode)}
-                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition-colors shrink-0"
-                          title="Copy Code"
-                        >
-                          <span>{group.joinCode}</span>
-                          {copiedCode === group.joinCode ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3 opacity-60" />
-                          )}
-                        </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-black text-slate-900 text-lg truncate group-hover:text-emerald-700 transition-colors">
+                            {group.name}
+                          </h3>
+
+                          {/* Join Code Chip */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyCode(e, group.joinCode)}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition-colors shrink-0"
+                            title="Copy Code"
+                          >
+                            <span>{group.joinCode}</span>
+                            {copiedCode === group.joinCode ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3 opacity-60" />
+                            )}
+                          </button>
+                        </div>
+
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          {group.memberCount} members • ₹{(group.totalSpendPaisa / 100).toFixed(0)} total
+                        </p>
                       </div>
-
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        {group.memberCount} members • ₹{(group.totalSpendPaisa / 100).toFixed(0)} total
-                      </p>
                     </div>
 
                     {/* Standing with larger numbers */}

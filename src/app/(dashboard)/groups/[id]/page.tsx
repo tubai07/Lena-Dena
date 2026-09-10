@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, use } from 'react';
+import React, { useState, useEffect, useMemo, useRef, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -34,6 +34,7 @@ import {
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
 import { getCachedItem, setCachedItem } from '@/lib/groupCache';
+import { getGroupCategoryInfo, GROUP_CATEGORIES } from '@/lib/groupIcons';
 
 interface Member {
   id: string;
@@ -118,6 +119,7 @@ interface DebtTransfer {
 interface GroupDetail {
   id: string;
   name: string;
+  category?: string;
   joinCode: string;
   simplifyDebts: boolean;
   totalSpendPaisa: number;
@@ -202,6 +204,12 @@ export default function GroupDetailPage({
   const [copiedCode, setCopiedCode] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+
+  // Tracking deleted items so polling never revives them
+  const deletedExpenseIdsRef = useRef<Set<string>>(new Set());
+  const deletedSettlementIdsRef = useRef<Set<string>>(new Set());
+  const deletedMemberIdsRef = useRef<Set<string>>(new Set());
 
   const fetchGroup = async (isBackground = false) => {
     try {
@@ -215,27 +223,42 @@ export default function GroupDetailPage({
       setGroup((prev) => {
         if (!prev) return data.group;
 
-        // Preserve in-flight optimistic expenses that server hasn't returned yet
+        // Preserve in-flight optimistic expenses that server hasn't returned yet (prevents vanishing glitch!)
         const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
-        const pendingOptimisticExpenses = prev.expenses.filter(
-          (e) => e.id.startsWith('temp_exp_') && !serverExpIds.has(e.id)
+        const pendingExpenses = prev.expenses.filter((e) => {
+          if (deletedExpenseIdsRef.current.has(e.id)) return false;
+          if (serverExpIds.has(e.id)) return false;
+          return true; // Retain recent local additions
+        });
+        const mergedExpenses = [...pendingExpenses, ...data.group.expenses].filter(
+          (e) => !deletedExpenseIdsRef.current.has(e.id)
         );
-        const mergedExpenses = [...pendingOptimisticExpenses, ...data.group.expenses];
 
         // Preserve in-flight optimistic settlements
         const serverStIds = new Set(data.group.settlements.map((s: any) => s.id));
-        const pendingOptimisticSettlements = prev.settlements.filter(
-          (s) => s.id.startsWith('temp_st_') && !serverStIds.has(s.id)
+        const pendingSettlements = prev.settlements.filter((s) => {
+          if (deletedSettlementIdsRef.current.has(s.id)) return false;
+          if (serverStIds.has(s.id)) return false;
+          return true;
+        });
+        const mergedSettlements = [...pendingSettlements, ...data.group.settlements].filter(
+          (s) => !deletedSettlementIdsRef.current.has(s.id)
         );
-        const mergedSettlements = [...pendingOptimisticSettlements, ...data.group.settlements];
 
-        const balances = calculateMemberNetBalances(data.group.members, mergedExpenses, mergedSettlements);
+        // Filter out locally removed members
+        const mergedMembers = data.group.members.filter(
+          (m: any) => !deletedMemberIdsRef.current.has(m.id)
+        );
+
+        const balances = calculateMemberNetBalances(mergedMembers, mergedExpenses, mergedSettlements);
         const simplifiedTransfers = simplifyDebts(balances);
-        const directTransfers = calculateDirectPairwiseDebts(data.group.members, mergedExpenses, mergedSettlements);
+        const directTransfers = calculateDirectPairwiseDebts(mergedMembers, mergedExpenses, mergedSettlements);
         const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
 
         const updated = {
           ...data.group,
+          category: prev.category || data.group.category,
+          members: mergedMembers,
           expenses: mergedExpenses,
           settlements: mergedSettlements,
           totalSpendPaisa,
@@ -312,9 +335,34 @@ export default function GroupDetailPage({
     }
   };
 
-  // Instant optimistic expense addition or modification
+  // Instant optimistic group category / theme update
+  const handleUpdateCategory = async (newCategory: string) => {
+    if (!group) return;
+    setShowIconPicker(false);
+    const updated = {
+      ...group,
+      category: newCategory,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
+    try {
+      await fetch(`/api/groups/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newCategory }),
+      });
+    } catch (e) {
+      console.error('Failed to update group category:', e);
+    }
+  };
+
+  // Instant optimistic expense addition or modification (NO 150ms premature refetch!)
   const handleExpenseAdded = (newExpense?: any) => {
     if (newExpense) {
+      // Clear from deleted set in case it was re-added
+      deletedExpenseIdsRef.current.delete(newExpense.id);
+
       setGroup((prev) => {
         if (!prev) return null;
         const filtered = prev.expenses.filter((e) => {
@@ -347,15 +395,13 @@ export default function GroupDetailPage({
       });
     }
     setEditingExpense(null);
-    // Only re-sync with server after confirmed save, avoiding race conditions
-    if (newExpense && !newExpense.id.startsWith('temp_')) {
-      setTimeout(() => fetchGroup(true), 150);
-    }
   };
 
-  // Instant optimistic settlement addition
+  // Instant optimistic settlement addition (NO 150ms premature refetch!)
   const handleSettled = (newSettlement?: any) => {
     if (newSettlement) {
+      deletedSettlementIdsRef.current.delete(newSettlement.id);
+
       setGroup((prev) => {
         if (!prev) return null;
         const filtered = prev.settlements.filter((s) => {
@@ -384,13 +430,11 @@ export default function GroupDetailPage({
         return updated;
       });
     }
-    if (newSettlement && !newSettlement.id.startsWith('temp_')) {
-      setTimeout(() => fetchGroup(true), 150);
-    }
   };
 
   // Instant 0ms optimistic expense deletion without thread-blocking confirm popup
   const handleDeleteExpense = async (expenseId: string) => {
+    deletedExpenseIdsRef.current.add(expenseId);
     if (group) {
       const updatedExpenses = group.expenses.filter((e) => e.id !== expenseId);
       const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
@@ -414,12 +458,14 @@ export default function GroupDetailPage({
       await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
+      deletedExpenseIdsRef.current.delete(expenseId);
       fetchGroup(true);
     }
   };
 
   // Instant 0ms optimistic settlement deletion without thread-blocking confirm popup
   const handleDeleteSettlement = async (settlementId: string) => {
+    deletedSettlementIdsRef.current.add(settlementId);
     if (group) {
       const updatedSettlements = group.settlements.filter((s) => s.id !== settlementId);
       const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
@@ -441,6 +487,7 @@ export default function GroupDetailPage({
       await fetch(`/api/groups/${id}/settlements/${settlementId}`, { method: 'DELETE' });
     } catch (e) {
       console.error(e);
+      deletedSettlementIdsRef.current.delete(settlementId);
       fetchGroup(true);
     }
   };
@@ -475,6 +522,48 @@ export default function GroupDetailPage({
       }
     } catch (e) {
       console.error('Failed to toggle admin status:', e);
+      fetchGroup(true);
+    }
+  };
+
+  // Instant optimistic member removal by Creator
+  const handleRemoveMember = async (memberId: string) => {
+    if (!group) return;
+    const target = group.members.find((m) => m.id === memberId);
+    if (!target) return;
+    if (target.isOwner) {
+      return;
+    }
+
+    // 0ms optimistic removal
+    deletedMemberIdsRef.current.add(memberId);
+    const updatedMembers = group.members.filter((m) => m.id !== memberId);
+    const balances = calculateMemberNetBalances(updatedMembers, group.expenses, group.settlements);
+    const simplifiedTransfers = simplifyDebts(balances);
+    const directTransfers = calculateDirectPairwiseDebts(updatedMembers, group.expenses, group.settlements);
+
+    const updated = {
+      ...group,
+      members: updatedMembers,
+      balances,
+      simplifiedTransfers,
+      directTransfers,
+      activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
+    try {
+      const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        deletedMemberIdsRef.current.delete(memberId);
+        fetchGroup(true);
+      }
+    } catch (e) {
+      console.error('Failed to remove member:', e);
+      deletedMemberIdsRef.current.delete(memberId);
       fetchGroup(true);
     }
   };
@@ -620,6 +709,61 @@ export default function GroupDetailPage({
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
+
+            {/* Group Category Icon with Interactive Picker */}
+            {(() => {
+              const catInfo = getGroupCategoryInfo(group.category);
+              const GroupCatIcon = catInfo.icon;
+              return (
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowIconPicker(!showIconPicker)}
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-2xs border cursor-pointer hover:scale-105 active:scale-95 ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}
+                    title="Change Group Icon"
+                  >
+                    <GroupCatIcon className="w-5 h-5" />
+                  </button>
+
+                  {/* Icon Picker Popover */}
+                  {showIconPicker && (
+                    <div className="absolute left-0 top-12 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2.5 z-40 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95">
+                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
+                        <span className="text-[11px] font-bold text-slate-800">Select Group Theme</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowIconPicker(false)}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {GROUP_CATEGORIES.map((cat) => {
+                        const Icon = cat.icon;
+                        const isSelected = (group.category || 'Trip') === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => handleUpdateCategory(cat.id)}
+                            className={`p-1.5 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                              isSelected ? 'ring-2 ring-emerald-600 bg-emerald-50/50 shadow-2xs' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
+                              <Icon className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-800 truncate w-full text-center">
+                              {cat.id}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight truncate">
@@ -1103,19 +1247,29 @@ export default function GroupDetailPage({
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
 
-                      {/* Admin assignment toggle button for other members */}
+                      {/* Admin assignment toggle button & Remove Member for other members */}
                       {!b.isOwner && (
-                        <div className="mt-1.5">
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <button
                             type="button"
                             onClick={() => handleToggleAdmin(b.memberId, Boolean(b.isAdmin))}
-                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                               b.isAdmin
-                                ? 'text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'
-                                : 'text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+                                ? 'text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                                : 'text-indigo-700 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100'
                             }`}
                           >
                             {b.isAdmin ? 'Revoke Admin' : 'Make Admin'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMember(b.memberId)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                            title={`Remove ${b.name} from group`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>Remove</span>
                           </button>
                         </div>
                       )}

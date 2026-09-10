@@ -44,9 +44,64 @@ export async function PATCH(
 
     invalidateAllGroupServerCaches(id, group.businessId);
 
-    return NextResponse.json({ member: updatedMember });
+    return NextResponse.json({ success: true, member: updatedMember });
   } catch (err: any) {
     console.error('Error updating member admin status:', err);
+    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string; memberId: string }> }
+) {
+  try {
+    const { id, memberId } = await params;
+
+    const group = await db.group.findUnique({
+      where: { id },
+      include: { members: true },
+    });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const member = group.members.find((m) => m.id === memberId);
+    if (!member) {
+      return NextResponse.json({ error: 'Member not found in this group' }, { status: 404 });
+    }
+
+    // Creator / Owner cannot be removed
+    if (member.isOwner) {
+      return NextResponse.json(
+        { error: 'The creator cannot be removed from the group' },
+        { status: 400 }
+      );
+    }
+
+    // Delete the member (cascades splits, payers, settlements)
+    await db.groupMember.delete({
+      where: { id: memberId },
+    });
+
+    // Clean up any orphaned expenses without payers or splits
+    await db.groupExpense.deleteMany({
+      where: {
+        groupId: id,
+        OR: [{ payers: { none: {} } }, { splits: { none: {} } }],
+      },
+    });
+
+    invalidateAllGroupServerCaches(id, group.businessId);
+
+    return NextResponse.json({
+      success: true,
+      removedMemberId: memberId,
+      message: `${member.name} removed from the group`,
+    });
+  } catch (err: any) {
+    console.error('Error removing member from group:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }

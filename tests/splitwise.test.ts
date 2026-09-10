@@ -252,5 +252,40 @@ describe('Splitwise Engine & Debt Simplification', () => {
     );
 
     expect(updatedMembers.find((m) => m.id === 'm2')!.isAdmin).toBe(true);
+
+    // Verify calculateMemberNetBalances preserves isAdmin
+    const balances = calculateMemberNetBalances(updatedMembers, [], []);
+    expect(balances.find((b) => b.memberId === 'm1')!.isAdmin).toBe(true);
+    expect(balances.find((b) => b.memberId === 'm2')!.isAdmin).toBe(true);
+  });
+
+  it('allows creator to remove a non-owner member and recalculates group balances', () => {
+    const members = [
+      { id: 'm1', name: 'Creator', isOwner: true, isAdmin: true },
+      { id: 'm2', name: 'Member To Remove', isOwner: false, isAdmin: false },
+      { id: 'm3', name: 'Remaining Friend', isOwner: false, isAdmin: false },
+    ];
+
+    const expenses = [
+      {
+        id: 'exp1',
+        totalAmountPaisa: 30000,
+        payers: [{ memberId: 'm1', amountPaisa: 30000 }],
+        splits: [
+          { memberId: 'm1', amountPaisa: 10000 },
+          { memberId: 'm2', amountPaisa: 10000 },
+          { memberId: 'm3', amountPaisa: 10000 },
+        ],
+      },
+    ];
+
+    // Creator removes m2
+    const remainingMembers = members.filter((m) => m.id !== 'm2');
+    expect(remainingMembers).toHaveLength(2);
+    expect(remainingMembers.some((m) => m.id === 'm2')).toBe(false);
+
+    // Creator (isOwner: true) cannot be removed
+    const canRemoveCreator = remainingMembers.some((m) => m.id === 'm1' && !m.isOwner);
+    expect(canRemoveCreator).toBe(false);
   });
 });

@@ -32,6 +32,7 @@ import {
   simplifyDebts,
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
+import { getGroupCategoryInfo } from '@/lib/groupIcons';
 
 interface Member {
   id: string;
@@ -271,12 +272,25 @@ export default function JoinGroupDetailPage({
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
-          <div className="text-center space-y-1">
-            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
-              Code: {group.joinCode}
-            </span>
-            <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
-            <p className="text-xs font-medium text-slate-400">Who are you in this group?</p>
+          <div className="text-center space-y-2">
+            {(() => {
+              const catInfo = getGroupCategoryInfo(group.category);
+              const CatIcon = catInfo.icon;
+              return (
+                <div className="flex justify-center">
+                  <div className={`w-14 h-14 rounded-3xl flex items-center justify-center border shadow-xs ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+                    <CatIcon className="w-7 h-7" />
+                  </div>
+                </div>
+              );
+            })()}
+            <div>
+              <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
+                Code: {group.joinCode}
+              </span>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">{group.name}</h1>
+              <p className="text-xs font-medium text-slate-400 mt-0.5">Who are you in this group?</p>
+            </div>
           </div>
 
           {/* Existing Member List */}
@@ -470,21 +484,32 @@ export default function JoinGroupDetailPage({
     <div className="min-h-screen bg-slate-50 pb-20">
       {/* Top Mobile Bar */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-slate-900">{group.name}</span>
-            <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
-              {group.joinCode}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-0.5">
-            <span>You are: <strong className="font-bold text-slate-800">{claimedMember.name}</strong></span>
-            <button
-              onClick={handleSwitchIdentity}
-              className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
-            >
-              (Switch)
-            </button>
+        <div className="flex items-center gap-3">
+          {(() => {
+            const catInfo = getGroupCategoryInfo(group.category);
+            const CatIcon = catInfo.icon;
+            return (
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-2xs shrink-0 ${catInfo.bg} ${catInfo.color} ${catInfo.border}`}>
+                <CatIcon className="w-4 h-4" />
+              </div>
+            );
+          })()}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-bold text-slate-900">{group.name}</span>
+              <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
+                {group.joinCode}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-0.5">
+              <span>You are: <strong className="font-bold text-slate-800">{claimedMember.name}</strong></span>
+              <button
+                onClick={handleSwitchIdentity}
+                className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
+              >
+                (Switch)
+              </button>
+            </div>
           </div>
         </div>
 

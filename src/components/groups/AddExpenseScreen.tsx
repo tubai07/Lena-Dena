@@ -518,16 +518,48 @@ export function AddExpenseScreen({
               </div>
 
               {/* Transaction Date Row */}
-              <div className="pt-2">
+              <div className="pt-2 flex items-center flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setShowWheelDatePicker(true)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-sm font-semibold transition-all cursor-pointer shadow-2xs hover:border-slate-300"
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:border-slate-300"
                 >
-                  <Calendar className="w-4 h-4 text-emerald-700" />
+                  <Calendar className="w-3.5 h-3.5 text-emerald-700" />
                   <span>
                     Date: <strong className="font-bold text-slate-900">{formattedDateLabel}</strong>
                   </span>
+                </button>
+
+                {/* Quick Date Pills */}
+                <button
+                  type="button"
+                  onClick={() => setExpenseDate(getLocalDateString())}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    expenseDate === getLocalDateString()
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const yest = new Date();
+                    yest.setDate(yest.getDate() - 1);
+                    setExpenseDate(getLocalDateString(yest));
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    (() => {
+                      const yest = new Date();
+                      yest.setDate(yest.getDate() - 1);
+                      return expenseDate === getLocalDateString(yest);
+                    })()
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Yesterday
                 </button>
               </div>
 
