@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useMemo, use } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -13,6 +13,16 @@ import {
   Sparkles,
   ArrowLeft,
   UserCheck,
+  Search,
+  X,
+  Car,
+  Utensils,
+  ShoppingCart,
+  Coffee,
+  Hotel,
+  ShoppingBag,
+  Activity,
+  Trash2,
 } from 'lucide-react';
 import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -90,6 +100,8 @@ export default function JoinGroupDetailPage({
     receiverId?: string;
     amountPaisa?: number;
   }>({});
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'settlements'>('all');
 
   const storageKey = `lena_dena_member_${upperCode}`;
 
@@ -308,6 +320,73 @@ export default function JoinGroupDetailPage({
   const transfersIOwe = group.activeTransfers.filter((t) => t.fromId === claimedMember.id);
   const transfersOwedToMe = group.activeTransfers.filter((t) => t.toId === claimedMember.id);
 
+  function getCategoryBadge(cat?: string) {
+    switch (cat) {
+      case 'Food':
+        return { icon: Utensils, bg: 'bg-amber-50 text-amber-600' };
+      case 'Transport':
+        return { icon: Car, bg: 'bg-blue-50 text-blue-600' };
+      case 'Groceries':
+        return { icon: ShoppingCart, bg: 'bg-emerald-50 text-emerald-600' };
+      case 'Drinks':
+        return { icon: Coffee, bg: 'bg-rose-50 text-rose-600' };
+      case 'Stay':
+        return { icon: Hotel, bg: 'bg-purple-50 text-purple-600' };
+      case 'Shopping':
+        return { icon: ShoppingBag, bg: 'bg-indigo-50 text-indigo-600' };
+      default:
+        return { icon: Receipt, bg: 'bg-slate-100 text-slate-700' };
+    }
+  }
+
+  const activityItems = useMemo(() => {
+    if (!group) return [];
+
+    const expItems = (group.expenses || []).map((exp) => ({
+      type: 'EXPENSE' as const,
+      id: exp.id,
+      date: new Date(exp.date),
+      category: exp.category || 'General',
+      title: exp.description,
+      totalAmountPaisa: exp.totalAmountPaisa,
+      payerNames: exp.payers?.map((p: any) => p.member?.name).join(', ') || 'Unknown',
+      payers: exp.payers,
+      splits: exp.splits,
+      raw: exp,
+    }));
+
+    const stItems = (group.settlements || []).map((st) => ({
+      type: 'SETTLEMENT' as const,
+      id: st.id,
+      date: new Date(st.date || st.createdAt || Date.now()),
+      category: 'Settlement',
+      title: `${st.payer?.name} paid ${st.receiver?.name}`,
+      totalAmountPaisa: st.amountPaisa,
+      payerNames: st.payer?.name || '',
+      receiverName: st.receiver?.name || '',
+      paymentMethod: st.paymentMethod,
+      raw: st,
+    }));
+
+    const combined = [...expItems, ...stItems].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    return combined.filter((item) => {
+      if (activityFilter === 'expenses' && item.type !== 'EXPENSE') return false;
+      if (activityFilter === 'settlements' && item.type !== 'SETTLEMENT') return false;
+
+      if (activitySearch.trim()) {
+        const q = activitySearch.toLowerCase().trim();
+        const matchTitle = item.title.toLowerCase().includes(q);
+        const matchPayer = item.payerNames.toLowerCase().includes(q);
+        const matchReceiver = item.type === 'SETTLEMENT' && (item.receiverName || '').toLowerCase().includes(q);
+        const matchSplitMem = item.type === 'EXPENSE' && (item.splits || []).some((s: any) => s.member?.name?.toLowerCase().includes(q));
+        const matchAmount = (item.totalAmountPaisa / 100).toString().includes(q);
+        return matchTitle || matchPayer || matchReceiver || matchSplitMem || matchAmount;
+      }
+      return true;
+    });
+  }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
+
   const handleExpenseAdded = (newExpense?: any) => {
     if (newExpense) {
       setGroup((prev) => {
@@ -507,42 +586,150 @@ export default function JoinGroupDetailPage({
           </div>
         )}
 
-        {/* Group Expenses Timeline */}
-        <div className="space-y-2">
+        {/* Group Activity Feed */}
+        <div className="space-y-3 pt-1">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-              Recent Group Bills ({group.expenses.length})
+              Group Activity ({group.expenses.length + group.settlements.length})
             </h3>
             <button
               onClick={() => setIsAddExpenseOpen(true)}
-              className="text-xs font-bold text-indigo-600"
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
             >
               + Add Bill
             </button>
           </div>
 
+          {/* Search & Filter Bar */}
           <div className="space-y-2">
-            {group.expenses.map((exp) => (
-              <div
-                key={exp.id}
-                className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between text-xs"
-              >
-                <div>
-                  <div className="font-extrabold text-slate-900 text-sm">{exp.description}</div>
-                  <div className="text-[11px] text-slate-400">
-                    {exp.payers.map((p: any) => p.member.name).join(', ')} paid •{' '}
-                    {new Date(exp.date).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </div>
-                </div>
-                <div className="text-right font-black text-slate-900 text-sm">
-                  ₹{(exp.totalAmountPaisa / 100).toFixed(2)}
-                </div>
-              </div>
-            ))}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search activity by name, description, amount..."
+                value={activitySearch}
+                onChange={(e) => setActivitySearch(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs placeholder:text-slate-400"
+              />
+              {activitySearch && (
+                <button
+                  onClick={() => setActivitySearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: 'all', label: `All (${group.expenses.length + group.settlements.length})` },
+                { id: 'expenses', label: `Expenses (${group.expenses.length})` },
+                { id: 'settlements', label: `Settlements (${group.settlements.length})` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setActivityFilter(f.id as any)}
+                  className={`px-3 py-1 rounded-full font-bold transition-all shrink-0 cursor-pointer ${
+                    activityFilter === f.id
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* List items */}
+          {activityItems.length === 0 ? (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/80 text-center space-y-2 shadow-2xs">
+              <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
+              <h4 className="font-extrabold text-slate-800 text-xs">
+                {activitySearch ? 'No matching activity found' : 'No activity yet'}
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                {activitySearch ? 'Try a different search query.' : "Tap '+ Add Bill' above to record a bill."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activityItems.map((item) => {
+                const dateStr = item.date.toLocaleDateString('en-IN', {
+                  month: 'short',
+                  day: 'numeric',
+                });
+                const totalRupees = item.totalAmountPaisa / 100;
+
+                if (item.type === 'EXPENSE') {
+                  const badge = getCategoryBadge(item.category);
+                  const CategoryIcon = badge.icon;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
+                          <CategoryIcon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-slate-900 text-sm truncate">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {item.payerNames} paid • {dateStr}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-black text-slate-900 text-sm block">
+                          ₹{totalRupees.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 capitalize">
+                          {item.raw.splitType.toLowerCase()}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-3.5 rounded-2xl border border-emerald-100/90 shadow-2xs flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-slate-900 text-sm truncate">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                            Settlement • {dateStr}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="font-black text-emerald-600 text-sm block">
+                          ₹{totalRupees.toFixed(2)}
+                        </span>
+                        <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-1 py-0.5 rounded">
+                          Settled
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -551,6 +738,7 @@ export default function JoinGroupDetailPage({
         isOpen={isAddExpenseOpen}
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}
+        groupName={group.name}
         members={group.members}
         onExpenseAdded={handleExpenseAdded}
         defaultPayerId={claimedMember.id}

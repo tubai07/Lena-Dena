@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useMemo, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -14,6 +14,15 @@ import {
   Smartphone,
   CheckCircle2,
   Trash2,
+  Search,
+  X,
+  Car,
+  Utensils,
+  ShoppingCart,
+  Coffee,
+  Hotel,
+  ShoppingBag,
+  Activity,
 } from 'lucide-react';
 import { AddExpenseModal } from '@/components/groups/AddExpenseModal';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -168,7 +177,9 @@ export default function GroupDetailPage({
     return !getCachedItem<GroupDetail>(`group_${id}`);
   });
 
-  const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'members'>('expenses');
+  const [activeTab, setActiveTab] = useState<'activity' | 'balances' | 'members'>('activity');
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'settlements'>('all');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
@@ -480,6 +491,73 @@ export default function GroupDetailPage({
     ? group.simplifiedTransfers
     : group.directTransfers;
 
+  function getCategoryBadge(cat?: string) {
+    switch (cat) {
+      case 'Food':
+        return { icon: Utensils, bg: 'bg-amber-50 text-amber-600' };
+      case 'Transport':
+        return { icon: Car, bg: 'bg-blue-50 text-blue-600' };
+      case 'Groceries':
+        return { icon: ShoppingCart, bg: 'bg-emerald-50 text-emerald-600' };
+      case 'Drinks':
+        return { icon: Coffee, bg: 'bg-rose-50 text-rose-600' };
+      case 'Stay':
+        return { icon: Hotel, bg: 'bg-purple-50 text-purple-600' };
+      case 'Shopping':
+        return { icon: ShoppingBag, bg: 'bg-indigo-50 text-indigo-600' };
+      default:
+        return { icon: Receipt, bg: 'bg-slate-100 text-slate-700' };
+    }
+  }
+
+  const activityItems = useMemo(() => {
+    if (!group) return [];
+
+    const expItems = (group.expenses || []).map((exp) => ({
+      type: 'EXPENSE' as const,
+      id: exp.id,
+      date: new Date(exp.date),
+      category: exp.category || 'General',
+      title: exp.description,
+      totalAmountPaisa: exp.totalAmountPaisa,
+      payerNames: exp.payers?.map((p: any) => p.member?.name).join(', ') || 'Unknown',
+      payers: exp.payers,
+      splits: exp.splits,
+      raw: exp,
+    }));
+
+    const stItems = (group.settlements || []).map((st) => ({
+      type: 'SETTLEMENT' as const,
+      id: st.id,
+      date: new Date(st.date || Date.now()),
+      category: 'Settlement',
+      title: `${st.payer?.name} paid ${st.receiver?.name}`,
+      totalAmountPaisa: st.amountPaisa,
+      payerNames: st.payer?.name || '',
+      receiverName: st.receiver?.name || '',
+      paymentMethod: st.paymentMethod,
+      raw: st,
+    }));
+
+    const combined = [...expItems, ...stItems].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    return combined.filter((item) => {
+      if (activityFilter === 'expenses' && item.type !== 'EXPENSE') return false;
+      if (activityFilter === 'settlements' && item.type !== 'SETTLEMENT') return false;
+
+      if (activitySearch.trim()) {
+        const q = activitySearch.toLowerCase().trim();
+        const matchTitle = item.title.toLowerCase().includes(q);
+        const matchPayer = item.payerNames.toLowerCase().includes(q);
+        const matchReceiver = item.type === 'SETTLEMENT' && (item.receiverName || '').toLowerCase().includes(q);
+        const matchSplitMem = item.type === 'EXPENSE' && (item.splits || []).some((s: any) => s.member?.name?.toLowerCase().includes(q));
+        const matchAmount = (item.totalAmountPaisa / 100).toString().includes(q);
+        return matchTitle || matchPayer || matchReceiver || matchSplitMem || matchAmount;
+      }
+      return true;
+    });
+  }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
+
   return (
     <div className="w-full pb-28">
       {/* Top Header with Larger Typography */}
@@ -593,7 +671,7 @@ export default function GroupDetailPage({
         {/* Clean Tabs with larger text */}
         <div className="flex border-b border-slate-200 gap-5 pt-1">
           {[
-            { key: 'expenses', label: `Expenses (${group.expenses.length})`, icon: Receipt },
+            { key: 'activity', label: `Activity (${group.expenses.length + group.settlements.length})`, icon: Activity },
             { key: 'balances', label: `Balances (${displayedTransfers.length})`, icon: Scale },
             { key: 'members', label: `Members (${group.members.length})`, icon: Users },
           ].map((tab) => {
@@ -605,7 +683,7 @@ export default function GroupDetailPage({
                 onClick={() => setActiveTab(tab.key as any)}
                 className={`pb-3 text-sm font-extrabold flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
                   isActive
-                    ? 'border-indigo-600 text-indigo-600'
+                    ? 'border-emerald-600 text-emerald-600'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -616,71 +694,165 @@ export default function GroupDetailPage({
           })}
         </div>
 
-        {/* TAB 1: EXPENSES LIST */}
-        {activeTab === 'expenses' && (
-          <div className="space-y-2.5 pt-1">
-            {loading && group.expenses.length === 0 ? (
+        {/* TAB 1: ACTIVITY LIST */}
+        {activeTab === 'activity' && (
+          <div className="space-y-3 pt-1">
+            {/* Search & Filter Bar */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search activity by name, description, amount..."
+                  value={activitySearch}
+                  onChange={(e) => setActivitySearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs placeholder:text-slate-400"
+                />
+                {activitySearch && (
+                  <button
+                    onClick={() => setActivitySearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                {[
+                  { id: 'all', label: `All (${group.expenses.length + group.settlements.length})` },
+                  { id: 'expenses', label: `Expenses (${group.expenses.length})` },
+                  { id: 'settlements', label: `Settlements (${group.settlements.length})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActivityFilter(f.id as any)}
+                    className={`px-3 py-1 rounded-full font-bold transition-all shrink-0 cursor-pointer ${
+                      activityFilter === f.id
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* List items */}
+            {loading && activityItems.length === 0 ? (
               <div className="space-y-2.5 pt-1 animate-pulse">
                 <div className="h-16 bg-slate-100 rounded-2xl"></div>
                 <div className="h-16 bg-slate-100 rounded-2xl"></div>
               </div>
-            ) : group.expenses.length === 0 ? (
+            ) : activityItems.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 border border-slate-200/80 text-center space-y-2.5 shadow-2xs">
                 <Receipt className="w-10 h-10 text-slate-300 mx-auto" />
-                <h4 className="font-extrabold text-slate-800 text-sm">No expenses yet</h4>
+                <h4 className="font-extrabold text-slate-800 text-sm">
+                  {activitySearch ? 'No matching activity found' : 'No activity yet'}
+                </h4>
                 <p className="text-xs text-slate-500">
-                  Tap '+ Bill' above to add dinner, hotel, or groceries.
+                  {activitySearch ? 'Try a different search query.' : "Tap '+ Bill' above to record your first expense."}
                 </p>
               </div>
             ) : (
-              group.expenses.map((exp) => {
-                const totalRupees = exp.totalAmountPaisa / 100;
-                const payerNames = exp.payers.map((p) => p.member.name).join(', ');
-                const expDate = new Date(exp.date).toLocaleDateString('en-IN', {
+              activityItems.map((item) => {
+                const dateStr = item.date.toLocaleDateString('en-IN', {
                   month: 'short',
                   day: 'numeric',
                 });
 
-                return (
-                  <div
-                    key={exp.id}
-                    className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-base shrink-0">
-                        ₹
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="font-black text-slate-900 text-base truncate">
-                          {exp.description}
-                        </h4>
-                        <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
-                          Paid by <span className="font-bold text-slate-700">{payerNames}</span> •{' '}
-                          {expDate}
-                        </p>
-                      </div>
-                    </div>
+                if (item.type === 'EXPENSE') {
+                  const badge = getCategoryBadge(item.category);
+                  const CategoryIcon = badge.icon;
+                  const totalRupees = item.totalAmountPaisa / 100;
 
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <div className="text-right">
-                        <span className="font-black text-slate-900 text-base block">
-                          ₹{totalRupees.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-slate-500 font-semibold capitalize">
-                          {exp.splitType.toLowerCase()}
-                        </span>
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-11 h-11 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
+                          <CategoryIcon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-black text-slate-900 text-base truncate">
+                            {item.title}
+                          </h4>
+                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                            Paid by <span className="font-bold text-slate-700">{item.payerNames}</span> •{' '}
+                            {dateStr}
+                          </p>
+                        </div>
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteExpense(exp.id)}
-                        className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="text-right">
+                          <span className="font-black text-slate-900 text-base block">
+                            ₹{totalRupees.toFixed(2)}
+                          </span>
+                          <span className="text-xs text-slate-500 font-semibold capitalize">
+                            {item.raw.splitType.toLowerCase()}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteExpense(item.id)}
+                          className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
+                } else {
+                  // Settlement Item
+                  const totalRupees = item.totalAmountPaisa / 100;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white p-4 rounded-2xl border border-emerald-100/90 shadow-2xs flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-black text-slate-900 text-sm truncate">
+                            {item.title}
+                          </h4>
+                          <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                            Settlement • {dateStr}
+                            {item.paymentMethod ? ` • via ${item.paymentMethod}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="text-right">
+                          <span className="font-black text-emerald-600 text-base block">
+                            ₹{totalRupees.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                            Settled
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleDeleteSettlement(item.id)}
+                          className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          title="Delete Settlement"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
               })
             )}
           </div>
@@ -890,6 +1062,7 @@ export default function GroupDetailPage({
         isOpen={isAddExpenseOpen}
         onClose={() => setIsAddExpenseOpen(false)}
         groupId={group.id}
+        groupName={group.name}
         members={group.members}
         onExpenseAdded={handleExpenseAdded}
       />

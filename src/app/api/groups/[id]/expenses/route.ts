@@ -70,18 +70,32 @@ export async function POST(
       }
     }
 
-    // Verify payer sum matches total
-    const payersSum = payers.reduce((sum: number, p: any) => sum + Math.round(Number(p.amountPaisa) || 0), 0);
-    if (payersSum !== parsedTotal) {
+    // Auto-balance minor 1-2 paise floating point rounding differences
+    let adjustedPayers = payers.map((p: any) => ({
+      memberId: p.memberId,
+      amountPaisa: Math.round(Number(p.amountPaisa) || 0),
+    }));
+    const payersSum = adjustedPayers.reduce((sum: number, p: any) => sum + p.amountPaisa, 0);
+    const payerDiff = parsedTotal - payersSum;
+    if (Math.abs(payerDiff) <= 2 && adjustedPayers.length > 0) {
+      adjustedPayers[0].amountPaisa += payerDiff;
+    } else if (payersSum !== parsedTotal) {
       return NextResponse.json(
         { error: `Payer amounts (₹${(payersSum / 100).toFixed(2)}) must match total (₹${(parsedTotal / 100).toFixed(2)})` },
         { status: 400 }
       );
     }
 
-    // Verify split sum matches total
-    const splitsSum = splits.reduce((sum: number, s: any) => sum + Math.round(Number(s.amountPaisa) || 0), 0);
-    if (splitsSum !== parsedTotal) {
+    let adjustedSplits = splits.map((s: any) => ({
+      memberId: s.memberId,
+      amountPaisa: Math.round(Number(s.amountPaisa) || 0),
+      shareValue: s.shareValue ? Number(s.shareValue) : null,
+    }));
+    const splitsSum = adjustedSplits.reduce((sum: number, s: any) => sum + s.amountPaisa, 0);
+    const splitDiff = parsedTotal - splitsSum;
+    if (Math.abs(splitDiff) <= 2 && adjustedSplits.length > 0) {
+      adjustedSplits[0].amountPaisa += splitDiff;
+    } else if (splitsSum !== parsedTotal) {
       return NextResponse.json(
         { error: `Split amounts (₹${(splitsSum / 100).toFixed(2)}) must match total (₹${(parsedTotal / 100).toFixed(2)})` },
         { status: 400 }
@@ -100,16 +114,16 @@ export async function POST(
           notes: notes?.trim() || null,
           date: date ? new Date(date) : new Date(),
           payers: {
-            create: payers.map((p: any) => ({
+            create: adjustedPayers.map((p: any) => ({
               memberId: p.memberId,
-              amountPaisa: Math.round(Number(p.amountPaisa)),
+              amountPaisa: p.amountPaisa,
             })),
           },
           splits: {
-            create: splits.map((s: any) => ({
+            create: adjustedSplits.map((s: any) => ({
               memberId: s.memberId,
-              amountPaisa: Math.round(Number(s.amountPaisa)),
-              shareValue: s.shareValue ? Number(s.shareValue) : null,
+              amountPaisa: s.amountPaisa,
+              shareValue: s.shareValue,
             })),
           },
         },
