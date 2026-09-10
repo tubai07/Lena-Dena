@@ -19,15 +19,27 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Language>('en');
 
   useEffect(() => {
-    const saved = localStorage.getItem('lena_dena_lang') as Language;
-    if (saved && (saved === 'en' || saved === 'hi' || saved === 'bn')) {
-      setLangState(saved);
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('lena_dena_lang') as Language;
+        if (saved && (saved === 'en' || saved === 'hi' || saved === 'bn')) {
+          setLangState(saved);
+        }
+      }
+    } catch {
+      // Storage restricted or disabled (e.g. older Safari private mode)
     }
   }, []);
 
   const setLang = (newLang: Language) => {
     setLangState(newLang);
-    localStorage.setItem('lena_dena_lang', newLang);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lena_dena_lang', newLang);
+      }
+    } catch {
+      // Storage restricted or disabled
+    }
   };
 
   return (

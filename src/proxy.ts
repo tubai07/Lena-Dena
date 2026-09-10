@@ -1,6 +1,23 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+function parseSessionPayload(cookieValue: string | undefined): any | null {
+  if (!cookieValue) return null;
+  try {
+    if (cookieValue.includes('.')) {
+      const [payloadB64] = cookieValue.split('.');
+      const json = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
+      if (json?.userId && json?.businessId) return json;
+    } else {
+      const json = JSON.parse(Buffer.from(cookieValue, 'base64').toString('utf-8'));
+      if (json?.userId && json?.businessId) return json;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get('lena_dena_session');
@@ -31,14 +48,20 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Not authenticated: return 401 JSON for API calls, or redirect to /login for pages
-  if (!sessionCookie?.value) {
+  const sessionPayload = parseSessionPayload(sessionCookie?.value);
+
+  // Not authenticated or invalid cookie:
+  if (!sessionPayload) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!isAuthPage) {
       const loginUrl = new URL('/login', request.url);
-      return NextResponse.redirect(loginUrl);
+      const res = NextResponse.redirect(loginUrl);
+      if (sessionCookie) {
+        res.cookies.delete('lena_dena_session');
+      }
+      return res;
     }
     return NextResponse.next();
   }

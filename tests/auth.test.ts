@@ -6,6 +6,7 @@ import {
   verifyAndExtractPayload,
 } from '../src/lib/security';
 import { checkRateLimit, resetRateLimit } from '../src/lib/rate-limit';
+import { parseSessionCookie } from '../src/lib/auth';
 
 describe('Security & Authentication Engine', () => {
   it('hashes password with bcrypt and verifies correctly', async () => {
@@ -49,6 +50,34 @@ describe('Security & Authentication Engine', () => {
     expect(extracted).not.toBeNull();
     expect(extracted?.userId).toBe('user_123');
     expect(extracted?.businessId).toBe('biz_456');
+  });
+
+  it('parses legacy unsigned base64 cookies for older users without crashing', () => {
+    const legacySession = {
+      userId: 'legacy_user_789',
+      businessId: 'legacy_biz_789',
+      userName: 'Old User',
+      businessName: 'Personal Khata',
+      phone: '9988776655',
+    };
+
+    // The old cookie format was Buffer.from(JSON.stringify(data)).toString('base64')
+    const legacyCookie = Buffer.from(JSON.stringify(legacySession)).toString('base64');
+    expect(legacyCookie).not.toContain('.');
+
+    const parsed = parseSessionCookie(legacyCookie);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.userId).toBe('legacy_user_789');
+    expect(parsed?.businessId).toBe('legacy_biz_789');
+
+    // Also handles modern signed cookie
+    const modernCookie = signPayload(legacySession);
+    const parsedModern = parseSessionCookie(modernCookie);
+    expect(parsedModern).not.toBeNull();
+    expect(parsedModern?.userId).toBe('legacy_user_789');
+
+    // Rejects garbage cookie
+    expect(parseSessionCookie('garbage-not-json')).toBeNull();
   });
 
   it('rejects tampered or forged session tokens', () => {
