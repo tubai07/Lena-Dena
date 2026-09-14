@@ -36,7 +36,7 @@ interface SettleUpModalProps {
   members: Member[];
   transfers?: TransferDebt[];
   currentUserId?: string;
-  onSettled: (settlement?: any) => void;
+  onSettled: (settlement?: any, replacedTempId?: string) => void;
   initialPayerId?: string;
   initialReceiverId?: string;
   initialAmountPaisa?: number;
@@ -172,8 +172,9 @@ export function SettleUpModal({
     }
 
     // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
+    const tempId = `temp_st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const optimisticSettlement = {
-      id: `temp_st_${Date.now()}`,
+      id: tempId,
       payerId,
       receiverId,
       amountPaisa,
@@ -209,10 +210,14 @@ export function SettleUpModal({
 
       const data = await res.json();
       if (res.ok && data.settlement) {
-        onSettled(data.settlement);
+        onSettled(data.settlement, tempId);
+      } else {
+        // Rollback on server rejection
+        onSettled(null, tempId);
       }
     } catch (err: any) {
       console.error('Error saving settlement:', err);
+      onSettled(null, tempId);
     } finally {
       setLoading(false);
     }

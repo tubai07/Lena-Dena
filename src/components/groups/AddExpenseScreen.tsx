@@ -58,7 +58,7 @@ interface AddExpenseScreenProps {
   groupId: string;
   groupName?: string;
   members: Member[];
-  onExpenseAdded: (newExpense?: any) => void;
+  onExpenseAdded: (newExpense?: any, replacedTempId?: string) => void;
   defaultPayerId?: string;
   initialExpense?: any | null; // For editing existing expense
 }
@@ -406,7 +406,9 @@ export function AddExpenseScreen({
     const selectedDateObj = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date();
 
     // ⚡ Optimistic expense
-    const tempId = isEditing ? initialExpense.id : `temp_exp_${Date.now()}`;
+    const tempId = isEditing
+      ? initialExpense.id
+      : `temp_exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const optimisticExpense = {
       ...(initialExpense || {}),
       id: tempId,
@@ -436,7 +438,7 @@ export function AddExpenseScreen({
       }),
     };
 
-    onExpenseAdded(optimisticExpense);
+    onExpenseAdded(optimisticExpense, isEditing ? undefined : tempId);
     onClose();
 
     // Background server save
@@ -464,10 +466,18 @@ export function AddExpenseScreen({
 
       const data = await res.json();
       if (res.ok && data.expense) {
-        onExpenseAdded(data.expense);
+        onExpenseAdded(data.expense, tempId);
+      } else {
+        // Rollback on server rejection
+        if (!isEditing) {
+          onExpenseAdded(null, tempId);
+        }
       }
     } catch (err: any) {
       console.error('Error saving expense:', err);
+      if (!isEditing) {
+        onExpenseAdded(null, tempId);
+      }
     } finally {
       setLoading(false);
     }

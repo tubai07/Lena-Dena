@@ -11,6 +11,7 @@ import {
   ReceiptText,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Fuel,
   Wine,
   Scale,
@@ -30,6 +31,7 @@ import {
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
 import { TransactionDetailsModal } from '@/components/groups/TransactionDetailsModal';
+import { MemberDetailsModal, MemberBalanceDetail } from '@/components/groups/MemberDetailsModal';
 import {
   generateUpiUrl,
   calculateMemberNetBalances,
@@ -198,6 +200,7 @@ export default function GroupDetailPage({
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberBalanceDetail | null>(null);
   const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
@@ -234,6 +237,10 @@ export default function GroupDetailPage({
   const [isScrolledDown, setIsScrolledDown] = useState(false);
   const lastScrollY = useRef(0);
 
+  // Tracking in-flight optimistic expenses and settlements so background polling never drops them prematurely
+  const inFlightExpensesRef = useRef<Map<string, { expense: any; timestamp: number }>>(new Map());
+  const inFlightSettlementsRef = useRef<Map<string, { settlement: any; timestamp: number }>>(new Map());
+
   // Tracking deleted items so polling never revives them
   const deletedExpenseIdsRef = useRef<Set<string>>(new Set());
   const deletedSettlementIdsRef = useRef<Set<string>>(new Set());
@@ -251,49 +258,77 @@ export default function GroupDetailPage({
       setGroup((prev) => {
         if (!prev) return data.group;
 
-        // Preserve in-flight optimistic expenses that server hasn't returned yet
-        const serverExpenses = data.group.expenses || [];
-        const pendingExpenses = prev.expenses.filter((e) => {
-          if (deletedExpenseIdsRef.current.has(e.id)) return false;
-          if (e.id.startsWith('temp_')) {
-            const isAccountedFor = serverExpenses.some((se: any) => {
-              const sameDesc = se.description?.trim().toLowerCase() === e.description?.trim().toLowerCase();
-              const sameAmount = se.totalAmountPaisa === e.totalAmountPaisa;
-              return sameDesc && sameAmount;
-            });
-            return !isAccountedFor;
-          }
-          return !serverExpenses.some((se: any) => se.id === e.id);
-        });
-        const mergedExpenses = [...pendingExpenses, ...serverExpenses].filter(
-          (e) => !deletedExpenseIdsRef.current.has(e.id)
+        // Clean up any in-flight optimistic items that are older than 30s
+        const now = Date.now();
+        for (const [k, v] of inFlightExpensesRef.current.entries()) {
+          if (now - v.timestamp > 30000) inFlightExpensesRef.current.delete(k);
+        }
+        for (const [k, v] of inFlightSettlementsRef.current.entries()) {
+          if (now - v.timestamp > 30000) inFlightSettlementsRef.current.delete(k);
+        }
+
+        const serverExpenses = (data.group.expenses || []).filter(
+          (e: any) => !deletedExpenseIdsRef.current.has(e.id)
         );
 
-        // Preserve in-flight optimistic settlements that server hasn't returned yet
-        const serverSettlements = data.group.settlements || [];
-        const pendingSettlements = prev.settlements.filter((s) => {
-          if (deletedSettlementIdsRef.current.has(s.id)) return false;
-          if (s.id.startsWith('temp_')) {
-            const isAccountedFor = serverSettlements.some((ss: any) => {
-              return ss.payerId === s.payerId && ss.receiverId === s.receiverId && ss.amountPaisa === s.amountPaisa;
-            });
-            return !isAccountedFor;
+        // If server returned expenses matching in-flight ones, clear them from in-flight ref
+        for (const se of serverExpenses) {
+          for (const [k, v] of inFlightExpensesRef.current.entries()) {
+            if (se.id === k) {
+              inFlightExpensesRef.current.delete(k);
+            } else if (
+              se.description?.trim().toLowerCase() === v.expense.description?.trim().toLowerCase() &&
+              se.totalAmountPaisa === v.expense.totalAmountPaisa &&
+              Math.abs(new Date(se.date).getTime() - new Date(v.expense.date).getTime()) < 60000
+            ) {
+              inFlightExpensesRef.current.delete(k);
+            }
           }
-          return !serverSettlements.some((ss: any) => ss.id === s.id);
-        });
-        const mergedSettlements = [...pendingSettlements, ...serverSettlements].filter(
-          (s) => !deletedSettlementIdsRef.current.has(s.id)
+        }
+
+        // Merge active in-flight optimistic expenses
+        const inFlightExpensesList = Array.from(inFlightExpensesRef.current.values())
+          .map((v) => v.expense)
+          .filter((e) => !deletedExpenseIdsRef.current.has(e.id) && !serverExpenses.some((se: any) => se.id === e.id));
+
+        const mergedExpenses = [...inFlightExpensesList, ...serverExpenses];
+
+        const serverSettlements = (data.group.settlements || []).filter(
+          (s: any) => !deletedSettlementIdsRef.current.has(s.id)
         );
+
+        // If server returned settlements matching in-flight ones, clear them from in-flight ref
+        for (const ss of serverSettlements) {
+          for (const [k, v] of inFlightSettlementsRef.current.entries()) {
+            if (ss.id === k) {
+              inFlightSettlementsRef.current.delete(k);
+            } else if (
+              ss.payerId === v.settlement.payerId &&
+              ss.receiverId === v.settlement.receiverId &&
+              ss.amountPaisa === v.settlement.amountPaisa &&
+              Math.abs(new Date(ss.date).getTime() - new Date(v.settlement.date).getTime()) < 60000
+            ) {
+              inFlightSettlementsRef.current.delete(k);
+            }
+          }
+        }
+
+        // Merge active in-flight optimistic settlements
+        const inFlightSettlementsList = Array.from(inFlightSettlementsRef.current.values())
+          .map((v) => v.settlement)
+          .filter((s) => !deletedSettlementIdsRef.current.has(s.id) && !serverSettlements.some((ss: any) => ss.id === s.id));
+
+        const mergedSettlements = [...inFlightSettlementsList, ...serverSettlements];
 
         // Filter out locally removed members
-        const mergedMembers = data.group.members.filter(
+        const mergedMembers = (data.group.members || []).filter(
           (m: any) => !deletedMemberIdsRef.current.has(m.id)
         );
 
         const balances = calculateMemberNetBalances(mergedMembers, mergedExpenses, mergedSettlements);
         const simplifiedTransfers = simplifyDebts(balances);
         const directTransfers = calculateDirectPairwiseDebts(mergedMembers, mergedExpenses, mergedSettlements);
-        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
         const updated = {
           ...data.group,
@@ -393,19 +428,26 @@ export default function GroupDetailPage({
   };
 
   // Instant optimistic expense addition or modification
-  const handleExpenseAdded = (newExpense?: any) => {
+  const handleExpenseAdded = (newExpense?: any, replacedTempId?: string) => {
+    if (replacedTempId) {
+      inFlightExpensesRef.current.delete(replacedTempId);
+    }
+
     if (newExpense) {
       deletedExpenseIdsRef.current.delete(newExpense.id);
+
+      if (newExpense.id.startsWith('temp_')) {
+        inFlightExpensesRef.current.set(newExpense.id, {
+          expense: newExpense,
+          timestamp: Date.now(),
+        });
+      }
 
       setGroup((prev) => {
         if (!prev) return null;
         const filtered = prev.expenses.filter((e) => {
           if (e.id === newExpense.id) return false;
-          if (!newExpense.id.startsWith('temp_') && e.id.startsWith('temp_')) {
-            const sameDesc = e.description?.trim().toLowerCase() === newExpense.description?.trim().toLowerCase();
-            const sameAmount = e.totalAmountPaisa === newExpense.totalAmountPaisa;
-            if (sameDesc && sameAmount) return false;
-          }
+          if (replacedTempId && e.id === replacedTempId) return false;
           return true;
         });
         const updatedExpenses = [newExpense, ...filtered].sort((a, b) => {
@@ -414,7 +456,7 @@ export default function GroupDetailPage({
         const balances = calculateMemberNetBalances(prev.members, updatedExpenses, prev.settlements);
         const simplifiedTransfers = simplifyDebts(balances);
         const directTransfers = calculateDirectPairwiseDebts(prev.members, updatedExpenses, prev.settlements);
-        const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+        const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
         const updated = {
           ...prev,
@@ -442,30 +484,78 @@ export default function GroupDetailPage({
 
         return updated;
       });
+    } else if (replacedTempId) {
+      // Revert in-flight temp expense on network failure
+      setGroup((prev) => {
+        if (!prev) return null;
+        const updatedExpenses = prev.expenses.filter((e) => e.id !== replacedTempId);
+        const balances = calculateMemberNetBalances(prev.members, updatedExpenses, prev.settlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, updatedExpenses, prev.settlements);
+        const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
+
+        const updated = {
+          ...prev,
+          expenses: updatedExpenses,
+          totalSpendPaisa,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+        setCachedItem(`group_${id}`, updated);
+        return updated;
+      });
     }
     setEditingExpense(null);
   };
 
   // Instant optimistic settlement addition
-  const handleSettled = (newSettlement?: any) => {
+  const handleSettled = (newSettlement?: any, replacedTempId?: string) => {
+    if (replacedTempId) {
+      inFlightSettlementsRef.current.delete(replacedTempId);
+    }
+
     if (newSettlement) {
       deletedSettlementIdsRef.current.delete(newSettlement.id);
+
+      if (newSettlement.id.startsWith('temp_')) {
+        inFlightSettlementsRef.current.set(newSettlement.id, {
+          settlement: newSettlement,
+          timestamp: Date.now(),
+        });
+      }
 
       setGroup((prev) => {
         if (!prev) return null;
         const filtered = prev.settlements.filter((s) => {
           if (s.id === newSettlement.id) return false;
-          if (!newSettlement.id.startsWith('temp_') && s.id.startsWith('temp_')) {
-            const samePayer = s.payerId === newSettlement.payerId;
-            const sameReceiver = s.receiverId === newSettlement.receiverId;
-            const sameAmount = s.amountPaisa === newSettlement.amountPaisa;
-            if (samePayer && sameReceiver && sameAmount) return false;
-          }
+          if (replacedTempId && s.id === replacedTempId) return false;
           return true;
         });
         const updatedSettlements = [newSettlement, ...filtered].sort((a, b) => {
           return new Date(b.date).getTime() - new Date(a.date).getTime();
         });
+        const balances = calculateMemberNetBalances(prev.members, prev.expenses, updatedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(prev.members, prev.expenses, updatedSettlements);
+
+        const updated = {
+          ...prev,
+          settlements: updatedSettlements,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+        setCachedItem(`group_${id}`, updated);
+        return updated;
+      });
+    } else if (replacedTempId) {
+      // Revert in-flight temp settlement on network failure
+      setGroup((prev) => {
+        if (!prev) return null;
+        const updatedSettlements = prev.settlements.filter((s) => s.id !== replacedTempId);
         const balances = calculateMemberNetBalances(prev.members, prev.expenses, updatedSettlements);
         const simplifiedTransfers = simplifyDebts(balances);
         const directTransfers = calculateDirectPairwiseDebts(prev.members, prev.expenses, updatedSettlements);
@@ -753,11 +843,8 @@ export default function GroupDetailPage({
     group.members.find((m) => m.isOwner) ||
     group.members[0];
   const isCurrentUserAdmin = Boolean(ownerMember?.isOwner || ownerMember?.isAdmin);
-  const userBalance = ownerMember
-    ? group.balances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0
-    : 0;
 
-  // Real-time dynamic member net balances
+  // Real-time dynamic member net balances (single source of truth for all dues)
   const memberBalances = useMemo(() => {
     if (!group?.members) return [];
     return calculateMemberNetBalances(
@@ -766,6 +853,11 @@ export default function GroupDetailPage({
       group.settlements || []
     );
   }, [group?.members, group?.expenses, group?.settlements]);
+
+  const userBalance = useMemo(() => {
+    if (!ownerMember) return 0;
+    return memberBalances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0;
+  }, [ownerMember, memberBalances]);
 
   // Real-time dynamic simplified transfers (Splitwise debt minimization algorithm)
   const dynamicSimplifiedTransfers = useMemo(() => {
@@ -980,10 +1072,10 @@ export default function GroupDetailPage({
   // "3 people need to pay you back $45" or "You are owed $45 overall" (Never outputs 0 people!)
   const peopleOwingMe = displayedTransfers.filter((t) => t.toId === ownerMember?.id);
   const peopleIOwe = displayedTransfers.filter((t) => t.fromId === ownerMember?.id);
-  const membersOwingMe = group.balances.filter(
+  const membersOwingMe = memberBalances.filter(
     (b) => b.memberId !== ownerMember?.id && b.netBalancePaisa < 0
   );
-  const membersIowe = group.balances.filter(
+  const membersIowe = memberBalances.filter(
     (b) => b.memberId !== ownerMember?.id && b.netBalancePaisa > 0
   );
 
@@ -1603,12 +1695,13 @@ export default function GroupDetailPage({
 
             {/* Members List */}
             <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
-              {group.balances.map((b) => (
+              {memberBalances.map((b) => (
                 <div
                   key={b.memberId}
-                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
+                  onClick={() => setSelectedMember(b)}
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50/90 active:bg-slate-100 transition-colors cursor-pointer group"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div
                       className={`w-11 h-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border border-slate-200 ${getAvatarBg(
                         b.name
@@ -1616,9 +1709,9 @@ export default function GroupDetailPage({
                     >
                       {b.name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-slate-900 text-base truncate">
+                        <span className="font-bold text-slate-900 text-base truncate group-hover:text-emerald-700 transition-colors">
                           {b.name}
                         </span>
                         {b.isOwner ? (
@@ -1642,65 +1735,31 @@ export default function GroupDetailPage({
                         Paid: ₹{(b.totalPaidPaisa / 100).toFixed(0)} • Share: ₹
                         {(b.totalOwedPaisa / 100).toFixed(0)}
                       </span>
-
-                      {/* Creator Admin Controls & Safe Deletion */}
-                      {!b.isOwner && (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleAdmin(b.memberId, Boolean(b.isAdmin))}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                              b.isAdmin
-                                ? 'text-slate-600 border-slate-200 hover:bg-slate-100'
-                                : 'text-indigo-700 border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
-                            }`}
-                          >
-                            {b.isAdmin ? 'Revoke Admin' : 'Make Admin'}
-                          </button>
-
-                          {/* Deletion constraint: "The user cannot delete anyone inside the group unless they have settled everything" */}
-                          {Math.abs(b.netBalancePaisa) === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMember(b.memberId)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-all cursor-pointer flex items-center gap-1"
-                              title={`Remove ${b.name} from group`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Remove</span>
-                            </button>
-                          ) : (
-                            <span
-                              className="px-2 py-0.5 rounded-lg text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200"
-                              title="Member cannot be deleted until all dues are settled"
-                            >
-                              Settle ₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(0)} to remove
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0 pl-2">
-                    {b.netBalancePaisa > 0 ? (
-                      <span className="text-base sm:text-lg font-black text-emerald-600 block">
-                        +₹{(b.netBalancePaisa / 100).toFixed(2)}
+                  <div className="flex items-center gap-2 shrink-0 pl-2">
+                    <div className="text-right shrink-0">
+                      {b.netBalancePaisa > 0 ? (
+                        <span className="text-base sm:text-lg font-black text-emerald-600 block">
+                          +₹{(b.netBalancePaisa / 100).toFixed(2)}
+                        </span>
+                      ) : b.netBalancePaisa < 0 ? (
+                        <span className="text-base sm:text-lg font-black text-amber-600 block">
+                          -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-base sm:text-lg font-black text-slate-400 block">₹0</span>
+                      )}
+                      <span className="text-[11px] font-medium text-slate-500 block mt-0.5">
+                        {b.netBalancePaisa > 0
+                          ? 'Gets back'
+                          : b.netBalancePaisa < 0
+                          ? 'Owes'
+                          : 'Settled'}
                       </span>
-                    ) : b.netBalancePaisa < 0 ? (
-                      <span className="text-base sm:text-lg font-black text-amber-600 block">
-                        -₹{(Math.abs(b.netBalancePaisa) / 100).toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-base sm:text-lg font-black text-slate-400 block">₹0</span>
-                    )}
-                    <span className="text-[11px] font-medium text-slate-500 block mt-0.5">
-                      {b.netBalancePaisa > 0
-                        ? 'Gets back'
-                        : b.netBalancePaisa < 0
-                        ? 'Owes'
-                        : 'Settled'}
-                    </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </div>
                 </div>
               ))}
@@ -1865,6 +1924,23 @@ export default function GroupDetailPage({
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}
         initialAmountPaisa={settlePreload.amountPaisa}
+      />
+
+      <MemberDetailsModal
+        isOpen={Boolean(selectedMember)}
+        onClose={() => setSelectedMember(null)}
+        member={selectedMember ? memberBalances.find((b) => b.memberId === selectedMember.memberId) || selectedMember : null}
+        groupName={group.name}
+        transfers={displayedTransfers}
+        currentMemberId={ownerMember?.id}
+        isCurrentUserAdmin={isCurrentUserAdmin}
+        isCurrentUserCreator={Boolean(ownerMember?.isOwner)}
+        onToggleAdmin={handleToggleAdmin}
+        onRemoveMember={handleRemoveMember}
+        onSettleUp={(preload) => {
+          setSettlePreload(preload);
+          setIsSettleOpen(true);
+        }}
       />
     </div>
   );
