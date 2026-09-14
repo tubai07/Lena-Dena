@@ -421,6 +421,20 @@ export default function GroupDetailPage({
           activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
         };
         setCachedItem(`group_${id}`, updated);
+
+        try {
+          const allGroups = getCachedItem<any[]>('all_groups');
+          if (allGroups && Array.isArray(allGroups)) {
+            const idx = allGroups.findIndex((g: any) => g.id === id);
+            if (idx !== -1) {
+              allGroups[idx].totalSpendPaisa = totalSpendPaisa;
+              setCachedItem('all_groups', allGroups);
+            }
+          }
+        } catch {
+          // ignore cache write error
+        }
+
         return updated;
       });
     }
@@ -472,25 +486,44 @@ export default function GroupDetailPage({
       return;
     }
     deletedExpenseIdsRef.current.add(expenseId);
-    if (group) {
-      const updatedExpenses = group.expenses.filter((e) => e.id !== expenseId);
-      const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
+
+    setGroup((prev) => {
+      if (!prev) return null;
+      const updatedExpenses = (prev.expenses || []).filter(
+        (e) => e.id !== expenseId && (e as any).raw?.id !== expenseId
+      );
+      const balances = calculateMemberNetBalances(prev.members, updatedExpenses, prev.settlements);
       const simplifiedTransfers = simplifyDebts(balances);
-      const directTransfers = calculateDirectPairwiseDebts(group.members, updatedExpenses, group.settlements);
-      const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+      const directTransfers = calculateDirectPairwiseDebts(prev.members, updatedExpenses, prev.settlements);
+      const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
       const updated = {
-        ...group,
+        ...prev,
         expenses: updatedExpenses,
         totalSpendPaisa,
         balances,
         simplifiedTransfers,
         directTransfers,
-        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+        activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
       };
-      setGroup(updated);
       setCachedItem(`group_${id}`, updated);
-    }
+
+      try {
+        const allGroups = getCachedItem<any[]>('all_groups');
+        if (allGroups && Array.isArray(allGroups)) {
+          const idx = allGroups.findIndex((g: any) => g.id === id);
+          if (idx !== -1) {
+            allGroups[idx].totalSpendPaisa = totalSpendPaisa;
+            setCachedItem('all_groups', allGroups);
+          }
+        }
+      } catch {
+        // ignore cache write error
+      }
+
+      return updated;
+    });
+
     try {
       await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: 'DELETE' });
     } catch (e) {
@@ -507,23 +540,28 @@ export default function GroupDetailPage({
       return;
     }
     deletedSettlementIdsRef.current.add(settlementId);
-    if (group) {
-      const updatedSettlements = group.settlements.filter((s) => s.id !== settlementId);
-      const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
+
+    setGroup((prev) => {
+      if (!prev) return null;
+      const updatedSettlements = (prev.settlements || []).filter(
+        (s) => s.id !== settlementId && (s as any).raw?.id !== settlementId
+      );
+      const balances = calculateMemberNetBalances(prev.members, prev.expenses, updatedSettlements);
       const simplifiedTransfers = simplifyDebts(balances);
-      const directTransfers = calculateDirectPairwiseDebts(group.members, group.expenses, updatedSettlements);
+      const directTransfers = calculateDirectPairwiseDebts(prev.members, prev.expenses, updatedSettlements);
 
       const updated = {
-        ...group,
+        ...prev,
         settlements: updatedSettlements,
         balances,
         simplifiedTransfers,
         directTransfers,
-        activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+        activeTransfers: prev.simplifyDebts ? simplifiedTransfers : directTransfers,
       };
-      setGroup(updated);
       setCachedItem(`group_${id}`, updated);
-    }
+      return updated;
+    });
+
     try {
       await fetch(`/api/groups/${id}/settlements/${settlementId}`, { method: 'DELETE' });
     } catch (e) {
@@ -893,6 +931,18 @@ export default function GroupDetailPage({
     return groups;
   }, [activityItems]);
 
+  // Derived total group spend - always in 100% real-time lockstep with active expenses
+  const totalGroupSpendPaisa = useMemo(() => {
+    if (!group) return 0;
+    if (Array.isArray(group.expenses) && group.expenses.length > 0) {
+      return group.expenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
+    }
+    if (Array.isArray(group.expenses) && group.expenses.length === 0) {
+      return 0;
+    }
+    return Number(group.totalSpendPaisa) || 0;
+  }, [group?.expenses, group?.totalSpendPaisa]);
+
   // Overall standing calculations:
   // "3 people need to pay you back $45" or "You are owed $45 overall" (Never outputs 0 people!)
   const peopleOwingMe = displayedTransfers.filter((t) => t.toId === ownerMember?.id);
@@ -1081,7 +1131,7 @@ export default function GroupDetailPage({
               Group spend
             </span>
             <span className="text-base sm:text-xl font-black text-white tracking-tight block">
-              ₹{((group.totalSpendPaisa || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{((totalGroupSpendPaisa || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
         </div>
