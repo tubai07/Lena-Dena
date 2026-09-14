@@ -863,42 +863,6 @@ export default function GroupDetailPage() {
     }
   };
 
-  if (!isMounted || (loading && !group)) {
-    return (
-      <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen">
-        <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
-        <div className="h-32 bg-slate-200 rounded-3xl"></div>
-        <div className="h-44 bg-slate-200 rounded-3xl"></div>
-      </div>
-    );
-  }
-
-  if (!group) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-          <Users className="w-7 h-7" />
-        </div>
-        <h2 className="text-xl font-extrabold text-slate-800">Group Not Found</h2>
-        <p className="text-xs text-slate-500 max-w-xs">{fetchError || 'Unable to load this group. Please check the link or try again.'}</p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => fetchGroup()}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
-          >
-            Retry
-          </button>
-          <Link
-            href="/groups"
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold"
-          >
-            Back to Groups
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   const ownerMember =
     (claimedMemberId ? (group?.members || []).find((m) => m.id === claimedMemberId) : null) ||
     (group?.members || []).find((m) => m.isOwner) ||
@@ -936,7 +900,7 @@ export default function GroupDetailPage() {
     );
   }, [group?.members, group?.expenses, group?.settlements]);
 
-  const isSimplifyEnabled = Boolean(group.simplifyDebts ?? true);
+  const isSimplifyEnabled = Boolean(group?.simplifyDebts ?? true);
 
   const displayedTransfers = useMemo(() => {
     const list = isSimplifyEnabled ? dynamicSimplifiedTransfers : dynamicDirectTransfers;
@@ -1263,6 +1227,42 @@ export default function GroupDetailPage() {
 
   const displayedSubBalances = subBalances.slice(0, 2);
   const remainingCount = Math.max(0, subBalances.length - displayedSubBalances.length);
+
+  if (!isMounted || (loading && !group)) {
+    return (
+      <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen">
+        <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
+        <div className="h-32 bg-slate-200 rounded-3xl"></div>
+        <div className="h-44 bg-slate-200 rounded-3xl"></div>
+      </div>
+    );
+  }
+
+  if (!group) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+          <Users className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-extrabold text-slate-800">Group Not Found</h2>
+        <p className="text-xs text-slate-500 max-w-xs">{fetchError || 'Unable to load this group. Please check the link or try again.'}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchGroup()}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+          >
+            Retry
+          </button>
+          <Link
+            href="/groups"
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            Back to Groups
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-36 relative">
