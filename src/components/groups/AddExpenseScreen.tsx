@@ -438,7 +438,7 @@ export function AddExpenseScreen({
       }),
     };
 
-    onExpenseAdded(optimisticExpense, isEditing ? undefined : tempId);
+    onExpenseAdded(optimisticExpense, isEditing ? initialExpense.id : tempId);
     onClose();
 
     // Background server save
@@ -461,12 +461,13 @@ export function AddExpenseScreen({
           notes: notes.trim() || undefined,
           payers: finalPayers,
           splits: finalSplits,
+          memberId: defaultPayerId,
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.expense) {
-        onExpenseAdded(data.expense, tempId);
+        onExpenseAdded(data.expense, isEditing ? initialExpense.id : tempId);
       } else {
         // Rollback on server rejection
         if (!isEditing) {

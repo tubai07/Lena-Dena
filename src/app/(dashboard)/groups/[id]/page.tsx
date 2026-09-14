@@ -199,8 +199,11 @@ export default function GroupDetailPage({
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'settlements'>('all');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any | null>(null);
+  const [editingSettlement, setEditingSettlement] = useState<any | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
   const [selectedMember, setSelectedMember] = useState<MemberBalanceDetail | null>(null);
+  const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
@@ -572,6 +575,7 @@ export default function GroupDetailPage({
         return updated;
       });
     }
+    setEditingSettlement(null);
   };
 
   // Instant 0ms optimistic expense deletion
@@ -663,6 +667,57 @@ export default function GroupDetailPage({
       console.error(e);
       deletedSettlementIdsRef.current.delete(settlementId);
       fetchGroup(true);
+    }
+  };
+
+  // Group deletion with full cleanup and confirmation
+  const handleDeleteGroup = async () => {
+    if (!group) return;
+    if (!isCurrentUserAdmin) {
+      alert('Only group admins can delete this group.');
+      return;
+    }
+
+    try {
+      setIsDeletingGroup(true);
+      const res = await fetch(`/api/groups/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId: ownerMember?.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete group');
+      }
+
+      // Clear local caches
+      try {
+        localStorage.removeItem(`lena_dena_group_${id}`);
+        localStorage.removeItem(`lena_dena_member_${group.joinCode.toUpperCase()}`);
+
+        const joinedCodes = JSON.parse(localStorage.getItem('lena_dena_joined_groups') || '[]');
+        const updatedJoined = joinedCodes.filter(
+          (c: string) => c.toUpperCase() !== group.joinCode.toUpperCase()
+        );
+        localStorage.setItem('lena_dena_joined_groups', JSON.stringify(updatedJoined));
+
+        const allGroups = getCachedItem<any[]>('all_groups');
+        if (allGroups && Array.isArray(allGroups)) {
+          const filtered = allGroups.filter((g) => g.id !== id);
+          setCachedItem('all_groups', filtered);
+        }
+      } catch {
+        // ignore
+      }
+
+      router.push('/groups');
+    } catch (e: any) {
+      console.error('Error deleting group:', e);
+      alert(e.message || 'Error deleting group');
+    } finally {
+      setIsDeletingGroup(false);
+      setShowDeleteGroupModal(false);
     }
   };
 
@@ -1207,7 +1262,7 @@ export default function GroupDetailPage({
           <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
         </div>
 
-        {/* Top Navigation Row: Back Button on left */}
+        {/* Top Navigation Row: Back Button on left & Delete Group Button on right if Admin */}
         <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/groups"
@@ -1216,6 +1271,19 @@ export default function GroupDetailPage({
           >
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
           </Link>
+
+          {isCurrentUserAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteGroupModal(true)}
+              className="px-3.5 py-2 rounded-full bg-black/25 hover:bg-rose-600/90 border border-white/20 hover:border-rose-500/50 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer tap-effect"
+              title="Delete this group"
+              aria-label="Delete this group"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+              <span>Delete Group</span>
+            </button>
+          )}
         </div>
 
         {/* Large Title, People Pill & Total Group Spend on right */}
@@ -1875,9 +1943,12 @@ export default function GroupDetailPage({
           }
           setSelectedTransaction(null);
           if (tx.type === 'EXPENSE') {
+            setEditingSettlement(null);
             setEditingExpense(tx.raw);
             setIsAddExpenseOpen(true);
           } else {
+            setEditingExpense(null);
+            setEditingSettlement(tx.raw);
             setSettlePreload({
               payerId: tx.raw.payerId,
               receiverId: tx.raw.receiverId,
@@ -1915,7 +1986,10 @@ export default function GroupDetailPage({
 
       <SettleUpModal
         isOpen={isSettleOpen}
-        onClose={() => setIsSettleOpen(false)}
+        onClose={() => {
+          setIsSettleOpen(false);
+          setEditingSettlement(null);
+        }}
         groupId={group.id}
         members={group.members}
         transfers={displayedTransfers}
@@ -1924,6 +1998,7 @@ export default function GroupDetailPage({
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}
         initialAmountPaisa={settlePreload.amountPaisa}
+        initialSettlement={editingSettlement}
       />
 
       <MemberDetailsModal
@@ -1942,6 +2017,46 @@ export default function GroupDetailPage({
           setIsSettleOpen(true);
         }}
       />
+
+      {/* Confirmation Modal: Delete Group Entirely */}
+      {showDeleteGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 select-none">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <AlertCircle className="w-6 h-6 stroke-[2.5]" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900">
+                Delete "{group.name}"?
+              </h3>
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                This will permanently delete this group along with all its expenses, splits, settlements, and member records. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingGroup}
+                onClick={() => setShowDeleteGroupModal(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingGroup}
+                onClick={handleDeleteGroup}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingGroup ? 'Deleting...' : 'Delete Group'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

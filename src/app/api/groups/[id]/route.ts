@@ -135,24 +135,45 @@ export async function DELETE(
   try {
     const { id } = await params;
     const session = await getSession();
-    if (!session?.businessId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const existing = await db.group.findFirst({
-      where: { id, businessId: session.businessId },
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // ignore empty body
+    }
+    const { memberId } = body || {};
+
+    const group = await db.group.findUnique({
+      where: { id },
+      include: { members: true },
     });
 
-    if (!existing) {
-      return NextResponse.json({ error: 'Group not found or unauthorized' }, { status: 404 });
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Check admin authorization:
+    // 1. Business creator/owner of the group
+    // 2. OR group member with isAdmin === true or isOwner === true
+    const isBusinessOwner = session?.businessId && group.businessId === session.businessId;
+    const requestingMember = memberId
+      ? group.members.find((m) => m.id === memberId && m.isActive !== false)
+      : null;
+    const isMemberAdmin = Boolean(requestingMember?.isAdmin || requestingMember?.isOwner);
+
+    if (!isBusinessOwner && !isMemberAdmin) {
+      return NextResponse.json(
+        { error: 'Only group admins can delete the group' },
+        { status: 403 }
+      );
     }
 
     await db.group.delete({
       where: { id },
     });
 
-    invalidateServerDetail(id);
-    invalidateServerSummary(session.businessId);
+    invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

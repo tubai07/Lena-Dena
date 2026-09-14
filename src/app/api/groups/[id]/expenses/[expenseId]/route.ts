@@ -21,6 +21,7 @@ export async function PUT(
       date,
       payers,
       splits,
+      memberId,
     } = body;
 
     if (!description || typeof description !== 'string' || !description.trim()) {
@@ -51,10 +52,10 @@ export async function PUT(
 
     // Verify caller is an admin or group owner
     const callerIsOwner = session?.businessId === group.businessId;
-    const callerMember = group.members.find(
-      (m) => session?.phone && m.phone === session.phone
-    );
-    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+    const requestingMember = memberId
+      ? group.members.find((m) => m.id === memberId && m.isActive !== false)
+      : group.members.find((m) => session?.phone && m.phone === session.phone);
+    const callerIsAdmin = callerIsOwner || Boolean(requestingMember?.isAdmin || requestingMember?.isOwner);
 
     if (!callerIsAdmin) {
       return NextResponse.json({ error: 'Only group admins can edit expenses' }, { status: 403 });
@@ -206,6 +207,14 @@ export async function DELETE(
     const { id, expenseId } = await params;
     const session = await getSession();
 
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // ignore
+    }
+    const { memberId } = body || {};
+
     const group = await db.group.findUnique({
       where: { id },
       include: { members: true },
@@ -217,10 +226,10 @@ export async function DELETE(
 
     // Verify caller is an admin or group owner
     const callerIsOwner = session?.businessId === group.businessId;
-    const callerMember = group.members.find(
-      (m) => session?.phone && m.phone === session.phone
-    );
-    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+    const requestingMember = memberId
+      ? group.members.find((m) => m.id === memberId && m.isActive !== false)
+      : group.members.find((m) => session?.phone && m.phone === session.phone);
+    const callerIsAdmin = callerIsOwner || Boolean(requestingMember?.isAdmin || requestingMember?.isOwner);
 
     if (!callerIsAdmin) {
       return NextResponse.json({ error: 'Only group admins can delete expenses' }, { status: 403 });

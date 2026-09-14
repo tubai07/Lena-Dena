@@ -40,6 +40,7 @@ interface SettleUpModalProps {
   initialPayerId?: string;
   initialReceiverId?: string;
   initialAmountPaisa?: number;
+  initialSettlement?: any | null;
 }
 
 const getAvatarBg = (name: string) => {
@@ -61,7 +62,9 @@ export function SettleUpModal({
   initialPayerId,
   initialReceiverId,
   initialAmountPaisa,
+  initialSettlement = null,
 }: SettleUpModalProps) {
+  const isEditing = Boolean(initialSettlement?.id);
   // Step 1: Balance Selection ("Which balance do you want to settle?")
   // Step 2: Member Selection ("Who is paying?")
   // Step 3: Recipient Selection ("Who are they paying?")
@@ -100,7 +103,14 @@ export function SettleUpModal({
       setNotes('');
       setIsEditingAmount(false);
 
-      if (initialPayerId && initialReceiverId && initialAmountPaisa) {
+      if (initialSettlement) {
+        setPayerId(initialSettlement.payerId || initialSettlement.payer?.id || '');
+        setReceiverId(initialSettlement.receiverId || initialSettlement.receiver?.id || '');
+        setAmountRupees(((initialSettlement.amountPaisa || 0) / 100).toFixed(2));
+        setPaymentMethod(initialSettlement.paymentMethod || 'UPI');
+        setNotes(initialSettlement.notes || '');
+        setStep(4);
+      } else if (initialPayerId && initialReceiverId && initialAmountPaisa) {
         setPayerId(initialPayerId);
         setReceiverId(initialReceiverId);
         setAmountRupees((initialAmountPaisa / 100).toFixed(2));
@@ -112,7 +122,7 @@ export function SettleUpModal({
         setAmountRupees('');
       }
     }
-  }, [isOpen, initialPayerId, initialReceiverId, initialAmountPaisa]);
+  }, [isOpen, initialPayerId, initialReceiverId, initialAmountPaisa, initialSettlement]);
 
   if (!isOpen) return null;
 
@@ -172,15 +182,18 @@ export function SettleUpModal({
     }
 
     // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
-    const tempId = `temp_st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tempId = isEditing
+      ? initialSettlement.id
+      : `temp_st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const optimisticSettlement = {
+      ...(initialSettlement || {}),
       id: tempId,
       payerId,
       receiverId,
       amountPaisa,
       paymentMethod,
       notes: notes.trim() || undefined,
-      date: new Date().toISOString(),
+      date: isEditing && initialSettlement.date ? initialSettlement.date : new Date().toISOString(),
       payer: { id: payer?.id || payerId, name: payer?.name || 'Payer' },
       receiver: {
         id: receiver?.id || receiverId,
@@ -190,14 +203,19 @@ export function SettleUpModal({
       },
     };
 
-    onSettled(optimisticSettlement);
+    onSettled(optimisticSettlement, isEditing ? initialSettlement.id : tempId);
     onClose();
 
     // Background server save
     try {
       setLoading(true);
-      const res = await fetch(`/api/groups/${groupId}/settlements`, {
-        method: 'POST',
+      const endpoint = isEditing
+        ? `/api/groups/${groupId}/settlements/${initialSettlement.id}`
+        : `/api/groups/${groupId}/settlements`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payerId,
@@ -205,19 +223,24 @@ export function SettleUpModal({
           amountPaisa,
           paymentMethod,
           notes: notes.trim() || undefined,
+          memberId: currentUserId,
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.settlement) {
-        onSettled(data.settlement, tempId);
+        onSettled(data.settlement, isEditing ? initialSettlement.id : tempId);
       } else {
         // Rollback on server rejection
-        onSettled(null, tempId);
+        if (!isEditing) {
+          onSettled(null, tempId);
+        }
       }
     } catch (err: any) {
       console.error('Error saving settlement:', err);
-      onSettled(null, tempId);
+      if (!isEditing) {
+        onSettled(null, tempId);
+      }
     } finally {
       setLoading(false);
     }
