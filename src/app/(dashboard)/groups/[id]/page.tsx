@@ -142,12 +142,26 @@ interface GroupDetail {
 
 export default function GroupDetailPage() {
   const urlParams = useParams();
-  const id = (urlParams?.id as string) || '';
+  const paramId = (urlParams?.id as string) || '';
+  const [id, setId] = useState(paramId);
+
+  useEffect(() => {
+    if (paramId) {
+      setId(paramId);
+    } else if (typeof window !== 'undefined') {
+      const parts = window.location.pathname.split('/groups/');
+      if (parts[1]) {
+        setId(decodeURIComponent(parts[1].split('/')[0].split('?')[0]));
+      }
+    }
+  }, [paramId]);
+
   const router = useRouter();
 
   const [isMounted, setIsMounted] = useState(false);
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   const [activeTab, setActiveTab] = useState<'activity' | 'balances' | 'members' | 'settings'>('activity');
   const [activitySearch, setActivitySearch] = useState('');
@@ -206,13 +220,21 @@ export default function GroupDetailPage() {
   const deletedMemberIdsRef = useRef<Set<string>>(new Set());
 
   const fetchGroup = async (isBackground = false) => {
+    const targetId = id || (typeof window !== 'undefined' ? window.location.pathname.split('/groups/')[1]?.split('/')[0]?.split('?')[0] : '');
+    if (!targetId) return;
+
     try {
       if (!isBackground && !group) setLoading(true);
-      const res = await fetch(`/api/groups/${id}?t=${Date.now()}`, {
+      const res = await fetch(`/api/groups/${targetId}?t=${Date.now()}`, {
         cache: 'no-store',
       });
-      if (!res.ok) throw new Error('Group not found');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Group not found');
+      }
       const data = await res.json();
+      if (!data?.group) throw new Error('Invalid group data received');
+      setFetchError('');
 
       setGroup((prev) => {
         if (!prev) return data.group;
@@ -325,9 +347,9 @@ export default function GroupDetailPage() {
 
         return updated;
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      if (!group) router.push('/groups');
+      setFetchError(e.message || 'Failed to load group');
     } finally {
       setLoading(false);
     }
@@ -335,15 +357,17 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     setIsMounted(true);
+    const targetId = id || (typeof window !== 'undefined' ? window.location.pathname.split('/groups/')[1]?.split('/')[0]?.split('?')[0] : '');
+    if (!targetId) return;
 
     // Instant hydrate from local cache on client mount without causing SSR hydration mismatch
-    const cachedFull = getCachedItem<GroupDetail>(`group_${id}`);
+    const cachedFull = getCachedItem<GroupDetail>(`group_${targetId}`);
     if (cachedFull) {
       setGroup(cachedFull);
       setLoading(false);
     } else {
       const allGroups = getCachedItem<any[]>('all_groups');
-      const summary = allGroups?.find((g: any) => g.id === id);
+      const summary = allGroups?.find((g: any) => g.id === targetId || g.joinCode?.toUpperCase() === targetId.toUpperCase());
       if (summary) {
         setGroup({
           id: summary.id,
@@ -1055,7 +1079,31 @@ export default function GroupDetailPage() {
     );
   }
 
-  if (!group) return null;
+  if (!group) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+          <Users className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-extrabold text-slate-800">Group Not Found</h2>
+        <p className="text-xs text-slate-500 max-w-xs">{fetchError || 'Unable to load this group. Please check the link or try again.'}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchGroup()}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+          >
+            Retry
+          </button>
+          <Link
+            href="/groups"
+            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold"
+          >
+            Back to Groups
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const ownerMember =
     (claimedMemberId ? group.members.find((m) => m.id === claimedMemberId) : null) ||

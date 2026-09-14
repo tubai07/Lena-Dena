@@ -96,8 +96,21 @@ const getAvatarBg = (name?: string) => {
 
 export default function JoinGroupDetailPage() {
   const urlParams = useParams();
-  const rawCode = (urlParams?.code as string) || '';
-  const upperCode = rawCode.toUpperCase().trim();
+  const paramCode = (urlParams?.code as string) || '';
+  const [code, setCode] = useState(paramCode);
+
+  useEffect(() => {
+    if (paramCode) {
+      setCode(paramCode);
+    } else if (typeof window !== 'undefined') {
+      const parts = window.location.pathname.split('/join/');
+      if (parts[1]) {
+        setCode(decodeURIComponent(parts[1].split('/')[0].split('?')[0]));
+      }
+    }
+  }, [paramCode]);
+
+  const upperCode = (code || '').toUpperCase().trim();
 
   const [isMounted, setIsMounted] = useState(false);
   const [group, setGroup] = useState<GroupData | null>(null);

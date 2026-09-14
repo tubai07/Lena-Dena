@@ -20,10 +20,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const cleanId = id?.trim() || '';
+    if (!cleanId) {
+      return NextResponse.json({ error: 'Group ID is required' }, { status: 400 });
+    }
     const session = await getSession();
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: {
         members: {
           orderBy: [{ isOwner: 'desc' }, { createdAt: 'asc' }],
@@ -106,13 +115,20 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const cleanId = id?.trim() || '';
     const session = await getSession();
     if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const existing = await db.group.findFirst({
-      where: { id, businessId: session.businessId },
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+        businessId: session.businessId,
+      },
     });
 
     if (!existing) {
@@ -128,11 +144,11 @@ export async function PUT(
     if (typeof simplifyDebts === 'boolean') data.simplifyDebts = simplifyDebts;
 
     const updated = await db.group.update({
-      where: { id },
+      where: { id: existing.id },
       data,
     });
 
-    invalidateAllGroupServerCaches(id, session.businessId);
+    invalidateAllGroupServerCaches(existing.id, session.businessId);
 
     return NextResponse.json({ group: updated });
   } catch (err: any) {
@@ -147,6 +163,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const cleanId = id?.trim() || '';
     const session = await getSession();
 
     let body: any = {};
@@ -157,8 +174,13 @@ export async function DELETE(
     }
     const { memberId } = body || {};
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: { members: true },
     });
 
@@ -183,10 +205,10 @@ export async function DELETE(
     }
 
     await db.group.delete({
-      where: { id },
+      where: { id: group.id },
     });
 
-    invalidateAllGroupServerCaches(id, group.businessId);
+    invalidateAllGroupServerCaches(group.id, group.businessId);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
