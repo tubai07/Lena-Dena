@@ -56,35 +56,42 @@ export async function GET(
       return NextResponse.json({ error: 'Group not found with this code' }, { status: 404 });
     }
 
-    const approvedMembers = group.members.filter((m) => m.status === 'APPROVED' && m.isActive !== false);
-    const pendingMembers = group.members.filter((m) => m.status === 'PENDING');
+    const members = group.members || [];
+    const expenses = group.expenses || [];
+    const settlements = group.settlements || [];
 
-    const balances = calculateMemberNetBalances(approvedMembers, group.expenses, group.settlements);
+    const approvedMembers = members.filter((m) => (m.status === 'APPROVED' || !m.status) && m.isActive !== false);
+    const pendingMembers = members.filter((m) => m.status === 'PENDING');
+
+    const balances = calculateMemberNetBalances(approvedMembers, expenses, settlements);
     const simplifiedTransfers = simplifyDebts(balances);
     const directTransfers = calculateDirectPairwiseDebts(
       approvedMembers,
-      group.expenses,
-      group.settlements
+      expenses,
+      settlements
     );
-    const totalSpendPaisa = group.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
+    const totalSpendPaisa = expenses.reduce((acc, e) => acc + (Number(e.totalAmountPaisa) || 0), 0);
+    const isSimplify = typeof group.simplifyDebts === 'boolean' ? group.simplifyDebts : true;
 
     return NextResponse.json(
       {
         group: {
           id: group.id,
           name: group.name,
-          category: group.category,
-          currencySymbol: group.currencySymbol,
+          category: group.category || 'Trip',
+          currencySymbol: group.currencySymbol || '₹',
           joinCode: group.joinCode,
-          simplifyDebts: group.simplifyDebts,
+          simplifyDebts: isSimplify,
           totalSpendPaisa,
           members: approvedMembers,
           pendingMembers,
-          allMembers: group.members,
-          balances,
-          activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
-          expenses: group.expenses,
-          settlements: group.settlements,
+          allMembers: members,
+          balances: balances || [],
+          simplifiedTransfers: simplifiedTransfers || [],
+          directTransfers: directTransfers || [],
+          activeTransfers: (isSimplify ? simplifiedTransfers : directTransfers) || [],
+          expenses,
+          settlements,
         },
       },
       {

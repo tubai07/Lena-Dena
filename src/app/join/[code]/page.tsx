@@ -95,10 +95,11 @@ const getAvatarBg = (name: string) => {
 export default function JoinGroupDetailPage({
   params,
 }: {
-  params: Promise<{ code: string }>;
+  params: Promise<{ code: string }> | { code: string };
 }) {
-  const { code } = use(params);
-  const upperCode = code.toUpperCase();
+  const resolvedParams = typeof (params as any)?.then === 'function' ? use(params as Promise<{ code: string }>) : (params as { code: string });
+  const code = resolvedParams?.code || '';
+  const upperCode = (code || '').toUpperCase().trim();
 
   const [group, setGroup] = useState<GroupData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,40 +122,60 @@ export default function JoinGroupDetailPage({
   const storageKey = `lena_dena_member_${upperCode}`;
 
   const fetchGroup = async (isBackground = false) => {
+    if (!upperCode) return;
     try {
       if (!isBackground && !group) setLoading(true);
       const res = await fetch(`/api/join/${upperCode}?t=${Date.now()}`, {
         cache: 'no-store',
       });
-      if (!res.ok) throw new Error('Group not found');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Group not found');
+      }
       const data = await res.json();
+      if (!data?.group) throw new Error('Invalid group data received');
       
       setGroup((prev) => {
-        if (!prev) return data.group;
-        const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
-        const pendingOptimisticExpenses = prev.expenses.filter(
+        const incomingMembers = data.group.members || [];
+        const incomingExpenses = data.group.expenses || [];
+        const incomingSettlements = data.group.settlements || [];
+
+        if (!prev) {
+          return {
+            ...data.group,
+            members: incomingMembers,
+            expenses: incomingExpenses,
+            settlements: incomingSettlements,
+            balances: data.group.balances || calculateMemberNetBalances(incomingMembers, incomingExpenses, incomingSettlements),
+            activeTransfers: data.group.activeTransfers || simplifyDebts(data.group.balances || []),
+          };
+        }
+
+        const serverExpIds = new Set(incomingExpenses.map((e: any) => e.id));
+        const pendingOptimisticExpenses = (prev.expenses || []).filter(
           (e) => e.id.startsWith('temp_exp_') && !serverExpIds.has(e.id)
         );
-        const mergedExpenses = [...pendingOptimisticExpenses, ...data.group.expenses];
+        const mergedExpenses = [...pendingOptimisticExpenses, ...incomingExpenses];
 
-        const serverStIds = new Set(data.group.settlements.map((s: any) => s.id));
-        const pendingOptimisticSettlements = prev.settlements.filter(
+        const serverStIds = new Set(incomingSettlements.map((s: any) => s.id));
+        const pendingOptimisticSettlements = (prev.settlements || []).filter(
           (s) => s.id.startsWith('temp_st_') && !serverStIds.has(s.id)
         );
-        const mergedSettlements = [...pendingOptimisticSettlements, ...data.group.settlements];
+        const mergedSettlements = [...pendingOptimisticSettlements, ...incomingSettlements];
 
-        const balances = calculateMemberNetBalances(data.group.members, mergedExpenses, mergedSettlements);
+        const balances = calculateMemberNetBalances(incomingMembers, mergedExpenses, mergedSettlements);
         const simplifiedTransfers = simplifyDebts(balances);
-        const directTransfers = calculateDirectPairwiseDebts(data.group.members, mergedExpenses, mergedSettlements);
-        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+        const directTransfers = calculateDirectPairwiseDebts(incomingMembers, mergedExpenses, mergedSettlements);
+        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
         return {
           ...data.group,
+          members: incomingMembers,
           expenses: mergedExpenses,
           settlements: mergedSettlements,
           totalSpendPaisa,
-          balances,
-          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+          balances: balances || [],
+          activeTransfers: (data.group.simplifyDebts ?? true) ? simplifiedTransfers : directTransfers,
         };
       });
     } catch (e: any) {
@@ -210,11 +231,12 @@ export default function JoinGroupDetailPage({
     }
   };
 
-  const handleClaimExisting = (member: Member) => {
+  const handleClaimExisting = async (member: Member) => {
     const ident = { id: member.id, name: member.name };
     setClaimedMember(ident);
     localStorage.setItem(storageKey, JSON.stringify(ident));
     recordJoinedCode();
+    await fetchGroup(true);
   };
 
   const handleClaimNew = async (e: React.FormEvent) => {
@@ -235,7 +257,7 @@ export default function JoinGroupDetailPage({
       setClaimedMember(ident);
       localStorage.setItem(storageKey, JSON.stringify(ident));
       recordJoinedCode();
-      fetchGroup();
+      await fetchGroup(true);
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -274,14 +296,52 @@ export default function JoinGroupDetailPage({
   // Find active member record for claimed identity
   const currentMemberRecord = useMemo(() => {
     if (!claimedMember || !group) return null;
-    const all = (group as any).allMembers || (group as any).pendingMembers?.concat(group.members) || group.members || [];
+    const all = (group as any).allMembers || (group as any).pendingMembers?.concat(group.members || []) || group.members || [];
     return all.find((m: any) => m.id === claimedMember.id);
   }, [claimedMember, group]);
 
   const isPendingApproval = currentMemberRecord?.status === 'PENDING';
+  const isRejected = currentMemberRecord?.status === 'REJECTED';
+  const hasValidClaim = Boolean(claimedMember && currentMemberRecord && !isRejected);
 
-  // Identity selection screen if friend hasn't claimed their name yet
-  if (!claimedMember) {
+  // Rejected View: User was rejected by admin
+  if (isRejected) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 select-none">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6 text-center animate-in fade-in zoom-in-95">
+          <div className="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 border border-rose-200/80 flex items-center justify-center mx-auto shadow-xs">
+            <X className="w-8 h-8 stroke-[2.2]" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
+              Code: {group.joinCode}
+            </span>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Request Declined</h1>
+            <p className="text-sm font-semibold text-slate-600">
+              Your request to join <span className="font-bold text-slate-900">{group.name}</span> was not approved by the group admin.
+            </p>
+            <p className="text-xs text-slate-400 font-medium">
+              You can contact the group admin or try joining under another name.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleSwitchIdentity}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-2xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Try with another name or code
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Identity selection screen if friend hasn't claimed a valid name yet
+  if (!hasValidClaim) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6">
@@ -312,7 +372,7 @@ export default function JoinGroupDetailPage({
               Select Your Name
             </label>
             <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
-              {group.members.map((m) => (
+              {(group.members || []).map((m) => (
                 <button
                   key={m.id}
                   onClick={() => handleClaimExisting(m)}
@@ -377,7 +437,7 @@ export default function JoinGroupDetailPage({
             </span>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Approval Pending</h1>
             <p className="text-sm font-semibold text-slate-600">
-              Hi <span className="font-bold text-slate-900">{claimedMember.name}</span>, your request to join <span className="font-bold text-slate-900">{group.name}</span> has been sent to the group admin.
+              Hi <span className="font-bold text-slate-900">{claimedMember?.name}</span>, your request to join <span className="font-bold text-slate-900">{group.name}</span> has been sent to the group admin.
             </p>
             <p className="text-xs text-slate-400 font-medium">
               You will automatically gain full access as soon as an admin approves your request.
@@ -405,11 +465,12 @@ export default function JoinGroupDetailPage({
 
   // Active Member View
   const myBalance =
-    group.balances.find((b) => b.memberId === claimedMember.id)?.netBalancePaisa || 0;
+    (group.balances || []).find((b) => b.memberId === claimedMember?.id)?.netBalancePaisa || 0;
 
   // Transfers involving current user
-  const transfersIOwe = group.activeTransfers.filter((t) => t.fromId === claimedMember.id);
-  const transfersOwedToMe = group.activeTransfers.filter((t) => t.toId === claimedMember.id);
+  const activeTransfers = group.activeTransfers || [];
+  const transfersIOwe = activeTransfers.filter((t) => t.fromId === claimedMember?.id);
+  const transfersOwedToMe = activeTransfers.filter((t) => t.toId === claimedMember?.id);
 
   function getCategoryBadge(cat?: string) {
     switch (cat) {
@@ -436,13 +497,16 @@ export default function JoinGroupDetailPage({
     const expItems = (group.expenses || []).map((exp) => ({
       type: 'EXPENSE' as const,
       id: exp.id,
-      date: new Date(exp.date),
+      date: new Date(exp.date || Date.now()),
       category: exp.category || 'General',
-      title: exp.description,
-      totalAmountPaisa: exp.totalAmountPaisa,
-      payerNames: exp.payers?.map((p: any) => p.member?.name).join(', ') || 'Unknown',
-      payers: exp.payers,
-      splits: exp.splits,
+      title: exp.description || 'Expense',
+      totalAmountPaisa: Number(exp.totalAmountPaisa) || 0,
+      payerNames: (exp.payers || [])
+        .map((p: any) => p?.member?.name || 'Someone')
+        .filter(Boolean)
+        .join(', ') || 'Someone',
+      payers: exp.payers || [],
+      splits: exp.splits || [],
       raw: exp,
     }));
 
@@ -451,11 +515,11 @@ export default function JoinGroupDetailPage({
       id: st.id,
       date: new Date(st.date || st.createdAt || Date.now()),
       category: 'Settlement',
-      title: `${st.payer?.name} paid ${st.receiver?.name}`,
-      totalAmountPaisa: st.amountPaisa,
+      title: `${st.payer?.name || 'Someone'} paid ${st.receiver?.name || 'Someone'}`,
+      totalAmountPaisa: Number(st.amountPaisa) || 0,
       payerNames: st.payer?.name || '',
       receiverName: st.receiver?.name || '',
-      paymentMethod: st.paymentMethod,
+      paymentMethod: st.paymentMethod || 'UPI',
       raw: st,
     }));
 
@@ -467,18 +531,18 @@ export default function JoinGroupDetailPage({
 
       if (activitySearch.trim()) {
         const q = activitySearch.toLowerCase().trim();
-        const matchTitle = item.title.toLowerCase().includes(q);
-        const matchPayer = item.payerNames.toLowerCase().includes(q);
+        const matchTitle = (item.title || '').toLowerCase().includes(q);
+        const matchPayer = (item.payerNames || '').toLowerCase().includes(q);
         const matchReceiver = item.type === 'SETTLEMENT' && (item.receiverName || '').toLowerCase().includes(q);
-        const matchSplitMem = item.type === 'EXPENSE' && (item.splits || []).some((s: any) => s.member?.name?.toLowerCase().includes(q));
-        const matchAmount = (item.totalAmountPaisa / 100).toString().includes(q);
+        const matchSplitMem = item.type === 'EXPENSE' && (item.splits || []).some((s: any) => (s?.member?.name || '').toLowerCase().includes(q));
+        const matchAmount = ((item.totalAmountPaisa || 0) / 100).toString().includes(q);
         return matchTitle || matchPayer || matchReceiver || matchSplitMem || matchAmount;
       }
       return true;
     });
   }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
 
-  const currentMemberObj = group?.members.find((m) => m.id === claimedMember?.id) || group?.members.find((m) => m.isOwner) || group?.members?.[0];
+  const currentMemberObj = (group?.members || []).find((m) => m.id === claimedMember?.id) || (group?.members || []).find((m) => m.isOwner) || group?.members?.[0];
   const isUserAdmin = Boolean(currentMemberObj?.isOwner || currentMemberObj?.isAdmin);
 
   const handleDeleteExpense = async (expenseId: string) => {
@@ -603,7 +667,7 @@ export default function JoinGroupDetailPage({
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-0.5">
-              <span>You are: <strong className="font-bold text-slate-800">{claimedMember.name}</strong></span>
+              <span>You are: <strong className="font-bold text-slate-800">{claimedMember?.name || 'Guest'}</strong></span>
               <button
                 onClick={handleSwitchIdentity}
                 className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
@@ -841,7 +905,7 @@ export default function JoinGroupDetailPage({
                           ₹{totalRupees.toFixed(2)}
                         </span>
                         <span className="text-xs font-semibold text-slate-400 capitalize">
-                          {item.raw.splitType.toLowerCase()}
+                          {item.raw?.splitType ? String(item.raw.splitType).toLowerCase() : 'equal'}
                         </span>
                       </div>
                     </div>
@@ -889,7 +953,7 @@ export default function JoinGroupDetailPage({
         isOpen={Boolean(selectedTransaction)}
         onClose={() => setSelectedTransaction(null)}
         item={selectedTransaction}
-        members={group.members}
+        members={group.members || []}
         currentUserId={claimedMember?.id}
         isAdmin={isUserAdmin}
         onEdit={(tx) => {
@@ -926,7 +990,7 @@ export default function JoinGroupDetailPage({
         }}
         groupId={group.id}
         groupName={group.name}
-        members={group.members}
+        members={group.members || []}
         onExpenseAdded={handleExpenseAdded}
         defaultPayerId={claimedMember?.id}
         initialExpense={editingExpense}
@@ -936,7 +1000,7 @@ export default function JoinGroupDetailPage({
         isOpen={isSettleOpen}
         onClose={() => setIsSettleOpen(false)}
         groupId={group.id}
-        members={group.members}
+        members={group.members || []}
         onSettled={handleSettled}
         initialPayerId={settlePreload.payerId}
         initialReceiverId={settlePreload.receiverId}

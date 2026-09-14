@@ -85,7 +85,7 @@ export async function GET(req: Request) {
     });
 
     const formatted = groups.map((g) => {
-      const approvedMembers = g.members.filter((m: any) => m.isActive !== false && m.status === 'APPROVED');
+      const approvedMembers = g.members.filter((m: any) => m.isActive !== false && (m.status === 'APPROVED' || !m.status));
       const totalSpendPaisa = g.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
       const balances = calculateMemberNetBalances(approvedMembers, g.expenses, g.settlements);
       const ownerMember = approvedMembers.find((m) => m.isOwner) || approvedMembers[0];

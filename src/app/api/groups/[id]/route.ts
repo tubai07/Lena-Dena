@@ -57,7 +57,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const approvedMembers = group.members.filter((m) => m.status === 'APPROVED' && m.isActive !== false);
+    const approvedMembers = group.members.filter((m) => (m.status === 'APPROVED' || !m.status) && m.isActive !== false);
     const pendingMembers = group.members.filter((m) => m.status === 'PENDING');
 
     const balances = calculateMemberNetBalances(approvedMembers, group.expenses, group.settlements);
