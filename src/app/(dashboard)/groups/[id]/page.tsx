@@ -1043,34 +1043,46 @@ export default function GroupDetailPage({
           </Link>
         </div>
 
-        {/* Large Title & People Pill */}
-        <div className="relative z-10 mt-4 space-y-2">
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight truncate">
-            {group.name}
-          </h1>
+        {/* Large Title, People Pill & Total Group Spend on right */}
+        <div className="relative z-10 mt-4 flex items-end justify-between gap-3">
+          <div className="space-y-2 min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight truncate">
+              {group.name}
+            </h1>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 backdrop-blur-md text-white/90 text-xs font-bold">
-              <Users className="w-3.5 h-3.5" />
-              <span>{group.members.length} people</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 backdrop-blur-md text-white/90 text-xs font-bold">
+                <Users className="w-3.5 h-3.5" />
+                <span>{group.members.length} people</span>
+              </div>
+
+              {/* Tap to copy code pill */}
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
+                title="Tap to copy invite code"
+              >
+                <span>Code: <span className="font-mono font-bold text-white">{group.joinCode}</span></span>
+                {copiedCode ? (
+                  <span className="text-emerald-300 font-bold flex items-center gap-0.5 text-[11px]">
+                    <Check className="w-3 h-3 stroke-[3]" /> Copied
+                  </span>
+                ) : (
+                  <Copy className="w-3 h-3 opacity-60" />
+                )}
+              </button>
             </div>
+          </div>
 
-            {/* Tap to copy code pill */}
-            <button
-              type="button"
-              onClick={handleCopyCode}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
-              title="Tap to copy invite code"
-            >
-              <span>Code: <span className="font-mono font-bold text-white">{group.joinCode}</span></span>
-              {copiedCode ? (
-                <span className="text-emerald-300 font-bold flex items-center gap-0.5 text-[11px]">
-                  <Check className="w-3 h-3 stroke-[3]" /> Copied
-                </span>
-              ) : (
-                <Copy className="w-3 h-3 opacity-60" />
-              )}
-            </button>
+          {/* Group Total Spend Badge */}
+          <div className="shrink-0 text-right bg-black/25 backdrop-blur-md border border-white/15 px-3.5 py-2 rounded-2xl shadow-xs">
+            <span className="text-[10px] font-bold text-emerald-200/90 uppercase tracking-wider block">
+              Group spend
+            </span>
+            <span className="text-base sm:text-xl font-black text-white tracking-tight block">
+              ₹{((group.totalSpendPaisa || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
         </div>
       </div>
