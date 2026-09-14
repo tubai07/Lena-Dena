@@ -21,11 +21,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const cached = getCachedServerSummary(session.businessId);
-    if (cached) {
-      return NextResponse.json(cached, {
-        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-      });
+    const url = new URL(req.url);
+    const forceFresh = url.searchParams.has('t') || url.searchParams.has('fresh');
+
+    if (!forceFresh) {
+      const cached = getCachedServerSummary(session.businessId);
+      if (cached) {
+        return NextResponse.json(cached, {
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+        });
+      }
     }
 
     // Highly optimized query selecting only necessary columns

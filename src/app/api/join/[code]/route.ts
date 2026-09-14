@@ -5,6 +5,7 @@ import {
   simplifyDebts,
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
+import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function GET(
   req: Request,
@@ -145,6 +146,8 @@ export async function POST(
           isOwner: false,
         },
       });
+
+      invalidateAllGroupServerCaches(group.id, group.businessId);
 
       return NextResponse.json({
         success: true,

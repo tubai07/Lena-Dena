@@ -27,6 +27,7 @@ import {
   Coffee,
   Sparkles,
   AlertCircle,
+  Settings,
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -194,7 +195,7 @@ export default function GroupDetailPage({
     return !getCachedItem<GroupDetail>(`group_${id}`);
   });
 
-  const [activeTab, setActiveTab] = useState<'activity' | 'balances' | 'members'>('activity');
+  const [activeTab, setActiveTab] = useState<'activity' | 'balances' | 'members' | 'settings'>('activity');
   const [activitySearch, setActivitySearch] = useState('');
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'settlements'>('all');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -351,6 +352,22 @@ export default function GroupDetailPage({
         };
 
         setCachedItem(`group_${id}`, updated);
+
+        // Synchronize all_groups overview cache with fresh member count and spend
+        try {
+          const allGroups = getCachedItem<any[]>('all_groups');
+          if (allGroups && Array.isArray(allGroups)) {
+            const idx = allGroups.findIndex((g: any) => g.id === id);
+            if (idx !== -1) {
+              allGroups[idx].memberCount = mergedMembers.filter((m: any) => m.isActive !== false).length;
+              allGroups[idx].totalSpendPaisa = totalSpendPaisa;
+              setCachedItem('all_groups', allGroups);
+            }
+          }
+        } catch {
+          // ignore cache write error
+        }
+
         return updated;
       });
     } catch (e) {
@@ -1262,7 +1279,7 @@ export default function GroupDetailPage({
           <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
         </div>
 
-        {/* Top Navigation Row: Back Button on left & Delete Group Button on right if Admin */}
+        {/* Top Navigation Row: Back Button on left */}
         <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/groups"
@@ -1271,19 +1288,6 @@ export default function GroupDetailPage({
           >
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
           </Link>
-
-          {isCurrentUserAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteGroupModal(true)}
-              className="px-3.5 py-2 rounded-full bg-black/25 hover:bg-rose-600/90 border border-white/20 hover:border-rose-500/50 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer tap-effect"
-              title="Delete this group"
-              aria-label="Delete this group"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-300" />
-              <span>Delete Group</span>
-            </button>
-          )}
         </div>
 
         {/* Large Title, People Pill & Total Group Spend on right */}
@@ -1834,43 +1838,153 @@ export default function GroupDetailPage({
             </div>
           </div>
         )}
+
+        {/* ================= TAB 4: GROUP SETTINGS ================= */}
+        {activeTab === 'settings' && (
+          <div className="space-y-4">
+            {/* Group Overview Card */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">Group Name</span>
+                  <h3 className="text-lg font-black text-slate-900 mt-0.5">{group.name}</h3>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">Category</span>
+                  <span className="text-sm font-bold text-slate-700 mt-0.5 block">{group.category || 'Trip'}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Members</span>
+                  <span className="text-lg font-black text-slate-900 mt-0.5 block">{group.members.length} people</span>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Group Spend</span>
+                  <span className="text-lg font-black text-slate-900 mt-0.5 block">
+                    ₹{((totalGroupSpendPaisa || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Join Code Section */}
+              <div className="p-3.5 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-center justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <span className="text-xs font-bold text-amber-900 block">Invite Code</span>
+                  <p className="text-[11px] text-amber-700 font-medium">Share this code with friends so they can join.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                >
+                  <span>{group.joinCode}</span>
+                  {copiedCode ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5 opacity-80" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Group Preferences */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-3">
+              <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Group Preferences</h4>
+              
+              <div className="flex items-center justify-between gap-3 py-1">
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <span className="text-sm font-bold text-slate-900 block">Simplify Debts</span>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    Automatically optimizes pairwise debts to minimize total transactions across all group members.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleSimplify(!isSimplifyEnabled)}
+                  className={`w-12 h-7 rounded-full transition-colors relative p-0.5 cursor-pointer shrink-0 ${
+                    isSimplifyEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                  aria-label="Toggle Simplify Debts"
+                >
+                  <div
+                    className={`w-6 h-6 rounded-full bg-white shadow-md transform transition-transform ${
+                      isSimplifyEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Danger Zone: Delete Group */}
+            <div className="bg-rose-50/70 rounded-2xl p-4 border border-rose-200/80 shadow-2xs space-y-3">
+              <div className="flex items-center gap-1.5 text-rose-700">
+                <AlertCircle className="w-4 h-4 stroke-[2.5]" />
+                <h4 className="text-[11px] font-extrabold uppercase tracking-wider">Danger Zone</h4>
+              </div>
+
+              <div className="space-y-1">
+                <h5 className="text-sm font-bold text-slate-900">Delete this group</h5>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  Permanently delete this group and remove all associated expenses, splits, and payment history. This action cannot be undone.
+                </p>
+              </div>
+
+              {isCurrentUserAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteGroupModal(true)}
+                  className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Group</span>
+                </button>
+              ) : (
+                <div className="p-2.5 bg-white/80 rounded-xl border border-rose-200 text-center">
+                  <span className="text-xs font-semibold text-rose-700">
+                    Only group admins can delete this group
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Action Button: Add expense (comfortable gap above bottom tab bar) */}
-      <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
-        <button
-          type="button"
-          onClick={() => {
-            setEditingExpense(null);
-            setIsAddExpenseOpen(true);
-          }}
-          className={`pointer-events-auto fab-add-person flex items-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-950/20 overflow-hidden cursor-pointer ${
-            isScrolledDown ? 'w-[52px]' : 'w-[156px]'
-          }`}
-          title="What did you spend money on?"
-          aria-label="What did you spend money on?"
-        >
-          <div className="w-[52px] h-[52px] flex items-center justify-center shrink-0">
-            <ReceiptText className="w-5 h-5 stroke-[2.2px]" />
-          </div>
-          <span
-            className={`whitespace-nowrap fab-text-wrapper overflow-hidden font-bold pr-4 ${
-              isScrolledDown ? 'max-w-0 opacity-0 !pr-0' : 'max-w-[110px] opacity-100'
+      {activeTab !== 'settings' && (
+        <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
+          <button
+            type="button"
+            onClick={() => {
+              setEditingExpense(null);
+              setIsAddExpenseOpen(true);
+            }}
+            className={`pointer-events-auto fab-add-person flex items-center bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold text-sm shadow-xl shadow-emerald-950/20 overflow-hidden cursor-pointer ${
+              isScrolledDown ? 'w-[52px]' : 'w-[156px]'
             }`}
+            title="What did you spend money on?"
+            aria-label="What did you spend money on?"
           >
-            Add expense
-          </span>
-        </button>
-      </div>
+            <div className="w-[52px] h-[52px] flex items-center justify-center shrink-0">
+              <ReceiptText className="w-5 h-5 stroke-[2.2px]" />
+            </div>
+            <span
+              className={`whitespace-nowrap fab-text-wrapper overflow-hidden font-bold pr-4 ${
+                isScrolledDown ? 'max-w-0 opacity-0 !pr-0' : 'max-w-[110px] opacity-100'
+              }`}
+            >
+              Add expense
+            </span>
+          </button>
+        </div>
+      )}
 
-      {/* Bottom Sticky Tab Navigation (3 tabs: Activity, Who owes who, People) */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-2 select-none shadow-lg">
-        <div className="grid grid-cols-3 gap-1">
+      {/* Bottom Sticky Tab Navigation (4 tabs: Activity, Who owes who, People, Settings) */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-2 select-none shadow-lg">
+        <div className="grid grid-cols-4 gap-1">
           {/* Tab 1: Activity */}
           <button
             type="button"
             onClick={() => setActiveTab('activity')}
-            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'activity'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -1890,7 +2004,7 @@ export default function GroupDetailPage({
           <button
             type="button"
             onClick={() => setActiveTab('balances')}
-            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'balances'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -1910,7 +2024,7 @@ export default function GroupDetailPage({
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'members'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -1924,6 +2038,26 @@ export default function GroupDetailPage({
               <Users className="w-5 h-5" />
             </div>
             <span className="text-[11px] mt-0.5">People</span>
+          </button>
+
+          {/* Tab 4: Settings */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'settings'
+                ? 'text-emerald-700 font-bold'
+                : 'text-slate-500 font-medium hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-colors ${
+                activeTab === 'settings' ? 'bg-emerald-100 text-emerald-800' : ''
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] mt-0.5">Settings</span>
           </button>
         </div>
       </nav>
