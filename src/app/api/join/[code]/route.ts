@@ -142,14 +142,49 @@ export async function POST(
     // 2. If adding a new member to the group (Created with PENDING status for admin approval)
     if (newMemberName && typeof newMemberName === 'string' && newMemberName.trim()) {
       const trimmedName = newMemberName.trim();
-      const duplicate = group.members.some(
+      const existingMember = group.members.find(
         (m) => m.name.toLowerCase() === trimmedName.toLowerCase()
       );
-      if (duplicate) {
-        return NextResponse.json(
-          { error: 'A member with this name already exists in this group. Select your name from the list instead!' },
-          { status: 400 }
-        );
+
+      if (existingMember) {
+        // If already pending or approved, seamlessly return their membership
+        if (existingMember.status === 'PENDING') {
+          return NextResponse.json({
+            success: true,
+            member: existingMember,
+            status: 'PENDING',
+            requiresApproval: true,
+            groupId: group.id,
+            groupName: group.name,
+          });
+        }
+
+        if (existingMember.status === 'APPROVED' || !existingMember.status) {
+          return NextResponse.json({
+            success: true,
+            member: existingMember,
+            status: 'APPROVED',
+            groupId: group.id,
+            groupName: group.name,
+          });
+        }
+
+        if (existingMember.status === 'REJECTED') {
+          // Allow re-applying
+          const updated = await db.groupMember.update({
+            where: { id: existingMember.id },
+            data: { status: 'PENDING' },
+          });
+          invalidateAllGroupServerCaches(group.id, group.businessId);
+          return NextResponse.json({
+            success: true,
+            member: updated,
+            status: 'PENDING',
+            requiresApproval: true,
+            groupId: group.id,
+            groupName: group.name,
+          });
+        }
       }
 
       const createdMember = await db.groupMember.create({

@@ -54,7 +54,14 @@ export async function GET(
     }
 
     if (session?.businessId && group.businessId !== session.businessId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      const isMember = group.members.some(
+        (m) =>
+          (session.phone && m.phone === session.phone) ||
+          (session.userName && m.name.toLowerCase() === session.userName.toLowerCase())
+      );
+      if (!isMember && !group.joinCode) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     const approvedMembers = group.members.filter((m) => (m.status === 'APPROVED' || !m.status) && m.isActive !== false);

@@ -396,10 +396,10 @@ export default function GroupDetailPage({
 
     const interval = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      const isIdle = Date.now() - lastActivityTime > 30000;
+      const isIdle = Date.now() - lastActivityTime > 45000;
       if (isIdle) return; // Skip polling when user is idle
       fetchGroup(true);
-    }, 6000);
+    }, 3500);
 
     // Debounced tab focus sync (300ms) to prevent burst storms on resume
     let focusTimeout: any = null;
@@ -1475,6 +1475,26 @@ export default function GroupDetailPage({
             </span>
           </div>
         </div>
+
+        {/* Real-time Join Request Notification Alert Banner for Admins */}
+        {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
+          <div
+            onClick={() => setActiveTab('members')}
+            className="relative z-10 mt-3 p-3 bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold rounded-2xl shadow-lg flex items-center justify-between gap-2 cursor-pointer transition-colors animate-in fade-in slide-in-from-top-2"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping shrink-0" />
+              <span className="text-xs sm:text-sm font-black truncate">
+                {group.pendingMembers!.length === 1
+                  ? `${group.pendingMembers![0].name} wants to join this group`
+                  : `${group.pendingMembers!.length} people want to join this group`}
+              </span>
+            </div>
+            <span className="px-2.5 py-1 bg-amber-950 text-amber-100 text-[10px] font-black rounded-xl shrink-0 uppercase tracking-wider">
+              Approve Now
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Overall Standing & Action Pills (White Theme) */}
@@ -2256,11 +2276,16 @@ export default function GroupDetailPage({
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-colors ${
+              className={`p-1.5 rounded-xl transition-colors relative ${
                 activeTab === 'members' ? 'bg-emerald-100 text-emerald-800' : ''
               }`}
             >
               <Users className="w-5 h-5" />
+              {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
+                  {group.pendingMembers!.length}
+                </span>
+              )}
             </div>
             <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap">People</span>
           </button>
