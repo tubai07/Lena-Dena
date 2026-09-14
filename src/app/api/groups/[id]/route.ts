@@ -97,6 +97,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const existing = await db.group.findFirst({
+      where: { id, businessId: session.businessId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Group not found or unauthorized' }, { status: 404 });
+    }
+
     const body = await req.json();
     const { name, category, simplifyDebts } = body;
 
@@ -129,6 +137,14 @@ export async function DELETE(
     const session = await getSession();
     if (!session?.businessId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const existing = await db.group.findFirst({
+      where: { id, businessId: session.businessId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Group not found or unauthorized' }, { status: 404 });
     }
 
     await db.group.delete({

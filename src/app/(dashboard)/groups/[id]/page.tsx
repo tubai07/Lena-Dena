@@ -1197,60 +1197,22 @@ export default function GroupDetailPage({
           </div>
         )}
 
-        {/* Horizontal Action Pills with scrollbar line removed */}
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1 scrollbar-none no-scrollbar text-xs [&::-webkit-scrollbar]:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              setSettlePreload({});
-              setIsSettleOpen(true);
-            }}
-            className="px-4 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-            <span>Mark this as paid</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab(activeTab === 'balances' ? 'activity' : 'balances')}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
-              activeTab === 'balances'
-                ? 'bg-emerald-600 border-emerald-600 text-white'
-                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5 text-indigo-500 stroke-[2.5]" />
-            <span>Who owes who</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleToggleSimplify(!group.simplifyDebts)}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
-              group.simplifyDebts
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-            }`}
-            title="Clean up who pays who (minimize transactions)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 stroke-[2.5]" />
-            <span>Clean up who pays who: {group.simplifyDebts ? 'ON' : 'OFF'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab(activeTab === 'members' ? 'activity' : 'members')}
-            className={`px-4 py-2 rounded-full border font-bold whitespace-nowrap tap-effect cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs ${
-              activeTab === 'members'
-                ? 'bg-emerald-600 border-emerald-600 text-white'
-                : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-sky-600 stroke-[2.5]" />
-            <span>People</span>
-          </button>
-        </div>
+        {/* Single Primary Action Button (Clean, Non-scrolling, only when balance is pending) */}
+        {userBalance !== 0 && (
+          <div className="mt-3.5 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                setSettlePreload({});
+                setIsSettleOpen(true);
+              }}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer tap-effect"
+            >
+              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+              <span>Mark this as paid</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area (Clean Light Theme) */}
@@ -1425,6 +1387,30 @@ export default function GroupDetailPage({
                 className="text-xs text-emerald-700 hover:text-emerald-800 font-bold cursor-pointer"
               >
                 Back to Activity
+              </button>
+            </div>
+
+            {/* Clean up who pays who (Simplify debts) toggle */}
+            <div className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm block">Clean up who pays who</span>
+                  <span className="text-[10px] sm:text-xs text-slate-500 font-medium block truncate">Minimize transactions between people</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleSimplify(!group.simplifyDebts)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  group.simplifyDebts
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {group.simplifyDebts ? 'ON' : 'OFF'}
               </button>
             </div>
 
@@ -1702,21 +1688,21 @@ export default function GroupDetailPage({
         </button>
       </div>
 
-      {/* Group Dedicated Bottom Dock: Different from the global Ledger/Split dock */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-3 py-1.5 shadow-lg">
-        <div className="flex items-center justify-around">
+      {/* Bottom Sticky Tab Navigation (3 tabs: Activity, Who owes who, People) */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-2 select-none shadow-lg">
+        <div className="grid grid-cols-3 gap-1">
           {/* Tab 1: Activity */}
           <button
             type="button"
             onClick={() => setActiveTab('activity')}
-            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'activity'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
             }`}
           >
             <div
-              className={`p-1 rounded-xl transition-colors ${
+              className={`p-1.5 rounded-xl transition-colors ${
                 activeTab === 'activity' ? 'bg-emerald-100 text-emerald-800' : ''
               }`}
             >
@@ -1729,14 +1715,14 @@ export default function GroupDetailPage({
           <button
             type="button"
             onClick={() => setActiveTab('balances')}
-            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'balances'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
             }`}
           >
             <div
-              className={`p-1 rounded-xl transition-colors ${
+              className={`p-1.5 rounded-xl transition-colors ${
                 activeTab === 'balances' ? 'bg-emerald-100 text-emerald-800' : ''
               }`}
             >
@@ -1749,35 +1735,20 @@ export default function GroupDetailPage({
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'members'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
             }`}
           >
             <div
-              className={`p-1 rounded-xl transition-colors ${
+              className={`p-1.5 rounded-xl transition-colors ${
                 activeTab === 'members' ? 'bg-emerald-100 text-emerald-800' : ''
               }`}
             >
               <Users className="w-5 h-5" />
             </div>
             <span className="text-[11px] mt-0.5">People</span>
-          </button>
-
-          {/* Tab 4: Mark as paid */}
-          <button
-            type="button"
-            onClick={() => {
-              setSettlePreload({});
-              setIsSettleOpen(true);
-            }}
-            className="flex flex-col items-center py-1 px-3 rounded-xl transition-all cursor-pointer text-slate-600 hover:text-emerald-700 font-medium"
-          >
-            <div className="p-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <span className="text-[11px] mt-0.5">Mark as paid</span>
           </button>
         </div>
       </nav>

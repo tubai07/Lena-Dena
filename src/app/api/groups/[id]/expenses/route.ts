@@ -70,11 +70,28 @@ export async function POST(
       }
     }
 
+    if (date) {
+      const expDate = new Date(date);
+      if (isNaN(expDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
+      }
+      if (expDate.getTime() > Date.now() + 5 * 60 * 1000) {
+        return NextResponse.json({ error: 'Expense date cannot be in the future' }, { status: 400 });
+      }
+    }
+
     // Auto-balance minor 1-2 paise floating point rounding differences
     let adjustedPayers = payers.map((p: any) => ({
       memberId: p.memberId,
       amountPaisa: Math.round(Number(p.amountPaisa) || 0),
     }));
+
+    for (const p of adjustedPayers) {
+      if (p.amountPaisa <= 0) {
+        return NextResponse.json({ error: 'Each payer amount must be greater than 0' }, { status: 400 });
+      }
+    }
+
     const payersSum = adjustedPayers.reduce((sum: number, p: any) => sum + p.amountPaisa, 0);
     const payerDiff = parsedTotal - payersSum;
     if (Math.abs(payerDiff) <= 2 && adjustedPayers.length > 0) {
@@ -91,6 +108,13 @@ export async function POST(
       amountPaisa: Math.round(Number(s.amountPaisa) || 0),
       shareValue: s.shareValue ? Number(s.shareValue) : null,
     }));
+
+    for (const s of adjustedSplits) {
+      if (s.amountPaisa <= 0) {
+        return NextResponse.json({ error: 'Each split person amount must be greater than 0' }, { status: 400 });
+      }
+    }
+
     const splitsSum = adjustedSplits.reduce((sum: number, s: any) => sum + s.amountPaisa, 0);
     const splitDiff = parsedTotal - splitsSum;
     if (Math.abs(splitDiff) <= 2 && adjustedSplits.length > 0) {

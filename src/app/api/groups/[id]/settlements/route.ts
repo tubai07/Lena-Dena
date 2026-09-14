@@ -24,6 +24,23 @@ export async function POST(
       return NextResponse.json({ error: 'Valid settlement amount is required' }, { status: 400 });
     }
 
+    const group = await db.group.findUnique({
+      where: { id },
+      include: { members: true },
+    });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const memberIds = new Set(group.members.map((m) => m.id));
+    if (!memberIds.has(payerId) || !memberIds.has(receiverId)) {
+      return NextResponse.json(
+        { error: 'Payer and receiver must be valid members of this group' },
+        { status: 400 }
+      );
+    }
+
     const settlement = await db.groupSettlement.create({
       data: {
         groupId: id,
@@ -39,7 +56,7 @@ export async function POST(
       },
     });
 
-    invalidateAllGroupServerCaches(id);
+    invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ settlement });
   } catch (err: any) {

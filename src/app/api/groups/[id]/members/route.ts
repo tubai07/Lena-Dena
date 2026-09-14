@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function POST(
   req: Request,
@@ -56,6 +57,8 @@ export async function POST(
         isOwner: false,
       },
     });
+
+    invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ member });
   } catch (err: any) {

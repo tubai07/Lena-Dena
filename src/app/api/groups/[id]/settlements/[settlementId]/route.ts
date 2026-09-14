@@ -9,6 +9,22 @@ export async function DELETE(
   try {
     const { id, settlementId } = await params;
 
+    const existing = await db.groupSettlement.findFirst({
+      where: {
+        id: settlementId,
+        groupId: id,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Settlement not found' }, { status: 404 });
+    }
+
+    const group = await db.group.findUnique({
+      where: { id },
+      select: { businessId: true },
+    });
+
     await db.groupSettlement.delete({
       where: {
         id: settlementId,
@@ -16,7 +32,7 @@ export async function DELETE(
       },
     });
 
-    invalidateAllGroupServerCaches(id);
+    invalidateAllGroupServerCaches(id, group?.businessId);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

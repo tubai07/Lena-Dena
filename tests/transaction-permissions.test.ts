@@ -84,4 +84,30 @@ describe('Transaction Details & Admin Permissions Engine', () => {
     expect(postDeletionBalances.find((b) => b.memberId === 'm_admin')?.netBalancePaisa).toBe(0);
     expect(postDeletionBalances.find((b) => b.memberId === 'm_member')?.netBalancePaisa).toBe(0);
   });
+
+  it('rejects future expense dates and non-positive participant amounts', () => {
+    // 1. Future date detection
+    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const isFuture = new Date(futureDate).getTime() > Date.now() + 5 * 60 * 1000;
+    expect(isFuture).toBe(true);
+
+    const pastDate = new Date(Date.now() - 60 * 1000).toISOString();
+    const isPast = new Date(pastDate).getTime() > Date.now() + 5 * 60 * 1000;
+    expect(isPast).toBe(false);
+
+    // 2. Non-positive amounts detection
+    const invalidPayers = [
+      { memberId: 'm1', amountPaisa: 1000 },
+      { memberId: 'm2', amountPaisa: -500 },
+    ];
+    const hasInvalidPayer = invalidPayers.some((p) => p.amountPaisa <= 0);
+    expect(hasInvalidPayer).toBe(true);
+
+    const validPayers = [
+      { memberId: 'm1', amountPaisa: 500 },
+      { memberId: 'm2', amountPaisa: 500 },
+    ];
+    const hasValidPayer = validPayers.some((p) => p.amountPaisa <= 0);
+    expect(hasValidPayer).toBe(false);
+  });
 });

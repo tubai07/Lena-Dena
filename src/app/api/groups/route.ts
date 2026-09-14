@@ -8,17 +8,11 @@ import {
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
 
-// Fast in-memory server cache with 10s TTL
-const groupsServerCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_TTL_MS = 10000;
-
-export function invalidateServerGroupsCache(businessId?: string) {
-  if (businessId) {
-    groupsServerCache.delete(businessId);
-  } else {
-    groupsServerCache.clear();
-  }
-}
+import {
+  getCachedServerSummary,
+  setCachedServerSummary,
+  invalidateAllGroupServerCaches,
+} from '@/lib/serverGroupCache';
 
 export async function GET(req: Request) {
   try {
@@ -27,9 +21,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const cached = groupsServerCache.get(session.businessId);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(cached.data, {
+    const cached = getCachedServerSummary(session.businessId);
+    if (cached) {
+      return NextResponse.json(cached, {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       });
     }
@@ -111,7 +105,7 @@ export async function GET(req: Request) {
     });
 
     const responsePayload = { groups: formatted };
-    groupsServerCache.set(session.businessId, { data: responsePayload, timestamp: Date.now() });
+    setCachedServerSummary(session.businessId, responsePayload);
 
     return NextResponse.json(responsePayload, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
@@ -193,7 +187,7 @@ export async function POST(req: Request) {
     });
 
     // Invalidate server cache
-    invalidateServerGroupsCache(session.businessId);
+    invalidateAllGroupServerCaches(newGroup.id, session.businessId);
 
     return NextResponse.json({ group: newGroup }, { status: 201 });
   } catch (err: any) {
