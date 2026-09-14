@@ -37,7 +37,6 @@ import {
   calculateDirectPairwiseDebts,
 } from '@/lib/splitwise';
 import { getCachedItem, setCachedItem } from '@/lib/groupCache';
-import { getGroupCategoryInfo, GROUP_CATEGORIES } from '@/lib/groupIcons';
 
 interface Member {
   id: string;
@@ -231,7 +230,6 @@ export default function GroupDetailPage({
   const [memberError, setMemberError] = useState('');
   const [addingMember, setAddingMember] = useState(false);
 
-  const [showIconPicker, setShowIconPicker] = useState(false);
   const [isStandingExpanded, setIsStandingExpanded] = useState(true);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
   const lastScrollY = useRef(0);
@@ -386,28 +384,6 @@ export default function GroupDetailPage({
       });
     } catch (e) {
       console.error(e);
-    }
-  };
-
-  // Instant optimistic group category / theme update
-  const handleUpdateCategory = async (newCategory: string) => {
-    if (!group) return;
-    setShowIconPicker(false);
-    const updated = {
-      ...group,
-      category: newCategory,
-    };
-    setGroup(updated);
-    setCachedItem(`group_${id}`, updated);
-
-    try {
-      await fetch(`/api/groups/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: newCategory }),
-      });
-    } catch (e) {
-      console.error('Failed to update group category:', e);
     }
   };
 
@@ -1045,7 +1021,7 @@ export default function GroupDetailPage({
   const remainingCount = Math.max(0, subBalances.length - displayedSubBalances.length);
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-28 relative">
+    <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-36 relative">
       {/* Group Header Banner with Emerald Gradient Pattern */}
       <div className="relative bg-gradient-to-b from-teal-700 via-emerald-700 to-emerald-800 text-white px-4 pt-4 pb-5 overflow-hidden">
         {/* Decorative geometric overlay */}
@@ -1056,7 +1032,7 @@ export default function GroupDetailPage({
           <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
         </div>
 
-        {/* Top Navigation Row: Back Button on left (NO SETTING BUTTON AT THE TOP) */}
+        {/* Top Navigation Row: Back Button on left */}
         <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/groups"
@@ -1065,64 +1041,6 @@ export default function GroupDetailPage({
           >
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
           </Link>
-
-          {/* Theme Category Icon with interactive selector */}
-          <div className="relative">
-            {(() => {
-              const catInfo = getGroupCategoryInfo(group.category);
-              const GroupCatIcon = catInfo.icon;
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowIconPicker(!showIconPicker)}
-                    className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md flex items-center justify-center text-white tap-effect transition-colors cursor-pointer"
-                    title="Change Group Theme"
-                  >
-                    <GroupCatIcon className="w-5 h-5" />
-                  </button>
-
-                  {showIconPicker && (
-                    <div className="absolute right-0 top-12 bg-white border border-slate-200 rounded-2xl shadow-xl p-2.5 z-50 grid grid-cols-4 gap-1.5 w-68 animate-in fade-in zoom-in-95 text-slate-900">
-                      <div className="col-span-4 px-1 py-0.5 flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
-                        <span className="text-[11px] font-bold text-slate-800">Select Group Theme</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowIconPicker(false)}
-                          className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      {GROUP_CATEGORIES.map((cat) => {
-                        const Icon = cat.icon;
-                        const isSelected = (group.category || 'Trip') === cat.id;
-                        return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => handleUpdateCategory(cat.id)}
-                            className={`p-1.5 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                              isSelected
-                                ? 'ring-2 ring-emerald-600 bg-emerald-50 shadow-2xs'
-                                : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
-                              <Icon className="w-3.5 h-3.5" />
-                            </div>
-                            <span className="text-[9px] font-bold text-slate-700 truncate w-full text-center">
-                              {cat.id}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
         </div>
 
         {/* Large Title & People Pill */}
@@ -1216,7 +1134,7 @@ export default function GroupDetailPage({
       </div>
 
       {/* Main Content Area (Clean Light Theme) */}
-      <div className="px-4 pt-4 pb-28">
+      <div className="px-4 pt-4 pb-36">
         {/* ================= TAB 1: ACTIVITY LIST ================= */}
         {activeTab === 'activity' && (
           <div className="space-y-4">
@@ -1661,8 +1579,8 @@ export default function GroupDetailPage({
         )}
       </div>
 
-      {/* Floating Action Button: Add expense */}
-      <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
+      {/* Floating Action Button: Add expense (comfortable gap above bottom tab bar) */}
+      <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
         <button
           type="button"
           onClick={() => {
