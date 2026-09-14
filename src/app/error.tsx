@@ -29,6 +29,12 @@ export default function ErrorBoundary({
           <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
             An unexpected error occurred while loading this page. Your data is safe in Lena Dena.
           </p>
+          {error?.message && (
+            <div className="text-xs font-mono text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-xl text-left overflow-auto max-h-40 break-words mt-3">
+              <span className="font-bold block mb-1">Error details:</span>
+              {error.message}
+            </div>
+          )}
           {error?.digest && (
             <p className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded-md inline-block mt-2">
               Ref: {error.digest}

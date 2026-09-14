@@ -69,7 +69,7 @@ export function distributeSharesSplits(
   });
 
   // Distribute remaining paise by highest fractional parts
-  let remainder = totalAmountPaisa - allocated;
+  const remainder = totalAmountPaisa - allocated;
   items.sort((a, b) => b.fraction - a.fraction);
   for (let i = 0; i < remainder && i < items.length; i++) {
     items[i].amountPaisa += 1;
