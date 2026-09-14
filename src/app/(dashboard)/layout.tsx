@@ -15,7 +15,13 @@ export default async function DashboardLayout({
 }) {
   const session = await getSession();
   if (!session?.businessId) {
-    redirect('/login');
+    return (
+      <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
+        <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
+          <div className="flex-1 w-full">{children}</div>
+        </div>
+      </div>
+    );
   }
 
   // Fetch business, initial customers, and recent activity concurrently in 1 parallel query batch

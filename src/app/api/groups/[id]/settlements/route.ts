@@ -24,8 +24,14 @@ export async function POST(
       return NextResponse.json({ error: 'Valid settlement amount is required' }, { status: 400 });
     }
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const cleanId = id?.trim() || '';
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: { members: true },
     });
 
@@ -44,7 +50,7 @@ export async function POST(
 
     const settlement = await db.groupSettlement.create({
       data: {
-        groupId: id,
+        groupId: group.id,
         payerId,
         receiverId,
         amountPaisa: parsedAmount,
@@ -57,7 +63,7 @@ export async function POST(
       },
     });
 
-    invalidateAllGroupServerCaches(id, group.businessId);
+    invalidateAllGroupServerCaches(group.id, group.businessId);
 
     return NextResponse.json({ settlement });
   } catch (err: any) {

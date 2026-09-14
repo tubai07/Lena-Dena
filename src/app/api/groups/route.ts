@@ -33,9 +33,29 @@ export async function GET(req: Request) {
       }
     }
 
+    const cleanPhone = session.phone ? session.phone.replace(/\D/g, '') : '';
+    const cleanName = session.userName?.trim() || '';
+
+    const memberMatchConditions: any[] = [];
+    if (cleanPhone && cleanPhone.length >= 10) {
+      memberMatchConditions.push({ phone: { contains: cleanPhone.slice(-10) } });
+    }
+    if (cleanName && cleanName.length >= 2) {
+      memberMatchConditions.push({ name: { equals: cleanName, mode: 'insensitive' } });
+    }
+
+    const whereClause: any = {
+      OR: [
+        { businessId: session.businessId },
+        ...(memberMatchConditions.length > 0
+          ? [{ members: { some: { OR: memberMatchConditions } } }]
+          : []),
+      ],
+    };
+
     // Highly optimized query selecting only necessary columns
     const groups = await db.group.findMany({
-      where: { businessId: session.businessId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -53,6 +73,7 @@ export async function GET(req: Request) {
             isAdmin: true,
             isActive: true,
             status: true,
+            phone: true,
           },
         },
         expenses: {
@@ -85,17 +106,23 @@ export async function GET(req: Request) {
     });
 
     const formatted = groups.map((g) => {
-      const approvedMembers = g.members.filter((m: any) => m.isActive !== false && (m.status === 'APPROVED' || !m.status));
+      const activeMembers = g.members.filter((m: any) => m.isActive !== false);
       const totalSpendPaisa = g.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
-      const balances = calculateMemberNetBalances(approvedMembers, g.expenses, g.settlements);
-      const ownerMember = approvedMembers.find((m) => m.isOwner) || approvedMembers[0];
+      const balances = calculateMemberNetBalances(activeMembers, g.expenses, g.settlements);
+      const ownerMember =
+        activeMembers.find((m: any) =>
+          (cleanPhone && m.phone && m.phone.replace(/\D/g, '').includes(cleanPhone.slice(-10))) ||
+          (cleanName && m.name.toLowerCase() === cleanName.toLowerCase())
+        ) ||
+        activeMembers.find((m) => m.isOwner) ||
+        activeMembers[0];
       const ownerBalance = ownerMember
         ? balances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0
         : 0;
 
       const transfers = g.simplifyDebts
         ? simplifyDebts(balances)
-        : calculateDirectPairwiseDebts(approvedMembers, g.expenses, g.settlements);
+        : calculateDirectPairwiseDebts(activeMembers, g.expenses, g.settlements);
 
       return {
         id: g.id,
@@ -104,7 +131,7 @@ export async function GET(req: Request) {
         currencySymbol: g.currencySymbol,
         joinCode: g.joinCode,
         simplifyDebts: g.simplifyDebts,
-        memberCount: approvedMembers.length,
+        memberCount: activeMembers.length,
         totalSpendPaisa,
         ownerBalancePaisa: ownerBalance,
         pendingTransfersCount: transfers.length,
@@ -155,12 +182,14 @@ export async function POST(req: Request) {
 
     // Prepare members list: Owner is always first member
     const ownerName = session.userName?.trim() || session.businessName || 'You';
-    const membersToCreate: { name: string; phone?: string; upiId?: string; isOwner: boolean; isAdmin: boolean }[] = [
+    const membersToCreate: any[] = [
       {
         name: ownerName,
         phone: session.phone || undefined,
         isOwner: true,
         isAdmin: true,
+        isActive: true,
+        status: 'APPROVED',
       },
     ];
 
@@ -174,6 +203,8 @@ export async function POST(req: Request) {
             upiId: typeof m === 'object' && m.upiId ? m.upiId.trim() : undefined,
             isOwner: false,
             isAdmin: false,
+            isActive: true,
+            status: 'APPROVED',
           });
         }
       }

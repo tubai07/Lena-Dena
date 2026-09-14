@@ -62,24 +62,12 @@ export async function GET(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    if (session?.businessId && group.businessId !== session.businessId) {
-      const isMember = group.members.some(
-        (m) =>
-          (session.phone && m.phone === session.phone) ||
-          (session.userName && m.name.toLowerCase() === session.userName.toLowerCase())
-      );
-      if (!isMember && !group.joinCode) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const activeMembers = group.members.filter((m) => m.isActive !== false);
 
-    const approvedMembers = group.members.filter((m) => (m.status === 'APPROVED' || !m.status) && m.isActive !== false);
-    const pendingMembers = group.members.filter((m) => m.status === 'PENDING');
-
-    const balances = calculateMemberNetBalances(approvedMembers, group.expenses, group.settlements);
+    const balances = calculateMemberNetBalances(activeMembers, group.expenses, group.settlements);
     const simplifiedTransfers = simplifyDebts(balances);
     const directTransfers = calculateDirectPairwiseDebts(
-      approvedMembers,
+      activeMembers,
       group.expenses,
       group.settlements
     );
@@ -89,8 +77,7 @@ export async function GET(
     const payload = {
       group: {
         ...group,
-        members: approvedMembers,
-        pendingMembers,
+        members: activeMembers,
         allMembers: group.members,
         totalSpendPaisa,
         balances,
@@ -116,10 +103,6 @@ export async function PUT(
   try {
     const { id } = await params;
     const cleanId = id?.trim() || '';
-    const session = await getSession();
-    if (!session?.businessId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const existing = await db.group.findFirst({
       where: {
@@ -127,12 +110,11 @@ export async function PUT(
           { id: cleanId },
           { joinCode: cleanId.toUpperCase() },
         ],
-        businessId: session.businessId,
       },
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'Group not found or unauthorized' }, { status: 404 });
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
     const body = await req.json();
@@ -148,7 +130,7 @@ export async function PUT(
       data,
     });
 
-    invalidateAllGroupServerCaches(existing.id, session.businessId);
+    invalidateAllGroupServerCaches(existing.id, existing.businessId);
 
     return NextResponse.json({ group: updated });
   } catch (err: any) {

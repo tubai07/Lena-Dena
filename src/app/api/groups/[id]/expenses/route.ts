@@ -39,8 +39,14 @@ export async function POST(
     }
 
     // Verify group exists and get members
-    const group = await db.group.findUnique({
-      where: { id },
+    const cleanId = id?.trim() || '';
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: { members: true },
     });
 
@@ -71,12 +77,15 @@ export async function POST(
       }
     }
 
+    let parsedDate = new Date();
     if (date) {
-      const expDate = new Date(date);
-      if (isNaN(expDate.getTime())) {
-        return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
+      const d = new Date(date);
+      if (!isNaN(d.getTime())) {
+        parsedDate = d;
       }
-      if (expDate.getTime() > Date.now() + 5 * 60 * 1000) {
+      const now = new Date();
+      now.setHours(23, 59, 59, 999);
+      if (parsedDate > now) {
         return NextResponse.json({ error: 'Expense date cannot be in the future' }, { status: 400 });
       }
     }
@@ -110,12 +119,6 @@ export async function POST(
       shareValue: s.shareValue ? Number(s.shareValue) : null,
     }));
 
-    for (const s of adjustedSplits) {
-      if (s.amountPaisa <= 0) {
-        return NextResponse.json({ error: 'Each split person amount must be greater than 0' }, { status: 400 });
-      }
-    }
-
     const splitsSum = adjustedSplits.reduce((sum: number, s: any) => sum + s.amountPaisa, 0);
     const splitDiff = parsedTotal - splitsSum;
     if (Math.abs(splitDiff) <= 2 && adjustedSplits.length > 0) {
@@ -131,13 +134,13 @@ export async function POST(
     const expense = await db.$transaction(async (tx) => {
       const createdExpense = await tx.groupExpense.create({
         data: {
-          groupId: id,
+          groupId: group.id,
           description: description.trim(),
           totalAmountPaisa: parsedTotal,
           category,
           splitType,
           notes: notes?.trim() || null,
-          date: date ? new Date(date) : new Date(),
+          date: parsedDate,
           payers: {
             create: adjustedPayers.map((p: any) => ({
               memberId: p.memberId,
@@ -161,7 +164,7 @@ export async function POST(
       return createdExpense;
     });
 
-    invalidateAllGroupServerCaches(id, group.businessId);
+    invalidateAllGroupServerCaches(group.id, group.businessId);
 
     return NextResponse.json({ expense });
   } catch (err: any) {

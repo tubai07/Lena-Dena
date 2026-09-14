@@ -25,8 +25,14 @@ export async function POST(
       );
     }
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const cleanId = id?.trim() || '';
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: { members: true },
     });
 
@@ -50,15 +56,18 @@ export async function POST(
 
     const member = await db.groupMember.create({
       data: {
-        groupId: id,
+        groupId: group.id,
         name: trimmed,
         phone: cleanPhone,
         upiId: upiId?.trim() || null,
         isOwner: false,
+        isAdmin: false,
+        isActive: true,
+        status: 'APPROVED',
       },
     });
 
-    invalidateAllGroupServerCaches(id, group.businessId);
+    invalidateAllGroupServerCaches(group.id, group.businessId);
 
     return NextResponse.json({ member });
   } catch (err: any) {

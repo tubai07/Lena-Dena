@@ -5,14 +5,10 @@ import Link from 'next/link';
 import {
   UsersRound,
   Plus,
-  KeyRound,
   Search,
-  Copy,
-  Check,
   ChevronRight,
 } from 'lucide-react';
 import { CreateGroupModal } from '@/components/groups/CreateGroupModal';
-import { JoinCodeModal } from '@/components/groups/JoinCodeModal';
 import { getCachedItem, setCachedItem } from '@/lib/groupCache';
 import { getGroupCategoryInfo } from '@/lib/groupIcons';
 
@@ -33,64 +29,15 @@ export default function GroupsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isJoinOpen, setIsJoinOpen] = useState(false);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const fetchGroups = async () => {
     try {
       const res = await fetch(`/api/groups?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      let combined: GroupSummary[] = res.ok && data.groups ? [...data.groups] : [];
+      const list: GroupSummary[] = res.ok && data.groups ? data.groups : [];
 
-      // Merge joined groups stored in localStorage
-      try {
-        const joinedCodes: string[] = JSON.parse(localStorage.getItem('lena_dena_joined_groups') || '[]');
-        const existingCodes = new Set(combined.map((g) => g.joinCode.toUpperCase()));
-        const missingCodes = joinedCodes.filter((c) => !existingCodes.has(c.toUpperCase()));
-
-        if (missingCodes.length > 0) {
-          const joinedResults = await Promise.all(
-            missingCodes.map(async (c) => {
-              try {
-                const jRes = await fetch(`/api/join/${c}`);
-                if (!jRes.ok) return null;
-                const jData = await jRes.json();
-                if (!jData?.group) return null;
-                const g = jData.group;
-                const ownerMember = g.members?.find((m: any) => m.isOwner) || g.members?.[0];
-                const mySaved = localStorage.getItem(`lena_dena_member_${c.toUpperCase()}`);
-                const myId = mySaved ? JSON.parse(mySaved).id : null;
-                const targetMemberId = myId || ownerMember?.id;
-                const ownerBalance = targetMemberId
-                  ? g.balances?.find((b: any) => b.memberId === targetMemberId)?.netBalancePaisa || 0
-                  : 0;
-
-                return {
-                  id: g.id,
-                  name: g.name,
-                  category: g.category || 'Trip',
-                  currencySymbol: g.currencySymbol || '₹',
-                  joinCode: g.joinCode,
-                  simplifyDebts: g.simplifyDebts,
-                  createdAt: g.createdAt || new Date().toISOString(),
-                  memberCount: g.members?.length || 0,
-                  totalSpendPaisa: g.totalSpendPaisa || 0,
-                  ownerBalancePaisa: ownerBalance,
-                } as GroupSummary;
-              } catch {
-                return null;
-              }
-            })
-          );
-          const validJoined = joinedResults.filter(Boolean) as GroupSummary[];
-          combined = [...combined, ...validJoined];
-        }
-      } catch {
-        // Ignore localStorage errors
-      }
-
-      setGroups(combined);
-      setCachedItem('all_groups', combined);
+      setGroups(list);
+      setCachedItem('all_groups', list);
     } catch (e) {
       console.error(e);
     } finally {
@@ -172,18 +119,8 @@ export default function GroupsPage() {
     }
   }, [groups]);
 
-  const handleCopyCode = (e: React.MouseEvent, code: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const filteredGroups = groups.filter(
-    (g) =>
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.joinCode.toLowerCase().includes(search.toLowerCase())
+  const filteredGroups = groups.filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const netBalancePaisa = groups.reduce((sum, g) => sum + g.ownerBalancePaisa, 0);
@@ -199,17 +136,8 @@ export default function GroupsPage() {
           <p className="text-xs font-semibold text-slate-500 mt-0.5">Split group bills & expenses</p>
         </div>
 
-        {/* Action Buttons with single-line guarantee */}
+        {/* Action Button */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setIsJoinOpen(true)}
-            className="px-3 sm:px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap"
-            title="Join with Code"
-          >
-            <KeyRound className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Join</span>
-          </button>
-
           <button
             onClick={() => setIsCreateOpen(true)}
             className="px-3.5 sm:px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap"
@@ -385,8 +313,6 @@ export default function GroupsPage() {
           setIsCreateOpen(false);
         }}
       />
-
-      <JoinCodeModal isOpen={isJoinOpen} onClose={() => setIsJoinOpen(false)} />
     </div>
   );
 }

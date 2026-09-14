@@ -131,7 +131,6 @@ interface GroupDetail {
   simplifyDebts: boolean;
   totalSpendPaisa: number;
   members: Member[];
-  pendingMembers?: Member[];
   expenses: Expense[];
   settlements: Settlement[];
   balances: MemberBalance[];
@@ -423,7 +422,7 @@ export default function GroupDetailPage() {
       const isIdle = Date.now() - lastActivityTime > 45000;
       if (isIdle) return; // Skip polling when user is idle
       fetchGroup(true);
-    }, 3500);
+    }, 8000);
 
     // Debounced tab focus sync (300ms) to prevent burst storms on resume
     let focusTimeout: any = null;
@@ -466,7 +465,9 @@ export default function GroupDetailPage() {
 
   const handleCopyCode = () => {
     if (!group) return;
-    navigator.clipboard.writeText(group.joinCode);
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+    }
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
@@ -878,72 +879,6 @@ export default function GroupDetailPage() {
     }
   };
 
-  // Instant optimistic approval for join requests
-  const handleApproveJoinRequest = async (memberId: string) => {
-    if (!group) return;
-    const pendingItem = (group.pendingMembers || []).find((m) => m.id === memberId);
-    if (!pendingItem) return;
-
-    // 0ms Optimistic UI update
-    const updatedPending = (group.pendingMembers || []).filter((m) => m.id !== memberId);
-    const approvedMember: Member = { ...pendingItem, status: 'APPROVED' };
-    const updatedMembers = [...group.members, approvedMember];
-    const balances = calculateMemberNetBalances(updatedMembers, group.expenses, group.settlements);
-    const simplifiedTransfers = simplifyDebts(balances);
-    const directTransfers = calculateDirectPairwiseDebts(updatedMembers, group.expenses, group.settlements);
-
-    const updated = {
-      ...group,
-      members: updatedMembers,
-      pendingMembers: updatedPending,
-      balances,
-      simplifiedTransfers,
-      directTransfers,
-      activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
-    };
-    setGroup(updated);
-    setCachedItem(`group_${id}`, updated);
-
-    try {
-      const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'APPROVED', adminMemberId: ownerMember?.id }),
-      });
-      if (!res.ok) {
-        fetchGroup(true);
-      }
-    } catch (e) {
-      console.error('Failed to approve member:', e);
-      fetchGroup(true);
-    }
-  };
-
-  // Instant optimistic rejection for join requests
-  const handleRejectJoinRequest = async (memberId: string) => {
-    if (!group) return;
-    const updatedPending = (group.pendingMembers || []).filter((m) => m.id !== memberId);
-    const updated = {
-      ...group,
-      pendingMembers: updatedPending,
-    };
-    setGroup(updated);
-    setCachedItem(`group_${id}`, updated);
-
-    try {
-      const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'REJECTED', adminMemberId: ownerMember?.id }),
-      });
-      if (!res.ok) {
-        fetchGroup(true);
-      }
-    } catch (e) {
-      console.error('Failed to reject member:', e);
-      fetchGroup(true);
-    }
-  };
 
   // Strict zero-balance leave group handler
   const handleLeaveGroup = async () => {
@@ -1498,20 +1433,22 @@ export default function GroupDetailPage() {
                 <span>{group.members.length} people</span>
               </div>
 
-              {/* Tap to copy code pill */}
+              {/* Share Group link button */}
               <button
                 type="button"
                 onClick={handleCopyCode}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/80 text-xs font-semibold tap-effect cursor-pointer"
-                title="Tap to copy invite code"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/90 text-xs font-semibold tap-effect cursor-pointer"
+                title="Copy shareable group link"
               >
-                <span>Code: <span className="font-mono font-bold text-white">{group.joinCode}</span></span>
                 {copiedCode ? (
-                  <span className="text-emerald-300 font-bold flex items-center gap-0.5 text-[11px]">
-                    <Check className="w-3 h-3 stroke-[3]" /> Copied
+                  <span className="text-emerald-300 font-bold flex items-center gap-1 text-[11px]">
+                    <Check className="w-3 h-3 stroke-[3]" /> Link Copied
                   </span>
                 ) : (
-                  <Copy className="w-3 h-3 opacity-60" />
+                  <>
+                    <Copy className="w-3 h-3 opacity-70" />
+                    <span>Share Group</span>
+                  </>
                 )}
               </button>
             </div>
@@ -1527,26 +1464,6 @@ export default function GroupDetailPage() {
             </span>
           </div>
         </div>
-
-        {/* Real-time Join Request Notification Alert Banner for Admins */}
-        {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
-          <div
-            onClick={() => setActiveTab('members')}
-            className="relative z-10 mt-3 p-3 bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold rounded-2xl shadow-lg flex items-center justify-between gap-2 cursor-pointer transition-colors animate-in fade-in slide-in-from-top-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping shrink-0" />
-              <span className="text-xs sm:text-sm font-black truncate">
-                {group.pendingMembers!.length === 1
-                  ? `${group.pendingMembers![0].name} wants to join this group`
-                  : `${group.pendingMembers!.length} people want to join this group`}
-              </span>
-            </div>
-            <span className="px-2.5 py-1 bg-amber-950 text-amber-100 text-[10px] font-black rounded-xl shrink-0 uppercase tracking-wider">
-              Approve Now
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Overall Standing & Action Pills (White Theme) */}
@@ -1936,58 +1853,6 @@ export default function GroupDetailPage() {
               </button>
             </div>
 
-            {/* Pending Join Requests (for Admins) */}
-            {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
-              <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
-                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-                      Pending Join Requests ({group.pendingMembers!.length})
-                    </h4>
-                  </div>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded-full">
-                    Admin Approval Required
-                  </span>
-                </div>
-
-                <div className="divide-y divide-amber-200/60 bg-white/70 rounded-xl border border-amber-200/50 px-3">
-                  {group.pendingMembers!.map((pm) => (
-                    <div key={pm.id} className="py-2.5 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
-                          {pm.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-sm font-bold text-slate-900 block truncate">{pm.name}</span>
-                          {pm.phone && <span className="text-xs text-slate-500 font-medium block">{pm.phone}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleRejectJoinRequest(pm.id)}
-                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                          title="Decline join request"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Decline</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleApproveJoinRequest(pm.id)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center gap-1"
-                          title="Approve member"
-                        >
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          <span>Approve</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Quick Add Friend with Mandatory Phone Number */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
@@ -2136,19 +2001,19 @@ export default function GroupDetailPage() {
                 </div>
               </div>
 
-              {/* Join Code Section */}
-              <div className="p-3.5 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-center justify-between gap-3">
+              {/* Share Group Link Section */}
+              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/70 rounded-xl flex items-center justify-between gap-3">
                 <div className="space-y-0.5 min-w-0">
-                  <span className="text-xs font-bold text-amber-900 block">Invite Code</span>
-                  <p className="text-[11px] text-amber-700 font-medium">Share this code with friends so they can join.</p>
+                  <span className="text-xs font-bold text-emerald-900 block">Share Group</span>
+                  <p className="text-[11px] text-emerald-700 font-medium">Share link with friends so they can view and split expenses.</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
                 >
-                  <span>{group.joinCode}</span>
                   {copiedCode ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5 opacity-80" />}
+                  <span>{copiedCode ? 'Copied' : 'Copy Link'}</span>
                 </button>
               </div>
             </div>
@@ -2333,11 +2198,6 @@ export default function GroupDetailPage() {
               }`}
             >
               <Users className="w-5 h-5" />
-              {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
-                  {group.pendingMembers!.length}
-                </span>
-              )}
             </div>
             <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap">People</span>
           </button>

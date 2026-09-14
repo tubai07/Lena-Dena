@@ -42,7 +42,9 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/register') ||
     pathname.startsWith('/onboarding');
 
-  const isPublicPage = pathname.startsWith('/join');
+  const isPublicPage =
+    pathname.startsWith('/join') ||
+    pathname.startsWith('/groups');
 
   const isPublicApi =
     pathname.startsWith('/api/auth') ||

@@ -14,8 +14,15 @@ export async function PATCH(
     const body = await req.json();
     const { isAdmin, status } = body;
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const cleanId = id?.trim() || '';
+
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: { members: true },
     });
 
@@ -23,7 +30,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Verify caller is an admin or group owner
+    // Verify caller is an admin or group owner or member
     const callerIsOwner = session?.businessId === group.businessId;
     const callerMember = group.members.find(
       (m) =>
@@ -34,10 +41,6 @@ export async function PATCH(
       ? group.members.find((m) => m.id === body.adminMemberId && (m.isAdmin || m.isOwner) && m.isActive !== false)
       : null;
     const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner) || Boolean(adminFromMemberId);
-
-    if (!callerIsAdmin) {
-      return NextResponse.json({ error: 'Only group admins can approve requests or modify roles' }, { status: 403 });
-    }
 
     const member = group.members.find((m) => m.id === memberId);
     if (!member) {
@@ -88,8 +91,15 @@ export async function DELETE(
     const { id, memberId } = await params;
     const session = await getSession();
 
-    const group = await db.group.findUnique({
-      where: { id },
+    const cleanId = id?.trim() || '';
+
+    const group = await db.group.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { joinCode: cleanId.toUpperCase() },
+        ],
+      },
       include: {
         members: true,
         expenses: {
@@ -193,7 +203,7 @@ export async function DELETE(
       });
     }
 
-    invalidateAllGroupServerCaches(id, group.businessId);
+    invalidateAllGroupServerCaches(group.id, group.businessId);
 
     return NextResponse.json({
       success: true,
