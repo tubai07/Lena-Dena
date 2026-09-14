@@ -537,9 +537,35 @@ export function AddExpenseScreen({
                 </div>
               )}
 
-              {/* Category Icon + Description Input */}
+              {/* 1. Amount Input (Top Prominent Position) */}
               <div className="flex items-center gap-3 pt-1">
-                <div className="relative">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 font-extrabold text-2xl flex items-center justify-center border border-emerald-200/80 shadow-2xs shrink-0">
+                  ₹
+                </div>
+
+                <div className="flex-1 border-b-2 border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
+                    placeholder="0.00"
+                    value={amountRupees}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      const parts = val.split('.');
+                      if (parts.length > 2) return;
+                      if (parts[1] && parts[1].length > 2) return;
+                      setAmountRupees(val);
+                    }}
+                    autoFocus
+                    className="w-full text-3xl sm:text-4xl font-black text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Category Icon + Description Input */}
+              <div className="flex items-center gap-3 pt-1">
+                <div className="relative shrink-0">
                   <button
                     type="button"
                     onClick={() => setShowCategoryPicker(!showCategoryPicker)}
@@ -584,26 +610,7 @@ export function AddExpenseScreen({
                     placeholder="Enter a description (e.g. Dinner, Taxi)"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    autoFocus
                     className="w-full text-base sm:text-lg font-bold text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Amount Input */}
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-800 font-bold text-2xl flex items-center justify-center border border-slate-200">
-                  ₹
-                </div>
-
-                <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={amountRupees}
-                    onChange={(e) => setAmountRupees(e.target.value)}
-                    className="w-full text-3xl font-black text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent tracking-tight"
                   />
                 </div>
               </div>
@@ -822,6 +829,7 @@ export function AddExpenseScreen({
                               <input
                                 type="number"
                                 step="0.01"
+                                inputMode="decimal"
                                 placeholder="0.00"
                                 value={val}
                                 onChange={(e) =>
@@ -1052,6 +1060,7 @@ export function AddExpenseScreen({
                               <input
                                 type="number"
                                 step="0.01"
+                                inputMode="decimal"
                                 placeholder="0.00"
                                 value={val}
                                 onChange={(e) =>

@@ -500,11 +500,18 @@ export function SettleUpModal({
                 <span className="text-3xl font-black text-slate-400">₹</span>
                 {isEditingAmount ? (
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*\.?[0-9]*"
                     autoFocus
                     value={amountRupees}
-                    onChange={(e) => setAmountRupees(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      const parts = val.split('.');
+                      if (parts.length > 2) return;
+                      if (parts[1] && parts[1].length > 2) return;
+                      setAmountRupees(val);
+                    }}
                     onBlur={() => setIsEditingAmount(false)}
                     onKeyDown={(e) => e.key === 'Enter' && setIsEditingAmount(false)}
                     className="w-44 text-4xl sm:text-5xl font-black text-slate-900 text-center border-b-2 border-emerald-600 focus:outline-hidden bg-transparent tracking-tight"

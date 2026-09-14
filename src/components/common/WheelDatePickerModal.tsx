@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Calendar as CalendarIcon, Check } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
 interface WheelDatePickerModalProps {
   isOpen: boolean;
@@ -11,12 +11,12 @@ interface WheelDatePickerModalProps {
   disableFuture?: boolean;
 }
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const YEARS = Array.from({ length: 21 }, (_, i) => 2020 + i); // 2020 to 2040
+const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 function parseSafeDate(dateInput?: string | null) {
   if (dateInput && typeof dateInput === 'string') {
@@ -64,11 +64,26 @@ export function WheelDatePickerModal({
     };
   }, [isOpen]);
 
-  const [day, setDay] = useState(parsed.day);
-  const [month, setMonth] = useState(parsed.month);
-  const [year, setYear] = useState(parsed.year);
+  const yesterday = useMemo(() => {
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    return {
+      year: yest.getFullYear(),
+      month: yest.getMonth(),
+      day: yest.getDate(),
+    };
+  }, [isOpen]);
 
-  // Sync state whenever modal opens or parsed changes
+  // View state for browsing months/years
+  const [viewYear, setViewYear] = useState(parsed.year);
+  const [viewMonth, setViewMonth] = useState(parsed.month);
+
+  // Selected date state
+  const [selectedDay, setSelectedDay] = useState(parsed.day);
+  const [selectedMonth, setSelectedMonth] = useState(parsed.month);
+  const [selectedYear, setSelectedYear] = useState(parsed.year);
+
+  // Reset/sync state when modal opens
   useEffect(() => {
     if (isOpen) {
       let y = parsed.year;
@@ -76,326 +91,242 @@ export function WheelDatePickerModal({
       let d = parsed.day;
 
       if (disableFuture) {
-        if (y > today.year || (y === today.year && m > today.month) || (y === today.year && m === today.month && d > today.day)) {
+        if (
+          y > today.year ||
+          (y === today.year && m > today.month) ||
+          (y === today.year && m === today.month && d > today.day)
+        ) {
           y = today.year;
           m = today.month;
           d = today.day;
         }
       }
 
-      setDay(d);
-      setMonth(m);
-      setYear(y);
+      setSelectedDay(d);
+      setSelectedMonth(m);
+      setSelectedYear(y);
+      setViewMonth(m);
+      setViewYear(y);
     }
   }, [isOpen, parsed, disableFuture, today]);
 
-  // Max days in the selected month & year
-  const maxDays = useMemo(() => {
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    if (disableFuture && year === today.year && month === today.month) {
-      return Math.min(daysInMonth, today.day);
-    }
-    return daysInMonth;
-  }, [year, month, disableFuture, today]);
-
-  // Clamp day if exceeding max days
-  useEffect(() => {
-    if (day > maxDays) {
-      setDay(maxDays);
-    }
-  }, [maxDays, day]);
-
-  // Touch event handlers for mobile swiping
-  const touchStartY = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
-  const handleTouchEnd = (
-    e: React.TouchEvent,
-    onUp: () => void,
-    onDown: () => void
-  ) => {
-    const diff = e.changedTouches[0].clientY - touchStartY.current;
-    if (diff > 18) {
-      onUp();
-    } else if (diff < -18) {
-      onDown();
-    }
-  };
-
-  // Wheel event handlers for desktop scrolling (Passive safe - no e.preventDefault())
-  const onWheelColumn = (
-    e: React.WheelEvent,
-    onUp: () => void,
-    onDown: () => void
-  ) => {
-    if (e.deltaY < -15) {
-      onUp();
-    } else if (e.deltaY > 15) {
-      onDown();
-    }
-  };
-
   if (!isOpen) return null;
 
-  // Jump to Today
-  const handleJumpToToday = () => {
-    const now = new Date();
-    setDay(now.getDate());
-    setMonth(now.getMonth());
-    setYear(now.getFullYear());
+  // Jump shortcuts
+  const handleSelectToday = () => {
+    setSelectedDay(today.day);
+    setSelectedMonth(today.month);
+    setSelectedYear(today.year);
+    setViewMonth(today.month);
+    setViewYear(today.year);
   };
 
-  // Jump to Yesterday
-  const handleJumpToYesterday = () => {
-    const yest = new Date();
-    yest.setDate(yest.getDate() - 1);
-    setDay(yest.getDate());
-    setMonth(yest.getMonth());
-    setYear(yest.getFullYear());
+  const handleSelectYesterday = () => {
+    setSelectedDay(yesterday.day);
+    setSelectedMonth(yesterday.month);
+    setSelectedYear(yesterday.year);
+    setViewMonth(yesterday.month);
+    setViewYear(yesterday.year);
   };
 
-  // Steppers for Day
-  const handlePrevDay = () => {
-    setDay((prev) => (prev > 1 ? prev - 1 : maxDays));
-  };
-  const handleNextDay = () => {
-    if (disableFuture && year === today.year && month === today.month && day >= today.day) {
-      return;
-    }
-    setDay((prev) => (prev < maxDays ? prev + 1 : 1));
-  };
-
-  // Steppers for Month
   const handlePrevMonth = () => {
-    setMonth((prev) => (prev > 0 ? prev - 1 : (disableFuture && year === today.year ? today.month : 11)));
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((prev) => prev - 1);
+    } else {
+      setViewMonth((prev) => prev - 1);
+    }
   };
+
   const handleNextMonth = () => {
-    if (disableFuture && year === today.year && month >= today.month) {
+    if (disableFuture && viewYear === today.year && viewMonth >= today.month) {
       return;
     }
-    setMonth((prev) => (prev < 11 ? prev + 1 : 0));
-  };
-
-  // Steppers for Year
-  const handlePrevYear = () => {
-    setYear((prev) => {
-      const idx = YEARS.indexOf(prev);
-      return idx > 0 ? YEARS[idx - 1] : prev;
-    });
-  };
-  const handleNextYear = () => {
-    if (disableFuture && year >= today.year) {
-      return;
-    }
-    setYear((prev) => {
-      const idx = YEARS.indexOf(prev);
-      return idx < YEARS.length - 1 ? YEARS[idx + 1] : prev;
-    });
-  };
-
-  // Handle native input change if user clicks native picker
-  const handleNativeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val) {
-      const p = parseSafeDate(val);
-      let y = p.year;
-      let m = p.month;
-      let d = p.day;
-      if (disableFuture) {
-        if (y > today.year || (y === today.year && m > today.month) || (y === today.year && m === today.month && d > today.day)) {
-          y = today.year;
-          m = today.month;
-          d = today.day;
-        }
-      }
-      setDay(d);
-      setMonth(m);
-      setYear(y);
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((prev) => prev + 1);
+    } else {
+      setViewMonth((prev) => prev + 1);
     }
   };
 
-  // Final Confirmation
+  const handleSelectDay = (d: number) => {
+    setSelectedDay(d);
+    setSelectedMonth(viewMonth);
+    setSelectedYear(viewYear);
+  };
+
   const handleConfirm = () => {
-    const yStr = year.toString();
-    const mStr = (month + 1).toString().padStart(2, '0');
-    const dStr = day.toString().padStart(2, '0');
+    const yStr = selectedYear.toString();
+    const mStr = (selectedMonth + 1).toString().padStart(2, '0');
+    const dStr = selectedDay.toString().padStart(2, '0');
     onConfirm(`${yStr}-${mStr}-${dStr}`);
     onClose();
   };
 
-  // Previous and next labels for 3-row tumbler effect
-  const prevDay = day > 1 ? day - 1 : maxDays;
-  const isNextDayFuture = disableFuture && year === today.year && month === today.month && day >= today.day;
-  const nextDay = isNextDayFuture ? '' : (day < maxDays ? day + 1 : 1);
+  // Calendar grid calculations
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay(); // 0 (Sun) to 6 (Sat)
+  const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
 
-  const prevMonth = month > 0 ? month - 1 : 11;
-  const isNextMonthFuture = disableFuture && year === today.year && month >= today.month;
-  const nextMonthName = isNextMonthFuture ? '' : MONTHS[month < 11 ? month + 1 : 0];
+  const isTodaySelected =
+    selectedDay === today.day &&
+    selectedMonth === today.month &&
+    selectedYear === today.year;
 
-  const yearIdx = YEARS.indexOf(year);
-  const prevYear = yearIdx > 0 ? YEARS[yearIdx - 1] : '';
-  const isNextYearFuture = disableFuture && year >= today.year;
-  const nextYear = isNextYearFuture ? '' : (yearIdx < YEARS.length - 1 ? YEARS[yearIdx + 1] : '');
+  const isYesterdaySelected =
+    selectedDay === yesterday.day &&
+    selectedMonth === yesterday.month &&
+    selectedYear === yesterday.year;
 
-  const currentDateValue = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-  const maxDateValue = disableFuture
-    ? `${today.year}-${(today.month + 1).toString().padStart(2, '0')}-${today.day.toString().padStart(2, '0')}`
-    : undefined;
+  const isNextMonthDisabled =
+    disableFuture && (viewYear > today.year || (viewYear === today.year && viewMonth >= today.month));
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl space-y-5 select-none animate-in zoom-in-95 duration-200 border border-slate-100"
+        className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl space-y-4 select-none animate-in zoom-in-95 duration-150 border border-slate-100"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header matching Screenshot 1 */}
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-xl font-bold text-slate-900 tracking-tight">Select Date</h3>
-          <div className="flex items-center gap-2">
+        {/* Header with Title & Quick Chips */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-black text-slate-900 tracking-tight">Select Date</h3>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={handleJumpToYesterday}
-              className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer active:scale-95"
+              onClick={handleSelectYesterday}
+              className={`text-xs font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                isYesterdaySelected
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
             >
               Yesterday
             </button>
             <button
               type="button"
-              onClick={handleJumpToToday}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer active:scale-95"
+              onClick={handleSelectToday}
+              className={`text-xs font-bold px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                isTodaySelected
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+              }`}
             >
               Today
             </button>
           </div>
         </div>
 
-        {/* 3-Row Tumbler Wheel Picker matching Screenshot 1 */}
-        <div className="relative py-2">
-          {/* Active Highlight Capsule in Center */}
-          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-14 bg-slate-50/90 border border-slate-200/70 rounded-2xl pointer-events-none" />
+        {/* Month / Year Navigator */}
+        <div className="flex items-center justify-between bg-slate-50/90 rounded-2xl p-1.5 border border-slate-200/70">
+          <button
+            type="button"
+            onClick={handlePrevMonth}
+            className="w-8 h-8 rounded-xl bg-white hover:bg-slate-100 flex items-center justify-center text-slate-600 shadow-2xs transition-colors cursor-pointer"
+            aria-label="Previous Month"
+          >
+            <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+          </button>
 
-          <div className="relative z-10 grid grid-cols-3 text-center">
-            {/* Column 1: Day */}
-            <div
-              className="flex flex-col items-center justify-center cursor-pointer select-none"
-              onWheel={(e) => onWheelColumn(e, handlePrevDay, handleNextDay)}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={(e) => handleTouchEnd(e, handlePrevDay, handleNextDay)}
-            >
-              {/* Previous Day */}
-              <button
-                type="button"
-                onClick={handlePrevDay}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
+          <span className="text-sm font-black text-slate-800">
+            {MONTH_NAMES[viewMonth]} {viewYear}
+          </span>
+
+          <button
+            type="button"
+            onClick={handleNextMonth}
+            disabled={isNextMonthDisabled}
+            className="w-8 h-8 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-30 flex items-center justify-center text-slate-600 shadow-2xs transition-colors cursor-pointer"
+            aria-label="Next Month"
+          >
+            <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+          </button>
+        </div>
+
+        {/* Calendar Day Grid */}
+        <div className="space-y-1.5">
+          {/* Weekday Labels */}
+          <div className="grid grid-cols-7 text-center">
+            {WEEK_DAYS.map((wd, i) => (
+              <span
+                key={wd}
+                className={`text-[11px] font-bold py-1 ${
+                  i === 0 || i === 6 ? 'text-slate-400' : 'text-slate-500'
+                }`}
               >
-                {prevDay}
-              </button>
+                {wd}
+              </span>
+            ))}
+          </div>
 
-              {/* Active Day */}
-              <div className="h-14 text-2xl font-bold text-slate-900 flex items-center justify-center w-full">
-                {day}
-              </div>
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {/* Previous month filler days */}
+            {Array.from({ length: firstDayOfWeek }).map((_, i) => {
+              const fillerDay = prevMonthDays - firstDayOfWeek + i + 1;
+              return (
+                <div
+                  key={`prev-${i}`}
+                  className="h-9 flex items-center justify-center text-xs font-semibold text-slate-300 pointer-events-none"
+                >
+                  {fillerDay}
+                </div>
+              );
+            })}
 
-              {/* Next Day */}
-              <button
-                type="button"
-                onClick={handleNextDay}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
-              >
-                {nextDay}
-              </button>
-            </div>
+            {/* Current month days */}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const dayNum = i + 1;
+              const isSelected =
+                selectedDay === dayNum &&
+                selectedMonth === viewMonth &&
+                selectedYear === viewYear;
 
-            {/* Column 2: Month */}
-            <div
-              className="flex flex-col items-center justify-center cursor-pointer select-none"
-              onWheel={(e) => onWheelColumn(e, handlePrevMonth, handleNextMonth)}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={(e) => handleTouchEnd(e, handlePrevMonth, handleNextMonth)}
-            >
-              {/* Previous Month */}
-              <button
-                type="button"
-                onClick={handlePrevMonth}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
-              >
-                {MONTHS[prevMonth]}
-              </button>
+              const isCurrentDay =
+                dayNum === today.day &&
+                viewMonth === today.month &&
+                viewYear === today.year;
 
-              {/* Active Month */}
-              <div className="h-14 text-2xl font-bold text-slate-900 flex items-center justify-center w-full">
-                {MONTHS[month]}
-              </div>
+              const isFuture =
+                disableFuture &&
+                (viewYear > today.year ||
+                  (viewYear === today.year && viewMonth > today.month) ||
+                  (viewYear === today.year && viewMonth === today.month && dayNum > today.day));
 
-              {/* Next Month */}
-              <button
-                type="button"
-                onClick={handleNextMonth}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
-              >
-                {nextMonthName}
-              </button>
-            </div>
-
-            {/* Column 3: Year */}
-            <div
-              className="flex flex-col items-center justify-center cursor-pointer select-none"
-              onWheel={(e) => onWheelColumn(e, handlePrevYear, handleNextYear)}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={(e) => handleTouchEnd(e, handlePrevYear, handleNextYear)}
-            >
-              {/* Previous Year */}
-              <button
-                type="button"
-                onClick={handlePrevYear}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
-              >
-                {prevYear || '\u00A0'}
-              </button>
-
-              {/* Active Year */}
-              <div className="h-14 text-2xl font-bold text-slate-900 flex items-center justify-center w-full">
-                {year}
-              </div>
-
-              {/* Next Year */}
-              <button
-                type="button"
-                onClick={handleNextYear}
-                className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
-              >
-                {nextYear || '\u00A0'}
-              </button>
-            </div>
+              return (
+                <button
+                  key={`day-${dayNum}`}
+                  type="button"
+                  disabled={isFuture}
+                  onClick={() => handleSelectDay(dayNum)}
+                  className={`h-9 w-full rounded-xl text-xs font-bold transition-all flex items-center justify-center relative cursor-pointer ${
+                    isFuture
+                      ? 'text-slate-300 opacity-40 cursor-not-allowed'
+                      : isSelected
+                      ? 'bg-emerald-600 text-white font-black shadow-xs scale-105'
+                      : isCurrentDay
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-black hover:bg-emerald-100'
+                      : 'hover:bg-slate-100 text-slate-800 active:scale-95'
+                  }`}
+                >
+                  <span>{dayNum}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Native Calendar Picker shortcut */}
-        <div className="flex items-center justify-center">
-          <label className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 cursor-pointer py-1">
-            <CalendarIcon className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Pick from calendar</span>
-            <input
-              type="date"
-              value={currentDateValue}
-              max={maxDateValue}
-              onChange={handleNativeChange}
-              className="sr-only"
-            />
-          </label>
-        </div>
-
-        {/* Confirm Button matching Screenshot 1 */}
+        {/* Confirm Action Button */}
         <button
           type="button"
           onClick={handleConfirm}
-          className="w-full py-3.5 rounded-full bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold text-base shadow-sm transition-all cursor-pointer"
+          className="w-full py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold text-sm shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          Confirm
+          <Check className="w-4 h-4 stroke-[3]" />
+          <span>Confirm Date</span>
         </button>
       </div>
     </div>

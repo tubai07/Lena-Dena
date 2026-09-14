@@ -106,25 +106,43 @@ export default function GroupsPage() {
   useEffect(() => {
     fetchGroups();
 
-    // Live auto-polling every 4 seconds
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchGroups();
-      }
-    }, 4000);
+    // Idle-aware smart polling (6s active, pauses after 30s idle)
+    let lastActivityTime = Date.now();
+    const updateActivity = () => {
+      lastActivityTime = Date.now();
+    };
 
+    window.addEventListener('pointerdown', updateActivity, { passive: true });
+    window.addEventListener('keydown', updateActivity, { passive: true });
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const isIdle = Date.now() - lastActivityTime > 30000;
+      if (isIdle) return; // Skip polling when user is idle
+      fetchGroups();
+    }, 6000);
+
+    // Debounced tab focus sync (300ms) to prevent burst storms on resume
+    let focusTimeout: any = null;
     const handleSync = () => {
       if (document.visibilityState === 'visible') {
-        fetchGroups();
+        clearTimeout(focusTimeout);
+        focusTimeout = setTimeout(() => {
+          fetchGroups();
+        }, 300);
       }
     };
+
     window.addEventListener('focus', handleSync);
     document.addEventListener('visibilitychange', handleSync);
 
     return () => {
       clearInterval(interval);
+      clearTimeout(focusTimeout);
       window.removeEventListener('focus', handleSync);
       document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('pointerdown', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
     };
   }, []);
 
@@ -180,22 +198,22 @@ export default function GroupsPage() {
           <p className="text-xs font-semibold text-slate-500 mt-0.5">Split group bills & expenses</p>
         </div>
 
-        {/* Action Buttons with larger text */}
-        <div className="flex items-center gap-2">
+        {/* Action Buttons with single-line guarantee */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setIsJoinOpen(true)}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3 sm:px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap"
             title="Join with Code"
           >
-            <KeyRound className="w-4 h-4 text-amber-600" />
+            <KeyRound className="w-4 h-4 text-amber-600 shrink-0" />
             <span>Join</span>
           </button>
 
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-sm shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 sm:px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>New Group</span>
           </button>
         </div>
@@ -281,7 +299,7 @@ export default function GroupsPage() {
             </div>
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               <span>Create Group</span>
@@ -316,28 +334,11 @@ export default function GroupsPage() {
                       })()}
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-black text-slate-900 text-lg truncate group-hover:text-emerald-700 transition-colors">
-                            {group.name}
-                          </h3>
+                        <h3 className="font-black text-slate-900 text-base sm:text-lg truncate group-hover:text-emerald-700 transition-colors">
+                          {group.name}
+                        </h3>
 
-                          {/* Join Code Chip */}
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyCode(e, group.joinCode)}
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-mono font-black bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 transition-colors shrink-0"
-                            title="Copy Code"
-                          >
-                            <span>{group.joinCode}</span>
-                            {copiedCode === group.joinCode ? (
-                              <Check className="w-3 h-3 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3 h-3 opacity-60" />
-                            )}
-                          </button>
-                        </div>
-
-                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                        <p className="text-xs font-semibold text-slate-500 mt-0.5">
                           {group.memberCount} members • ₹{(group.totalSpendPaisa / 100).toFixed(0)} total
                         </p>
                       </div>

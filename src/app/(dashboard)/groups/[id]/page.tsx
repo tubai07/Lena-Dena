@@ -381,24 +381,43 @@ export default function GroupDetailPage({
   useEffect(() => {
     fetchGroup();
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchGroup(true);
-      }
-    }, 3500);
+    // Idle-aware smart polling (6s active, pauses after 30s idle)
+    let lastActivityTime = Date.now();
+    const updateActivity = () => {
+      lastActivityTime = Date.now();
+    };
 
+    window.addEventListener('pointerdown', updateActivity, { passive: true });
+    window.addEventListener('keydown', updateActivity, { passive: true });
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const isIdle = Date.now() - lastActivityTime > 30000;
+      if (isIdle) return; // Skip polling when user is idle
+      fetchGroup(true);
+    }, 6000);
+
+    // Debounced tab focus sync (300ms) to prevent burst storms on resume
+    let focusTimeout: any = null;
     const handleSync = () => {
       if (document.visibilityState === 'visible') {
-        fetchGroup(true);
+        clearTimeout(focusTimeout);
+        focusTimeout = setTimeout(() => {
+          fetchGroup(true);
+        }, 300);
       }
     };
+
     window.addEventListener('focus', handleSync);
     document.addEventListener('visibilitychange', handleSync);
 
     return () => {
       clearInterval(interval);
+      clearTimeout(focusTimeout);
       window.removeEventListener('focus', handleSync);
       document.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('pointerdown', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
     };
   }, [id]);
 
@@ -1948,9 +1967,9 @@ export default function GroupDetailPage({
         )}
       </div>
 
-      {/* Floating Action Button: Add expense (comfortable gap above bottom tab bar) */}
+      {/* Floating Action Button: Add expense (generous gap above bottom tab bar) */}
       {activeTab !== 'settings' && (
-        <div className="fixed bottom-24 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
+        <div className="fixed bottom-28 sm:bottom-28 left-0 right-0 max-w-md mx-auto pointer-events-none px-4 flex justify-end z-30 animate-fab-enter">
           <button
             type="button"
             onClick={() => {
@@ -1984,7 +2003,7 @@ export default function GroupDetailPage({
           <button
             type="button"
             onClick={() => setActiveTab('activity')}
-            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'activity'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -1997,14 +2016,14 @@ export default function GroupDetailPage({
             >
               <ReceiptText className="w-5 h-5" />
             </div>
-            <span className="text-[11px] mt-0.5">Activity</span>
+            <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap">Activity</span>
           </button>
 
           {/* Tab 2: Who owes who */}
           <button
             type="button"
             onClick={() => setActiveTab('balances')}
-            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'balances'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -2017,14 +2036,14 @@ export default function GroupDetailPage({
             >
               <Scale className="w-5 h-5" />
             </div>
-            <span className="text-[11px] mt-0.5">Who owes who</span>
+            <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap tracking-tight">Who owes who</span>
           </button>
 
           {/* Tab 3: People */}
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'members'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -2037,14 +2056,14 @@ export default function GroupDetailPage({
             >
               <Users className="w-5 h-5" />
             </div>
-            <span className="text-[11px] mt-0.5">People</span>
+            <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap">People</span>
           </button>
 
           {/* Tab 4: Settings */}
           <button
             type="button"
             onClick={() => setActiveTab('settings')}
-            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center py-1.5 px-1 sm:px-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'settings'
                 ? 'text-emerald-700 font-bold'
                 : 'text-slate-500 font-medium hover:text-slate-800'
@@ -2057,7 +2076,7 @@ export default function GroupDetailPage({
             >
               <Settings className="w-5 h-5" />
             </div>
-            <span className="text-[11px] mt-0.5">Settings</span>
+            <span className="text-[10px] sm:text-[11px] mt-0.5 whitespace-nowrap">Settings</span>
           </button>
         </div>
       </nav>
