@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import {
   calculateMemberNetBalances,
   simplifyDebts,
@@ -73,6 +74,18 @@ export async function GET(
     const totalSpendPaisa = expenses.reduce((acc, e) => acc + (Number(e.totalAmountPaisa) || 0), 0);
     const isSimplify = typeof group.simplifyDebts === 'boolean' ? group.simplifyDebts : true;
 
+    const session = await getSession();
+    let currentUserId: string | null = null;
+    if (session) {
+      const match = members.find(
+        (m) =>
+          (session.phone && m.phone === session.phone) ||
+          (session.businessId && group.businessId === session.businessId && m.isOwner) ||
+          (session.userName && m.name.toLowerCase() === session.userName.toLowerCase())
+      );
+      if (match) currentUserId = match.id;
+    }
+
     return NextResponse.json(
       {
         group: {
@@ -83,6 +96,7 @@ export async function GET(
           joinCode: group.joinCode,
           simplifyDebts: isSimplify,
           totalSpendPaisa,
+          currentUserMemberId: currentUserId,
           members: approvedMembers,
           pendingMembers,
           allMembers: members,

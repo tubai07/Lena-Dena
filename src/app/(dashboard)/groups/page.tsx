@@ -28,14 +28,9 @@ interface GroupSummary {
 }
 
 export default function GroupsPage() {
-  // Instant render from cache (0ms)
-  const [groups, setGroups] = useState<GroupSummary[]>(() => {
-    return getCachedItem<GroupSummary[]>('all_groups') || [];
-  });
-  const [loading, setLoading] = useState(() => {
-    const cached = getCachedItem<GroupSummary[]>('all_groups');
-    return !cached || cached.length === 0;
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
@@ -104,6 +99,12 @@ export default function GroupsPage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
+    const cached = getCachedItem<GroupSummary[]>('all_groups');
+    if (cached && cached.length > 0) {
+      setGroups(cached);
+      setLoading(false);
+    }
     fetchGroups();
 
     // Idle-aware smart polling (6s active, pauses after 30s idle)
@@ -281,7 +282,7 @@ export default function GroupsPage() {
         )}
 
         {/* Groups List */}
-        {loading && groups.length === 0 ? (
+        {!isMounted || (loading && groups.length === 0) ? (
           <div className="space-y-3 pt-1 animate-pulse">
             <div className="h-20 bg-slate-100 rounded-2xl"></div>
             <div className="h-20 bg-slate-100 rounded-2xl"></div>

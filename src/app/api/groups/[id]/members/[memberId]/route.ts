@@ -26,9 +26,14 @@ export async function PATCH(
     // Verify caller is an admin or group owner
     const callerIsOwner = session?.businessId === group.businessId;
     const callerMember = group.members.find(
-      (m) => session?.phone && m.phone === session.phone
+      (m) =>
+        (session?.phone && m.phone === session.phone) ||
+        (session?.userName && m.name.toLowerCase() === session.userName.toLowerCase())
     );
-    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+    const adminFromMemberId = body.adminMemberId
+      ? group.members.find((m) => m.id === body.adminMemberId && (m.isAdmin || m.isOwner) && m.isActive !== false)
+      : null;
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner) || Boolean(adminFromMemberId);
 
     if (!callerIsAdmin) {
       return NextResponse.json({ error: 'Only group admins can approve requests or modify roles' }, { status: 403 });
@@ -106,13 +111,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Member not found in this group' }, { status: 404 });
     }
 
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // ignore
+    }
+
     // Verify caller is an admin, owner, or the member themselves leaving the group
     const callerIsOwner = session?.businessId === group.businessId;
     const callerMember = group.members.find(
-      (m) => session?.phone && m.phone === session.phone
+      (m) =>
+        (session?.phone && m.phone === session.phone) ||
+        (session?.userName && m.name.toLowerCase() === session.userName.toLowerCase()) ||
+        (body?.adminMemberId && m.id === body.adminMemberId)
     );
-    const isSelfLeaving = callerMember?.id === memberId;
-    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+    const adminFromMemberId = body?.adminMemberId
+      ? group.members.find((m) => m.id === body.adminMemberId && (m.isAdmin || m.isOwner) && m.isActive !== false)
+      : null;
+    const isSelfLeaving = callerMember?.id === memberId || body?.isLeaving === true;
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner) || Boolean(adminFromMemberId);
 
     if (!callerIsAdmin && !isSelfLeaving) {
       return NextResponse.json({ error: 'Only group admins or the member themselves can perform this action' }, { status: 403 });

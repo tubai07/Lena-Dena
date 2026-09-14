@@ -99,6 +99,7 @@ export default function JoinGroupDetailPage() {
   const rawCode = (urlParams?.code as string) || '';
   const upperCode = rawCode.toUpperCase().trim();
 
+  const [isMounted, setIsMounted] = useState(false);
   const [group, setGroup] = useState<GroupData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -133,6 +134,20 @@ export default function JoinGroupDetailPage() {
       }
       const data = await res.json();
       if (!data?.group) throw new Error('Invalid group data received');
+
+      if (data.group.currentUserMemberId) {
+        const all = data.group.allMembers || data.group.members || [];
+        const match = all.find((m: any) => m.id === data.group.currentUserMemberId);
+        if (match) {
+          const ident = { id: match.id, name: match.name };
+          setClaimedMember((prev) => prev || ident);
+          try {
+            if (!localStorage.getItem(storageKey)) {
+              localStorage.setItem(storageKey, JSON.stringify(ident));
+            }
+          } catch {}
+        }
+      }
       
       setGroup((prev) => {
         const incomingMembers = data.group.members || [];
@@ -185,6 +200,7 @@ export default function JoinGroupDetailPage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
     fetchGroup();
 
     // Check localStorage for claimed identity
@@ -272,7 +288,7 @@ export default function JoinGroupDetailPage() {
     setClaimedMember(null);
   };
 
-  if (loading) {
+  if (!isMounted || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 text-slate-400 font-semibold">
         Loading group...
@@ -702,6 +718,61 @@ export default function JoinGroupDetailPage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
+        {/* Pending Join Requests for Group Admins */}
+        {isUserAdmin && ((group as any).pendingMembers || []).length > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+              <span className="text-xs font-black text-amber-900 uppercase tracking-wider">
+                Pending Join Requests ({((group as any).pendingMembers || []).length})
+              </span>
+            </div>
+            <div className="space-y-2">
+              {((group as any).pendingMembers || []).map((pm: any) => (
+                <div
+                  key={pm.id}
+                  className="bg-white p-3 rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs"
+                >
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-slate-900 text-xs sm:text-sm truncate">{pm.name}</div>
+                    {pm.phone && (
+                      <div className="text-[10px] text-slate-500 font-semibold">{pm.phone}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/groups/${group.id}/members/${pm.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'APPROVED', adminMemberId: currentMemberObj?.id }),
+                        });
+                        fetchGroup(true);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await fetch(`/api/groups/${group.id}/members/${pm.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'REJECTED', adminMemberId: currentMemberObj?.id }),
+                        });
+                        fetchGroup(true);
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Personal Standing Card matching Screenshot 2 */}
         <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200/80 shadow-2xs text-center space-y-1">
           <span className="text-xs font-bold text-slate-500">

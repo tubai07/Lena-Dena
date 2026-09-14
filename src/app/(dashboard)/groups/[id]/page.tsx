@@ -145,55 +145,9 @@ export default function GroupDetailPage() {
   const id = (urlParams?.id as string) || '';
   const router = useRouter();
 
-  // Instant render from cache (0ms)
-  const [group, setGroup] = useState<GroupDetail | null>(() => {
-    const cachedFull = getCachedItem<GroupDetail>(`group_${id}`);
-    if (cachedFull) return cachedFull;
-
-    // Instant provisional render from groups list summary
-    const allGroups = getCachedItem<any[]>('all_groups');
-    const summary = allGroups?.find((g: any) => g.id === id);
-    if (summary) {
-      return {
-        id: summary.id,
-        name: summary.name,
-        joinCode: summary.joinCode,
-        simplifyDebts: true,
-        totalSpendPaisa: summary.totalSpendPaisa || 0,
-        members: [
-          {
-            id: 'current_user',
-            name: 'You',
-            isOwner: true,
-            phone: null,
-            upiId: null,
-          },
-        ],
-        expenses: [],
-        settlements: [],
-        balances: [
-          {
-            memberId: 'current_user',
-            name: 'You',
-            isOwner: true,
-            totalPaidPaisa: 0,
-            totalOwedPaisa: 0,
-            settlementsPaidPaisa: 0,
-            settlementsReceivedPaisa: 0,
-            netBalancePaisa: summary.ownerBalancePaisa || 0,
-          },
-        ],
-        simplifiedTransfers: [],
-        directTransfers: [],
-        activeTransfers: [],
-      };
-    }
-    return null;
-  });
-
-  const [loading, setLoading] = useState(() => {
-    return !getCachedItem<GroupDetail>(`group_${id}`);
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [group, setGroup] = useState<GroupDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<'activity' | 'balances' | 'members' | 'settings'>('activity');
   const [activitySearch, setActivitySearch] = useState('');
@@ -380,6 +334,55 @@ export default function GroupDetailPage() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
+
+    // Instant hydrate from local cache on client mount without causing SSR hydration mismatch
+    const cachedFull = getCachedItem<GroupDetail>(`group_${id}`);
+    if (cachedFull) {
+      setGroup(cachedFull);
+      setLoading(false);
+    } else {
+      const allGroups = getCachedItem<any[]>('all_groups');
+      const summary = allGroups?.find((g: any) => g.id === id);
+      if (summary) {
+        setGroup({
+          id: summary.id,
+          name: summary.name,
+          category: summary.category,
+          joinCode: summary.joinCode,
+          simplifyDebts: true,
+          totalSpendPaisa: summary.totalSpendPaisa || 0,
+          members: [
+            {
+              id: 'current_user',
+              name: 'You',
+              isOwner: true,
+              phone: null,
+              upiId: null,
+            },
+          ],
+          expenses: [],
+          settlements: [],
+          balances: [
+            {
+              memberId: 'current_user',
+              name: 'You',
+              isOwner: true,
+              totalPaidPaisa: 0,
+              totalOwedPaisa: 0,
+              settlementsPaidPaisa: 0,
+              settlementsReceivedPaisa: 0,
+              netBalancePaisa: summary.ownerBalancePaisa || 0,
+            },
+          ],
+          simplifiedTransfers: [],
+          directTransfers: [],
+          activeTransfers: [],
+        });
+        setLoading(false);
+      }
+    }
+
     fetchGroup();
 
     // Idle-aware smart polling (6s active, pauses after 30s idle)
@@ -835,6 +838,8 @@ export default function GroupDetailPage() {
     try {
       const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminMemberId: ownerMember?.id }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -879,7 +884,7 @@ export default function GroupDetailPage() {
       const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'APPROVED' }),
+        body: JSON.stringify({ status: 'APPROVED', adminMemberId: ownerMember?.id }),
       });
       if (!res.ok) {
         fetchGroup(true);
@@ -905,7 +910,7 @@ export default function GroupDetailPage() {
       const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'REJECTED' }),
+        body: JSON.stringify({ status: 'REJECTED', adminMemberId: ownerMember?.id }),
       });
       if (!res.ok) {
         fetchGroup(true);
@@ -941,6 +946,8 @@ export default function GroupDetailPage() {
     try {
       const res = await fetch(`/api/groups/${id}/members/${ownerMember.id}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminMemberId: ownerMember.id, isLeaving: true }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -1038,7 +1045,7 @@ export default function GroupDetailPage() {
     }
   };
 
-  if (loading && !group) {
+  if (!isMounted || (loading && !group)) {
     return (
       <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen">
         <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
