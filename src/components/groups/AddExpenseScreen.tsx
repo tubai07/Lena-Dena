@@ -15,6 +15,9 @@ import {
   ShoppingBag,
   FileText,
   AlertCircle,
+  Users,
+  User,
+  CheckCircle2,
 } from 'lucide-react';
 import { distributeEqualSplits } from '@/lib/splitwise';
 import { WheelDatePickerModal } from '@/components/common/WheelDatePickerModal';
@@ -27,7 +30,7 @@ const getAvatarBg = (name: string) => {
   return 'bg-emerald-100 text-emerald-700';
 };
 
-// Safe local date string formatter (YYYY-MM-DD) that never shifts due to UTC offset
+// Safe local date string formatter (YYYY-MM-DD)
 export const getLocalDateString = (dInput?: Date | string) => {
   const d = dInput ? new Date(dInput) : new Date();
   if (isNaN(d.getTime())) {
@@ -81,28 +84,31 @@ export function AddExpenseScreen({
   initialExpense = null,
 }: AddExpenseScreenProps) {
   const isEditing = Boolean(initialExpense?.id);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [description, setDescription] = useState('');
   const [amountRupees, setAmountRupees] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [payerId, setPayerId] = useState<string>('');
   const [category, setCategory] = useState('General');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
-  // Date selection (default today YYYY-MM-DD using local time)
+  // Date selection (defaults to today; cannot be future)
   const [expenseDate, setExpenseDate] = useState(() => getLocalDateString());
   const [showWheelDatePicker, setShowWheelDatePicker] = useState(false);
 
   // Notes
   const [notes, setNotes] = useState('');
 
-  // Split configurations
-  const [splitMode, setSplitMode] = useState<'EQUAL' | 'CUSTOM'>('EQUAL');
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
+  // Step 2: Who Paid? (Single person OR Multiple people)
+  const [payerMode, setPayerMode] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE');
+  const [singlePayerId, setSinglePayerId] = useState<string>('');
+  const [multiplePayers, setMultiplePayers] = useState<Record<string, string>>({});
 
-  // Track previous state to avoid losing typing on re-renders
+  // Step 3: How should this be split? ("Equal" or "Custom")
+  const [splitMode, setSplitMode] = useState<'EQUAL' | 'CUSTOM'>('EQUAL');
+  const [selectedSplitMemberIds, setSelectedSplitMemberIds] = useState<string[]>([]);
+  const [customSplitAmounts, setCustomSplitAmounts] = useState<Record<string, string>>({});
+
   const prevIsOpenRef = useRef(false);
   const prevExpenseIdRef = useRef<string | null>(null);
 
@@ -124,29 +130,42 @@ export function AddExpenseScreen({
         setExpenseDate(getLocalDateString(initialExpense.date));
         setNotes(initialExpense.notes || '');
 
-        const editPayer = initialExpense.payers?.[0]?.memberId || defaultPayerId || members[0]?.id || '';
-        setPayerId(editPayer);
+        // Payers
+        const existingPayers = initialExpense.payers || [];
+        if (existingPayers.length > 1) {
+          setPayerMode('MULTIPLE');
+          const payersMap: Record<string, string> = {};
+          existingPayers.forEach((p: any) => {
+            payersMap[p.memberId] = (p.amountPaisa / 100).toFixed(2);
+          });
+          setMultiplePayers(payersMap);
+          setSinglePayerId(existingPayers[0]?.memberId || members[0]?.id || '');
+        } else {
+          setPayerMode('SINGLE');
+          setSinglePayerId(existingPayers[0]?.memberId || defaultPayerId || members[0]?.id || '');
+          setMultiplePayers({});
+        }
 
-        const isCustom = initialExpense.splitType === 'EXACT' || initialExpense.splitType === 'CUSTOM';
-        setSplitMode(isCustom ? 'CUSTOM' : 'EQUAL');
+        // Splits
+        const isCustomSplit = initialExpense.splitType === 'EXACT' || initialExpense.splitType === 'CUSTOM';
+        setSplitMode(isCustomSplit ? 'CUSTOM' : 'EQUAL');
 
         const splitMembers = (initialExpense.splits || []).map((s: any) => s.memberId);
-        setSelectedMemberIds(splitMembers.length > 0 ? splitMembers : members.map((m) => m.id));
+        setSelectedSplitMemberIds(splitMembers.length > 0 ? splitMembers : members.map((m) => m.id));
 
-        if (isCustom) {
+        if (isCustomSplit) {
           const customs: Record<string, string> = {};
           (initialExpense.splits || []).forEach((s: any) => {
             customs[s.memberId] = (s.amountPaisa / 100).toFixed(2);
           });
-          setCustomAmounts(customs);
+          setCustomSplitAmounts(customs);
         } else {
-          setCustomAmounts({});
+          setCustomSplitAmounts({});
         }
       } else {
         // Create mode fresh state
         setDescription('');
         setAmountRupees('');
-        setSplitMode('EQUAL');
         setCategory('General');
         setExpenseDate(getLocalDateString());
         setNotes('');
@@ -156,10 +175,13 @@ export function AddExpenseScreen({
           members.find((m) => m.isOwner)?.id ||
           members[0]?.id ||
           '';
-        setPayerId(targetPayer);
+        setPayerMode('SINGLE');
+        setSinglePayerId(targetPayer);
+        setMultiplePayers({});
 
-        setSelectedMemberIds(members.map((m) => m.id));
-        setCustomAmounts({});
+        setSplitMode('EQUAL');
+        setSelectedSplitMemberIds(members.map((m) => m.id));
+        setCustomSplitAmounts({});
       }
     }
 
@@ -169,21 +191,30 @@ export function AddExpenseScreen({
 
   const totalAmountPaisa = Math.round(Number(amountRupees || 0) * 100);
 
-  // Equal splits calculation
-  const computedEqualSplits = useMemo(() => {
-    if (totalAmountPaisa <= 0 || selectedMemberIds.length === 0) return [];
-    return distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
-  }, [totalAmountPaisa, selectedMemberIds]);
-
-  // Sum of custom amounts in paise
-  const customSumPaisa = useMemo(() => {
-    return Object.values(customAmounts).reduce(
+  // Payers sum and difference calculations for Step 2
+  const multiplePayersSumPaisa = useMemo(() => {
+    return Object.values(multiplePayers).reduce(
       (sum, val) => sum + Math.round(Number(val || 0) * 100),
       0
     );
-  }, [customAmounts]);
+  }, [multiplePayers]);
 
-  const diffPaisa = totalAmountPaisa - customSumPaisa;
+  const payersDiffPaisa = totalAmountPaisa - (payerMode === 'SINGLE' ? totalAmountPaisa : multiplePayersSumPaisa);
+
+  // Splits sum and difference calculations for Step 3
+  const computedEqualSplits = useMemo(() => {
+    if (totalAmountPaisa <= 0 || selectedSplitMemberIds.length === 0) return [];
+    return distributeEqualSplits(totalAmountPaisa, selectedSplitMemberIds);
+  }, [totalAmountPaisa, selectedSplitMemberIds]);
+
+  const customSplitsSumPaisa = useMemo(() => {
+    return Object.values(customSplitAmounts).reduce(
+      (sum, val) => sum + Math.round(Number(val || 0) * 100),
+      0
+    );
+  }, [customSplitAmounts]);
+
+  const splitsDiffPaisa = totalAmountPaisa - customSplitsSumPaisa;
 
   // Formatted date string for button
   const formattedDateLabel = useMemo(() => {
@@ -203,52 +234,74 @@ export function AddExpenseScreen({
 
   const CategoryIcon = activeCategory.icon;
 
-  const handleSwitchToCustom = () => {
+  // Quick action: switch to multiple payers with equal or default allocation
+  const handleSwitchToMultiplePayers = () => {
+    setPayerMode('MULTIPLE');
+    const currentSum = Object.values(multiplePayers).reduce((s, v) => s + Math.round(Number(v || 0) * 100), 0);
+    if (currentSum === 0 && totalAmountPaisa > 0) {
+      const initialMap: Record<string, string> = {};
+      if (singlePayerId) {
+        initialMap[singlePayerId] = (totalAmountPaisa / 100).toFixed(2);
+      }
+      setMultiplePayers(initialMap);
+    }
+  };
+
+  // Quick auto-fill remainder for payers
+  const handleAutoFillPayerRemainder = (memberId: string) => {
+    const otherSum = Object.entries(multiplePayers)
+      .filter(([id]) => id !== memberId)
+      .reduce((sum, [, val]) => sum + Math.round(Number(val || 0) * 100), 0);
+    const remainder = Math.max(0, totalAmountPaisa - otherSum);
+    setMultiplePayers({
+      ...multiplePayers,
+      [memberId]: (remainder / 100).toFixed(2),
+    });
+  };
+
+  // Quick auto-fill remainder for splits
+  const handleAutoFillSplitRemainder = (memberId: string) => {
+    const otherSum = Object.entries(customSplitAmounts)
+      .filter(([id]) => id !== memberId)
+      .reduce((sum, [, val]) => sum + Math.round(Number(val || 0) * 100), 0);
+    const remainder = Math.max(0, totalAmountPaisa - otherSum);
+    setCustomSplitAmounts({
+      ...customSplitAmounts,
+      [memberId]: (remainder / 100).toFixed(2),
+    });
+  };
+
+  // Switch to custom split mode with equal seed
+  const handleSwitchToCustomSplits = () => {
     setSplitMode('CUSTOM');
-    const currentCustomPaisa = Object.values(customAmounts).reduce(
-      (s, v) => s + Math.round(Number(v || 0) * 100),
-      0
-    );
-    if (currentCustomPaisa === 0 && totalAmountPaisa > 0 && selectedMemberIds.length > 0) {
-      const splits = distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
+    const currentSum = Object.values(customSplitAmounts).reduce((s, v) => s + Math.round(Number(v || 0) * 100), 0);
+    if (currentSum === 0 && totalAmountPaisa > 0 && selectedSplitMemberIds.length > 0) {
+      const splits = distributeEqualSplits(totalAmountPaisa, selectedSplitMemberIds);
       const newCustoms: Record<string, string> = {};
       members.forEach((m) => {
         const match = splits.find((s) => s.memberId === m.id);
         newCustoms[m.id] = match ? (match.amountPaisa / 100).toFixed(2) : '0.00';
       });
-      setCustomAmounts(newCustoms);
+      setCustomSplitAmounts(newCustoms);
     }
   };
 
-  const handleAutoFillRemainder = (targetMemberId: string) => {
-    const otherSum = Object.entries(customAmounts)
-      .filter(([id]) => id !== targetMemberId)
-      .reduce((sum, [, val]) => sum + Math.round(Number(val || 0) * 100), 0);
-    const remainderPaisa = Math.max(0, totalAmountPaisa - otherSum);
-    setCustomAmounts({
-      ...customAmounts,
-      [targetMemberId]: (remainderPaisa / 100).toFixed(2),
-    });
-  };
-
-  const toggleMemberSelection = (id: string) => {
-    if (selectedMemberIds.includes(id)) {
-      if (selectedMemberIds.length === 1) return;
-      setSelectedMemberIds(selectedMemberIds.filter((mId) => mId !== id));
+  // Toggle member inclusion in equal split
+  const toggleSplitMember = (id: string) => {
+    if (selectedSplitMemberIds.includes(id)) {
+      if (selectedSplitMemberIds.length === 1) return; // Keep at least one
+      setSelectedSplitMemberIds(selectedSplitMemberIds.filter((mId) => mId !== id));
     } else {
-      setSelectedMemberIds([...selectedMemberIds, id]);
+      setSelectedSplitMemberIds([...selectedSplitMemberIds, id]);
     }
   };
 
-  const handleSelectAll = () => {
-    setSelectedMemberIds(members.map((m) => m.id));
-  };
-
+  // Step 1 -> Step 2 validation
   const handleGoToStep2 = () => {
     setError('');
     const trimmed = description.trim();
     if (!trimmed) {
-      setError('Please enter a description');
+      setError('Please enter a description for the bill');
       return;
     }
     if (totalAmountPaisa <= 0 || isNaN(totalAmountPaisa)) {
@@ -258,46 +311,78 @@ export function AddExpenseScreen({
     setStep(2);
   };
 
+  // Step 2 -> Step 3 validation
+  const handleGoToStep3 = () => {
+    setError('');
+    if (payerMode === 'SINGLE') {
+      if (!singlePayerId) {
+        setError('Please select who paid for this bill');
+        return;
+      }
+    } else {
+      if (Math.abs(payersDiffPaisa) > 2) {
+        const diffRupees = (Math.abs(payersDiffPaisa) / 100).toFixed(2);
+        if (payersDiffPaisa > 0) {
+          setError(`₹${diffRupees} remaining to match the total bill of ₹${(totalAmountPaisa / 100).toFixed(2)}`);
+        } else {
+          setError(`Payer amounts exceed bill total by ₹${diffRupees}`);
+        }
+        return;
+      }
+    }
+    setStep(3);
+  };
+
   if (!isOpen) return null;
 
+  // Final Submit
   const handleSubmit = async () => {
     setError('');
 
     const trimmedDesc = description.trim();
-    if (!trimmedDesc) {
-      setError('Please enter a description');
+    if (!trimmedDesc || totalAmountPaisa <= 0) {
       setStep(1);
       return;
     }
 
-    if (totalAmountPaisa <= 0 || isNaN(totalAmountPaisa)) {
-      setError('Please enter a valid bill amount');
-      setStep(1);
-      return;
+    // Build Payers list
+    let finalPayers: { memberId: string; amountPaisa: number }[] = [];
+    if (payerMode === 'SINGLE') {
+      finalPayers = [{ memberId: singlePayerId, amountPaisa: totalAmountPaisa }];
+    } else {
+      finalPayers = members
+        .map((m) => ({
+          memberId: m.id,
+          amountPaisa: Math.round(Number(multiplePayers[m.id] || 0) * 100),
+        }))
+        .filter((p) => p.amountPaisa > 0);
+
+      const pSum = finalPayers.reduce((s, p) => s + p.amountPaisa, 0);
+      if (Math.abs(totalAmountPaisa - pSum) > 2) {
+        setStep(2);
+        setError('Payer amounts must match the total bill amount');
+        return;
+      }
     }
 
-    if (!payerId) {
-      setError('Please select who paid');
-      return;
-    }
-
+    // Build Splits list
     let finalSplits: { memberId: string; amountPaisa: number }[] = [];
     let finalSplitType = 'EQUAL';
 
     if (splitMode === 'EQUAL') {
-      if (selectedMemberIds.length === 0) {
+      if (selectedSplitMemberIds.length === 0) {
         setError('Please select at least one person to split with');
         return;
       }
-      finalSplits = distributeEqualSplits(totalAmountPaisa, selectedMemberIds);
+      finalSplits = distributeEqualSplits(totalAmountPaisa, selectedSplitMemberIds);
       finalSplitType = 'EQUAL';
     } else {
-      if (Math.abs(diffPaisa) > 2) {
-        const diffRupees = Math.abs(diffPaisa) / 100;
-        if (diffPaisa > 0) {
-          setError(`₹${diffRupees.toFixed(2)} remaining unallocated to match total ₹${(totalAmountPaisa / 100).toFixed(2)}`);
+      if (Math.abs(splitsDiffPaisa) > 2) {
+        const diffRupees = (Math.abs(splitsDiffPaisa) / 100).toFixed(2);
+        if (splitsDiffPaisa > 0) {
+          setError(`₹${diffRupees} remaining to match bill total`);
         } else {
-          setError(`Custom amounts exceed total by ₹${diffRupees.toFixed(2)}`);
+          setError(`Split amounts exceed total by ₹${diffRupees}`);
         }
         return;
       }
@@ -305,44 +390,45 @@ export function AddExpenseScreen({
       finalSplits = members
         .map((m) => ({
           memberId: m.id,
-          amountPaisa: Math.round(Number(customAmounts[m.id] || 0) * 100),
+          amountPaisa: Math.round(Number(customSplitAmounts[m.id] || 0) * 100),
         }))
         .filter((s) => s.amountPaisa > 0);
 
       if (finalSplits.length === 0) {
-        setError('Please enter custom amounts for at least one person');
+        setError('Please enter split amounts for at least one person');
         return;
       }
       finalSplitType = 'EXACT';
     }
 
-    // Build local date object without timezone day shifting
+    // Parse date (ensures no timezone offset)
     const [y, m, d] = expenseDate.split('-').map(Number);
     const selectedDateObj = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date();
-    const payerMember = members.find((m) => m.id === payerId) || { id: payerId, name: 'You' };
 
-    // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
+    // ⚡ Optimistic expense
+    const tempId = isEditing ? initialExpense.id : `temp_exp_${Date.now()}`;
     const optimisticExpense = {
       ...(initialExpense || {}),
-      id: isEditing ? initialExpense.id : `temp_exp_${Date.now()}`,
+      id: tempId,
       description: trimmedDesc,
       totalAmountPaisa,
       category,
       splitType: finalSplitType,
       date: selectedDateObj.toISOString(),
       notes: notes.trim() || null,
-      payers: [
-        {
-          id: isEditing ? initialExpense.payers?.[0]?.id || `temp_p_${Date.now()}` : `temp_p_${Date.now()}`,
-          memberId: payerId,
-          amountPaisa: totalAmountPaisa,
-          member: { id: payerMember.id, name: payerMember.name },
-        },
-      ],
+      payers: finalPayers.map((p) => {
+        const mem = members.find((m) => m.id === p.memberId) || { id: p.memberId, name: 'Member' };
+        return {
+          id: `temp_p_${p.memberId}`,
+          memberId: p.memberId,
+          amountPaisa: p.amountPaisa,
+          member: { id: mem.id, name: mem.name },
+        };
+      }),
       splits: finalSplits.map((s, idx) => {
         const mem = members.find((m) => m.id === s.memberId) || { id: s.memberId, name: 'Member' };
         return {
-          id: isEditing ? initialExpense.splits?.[idx]?.id || `temp_s_${Date.now()}_${idx}` : `temp_s_${Date.now()}_${idx}`,
+          id: `temp_s_${s.memberId}_${idx}`,
           memberId: s.memberId,
           amountPaisa: s.amountPaisa,
           member: { id: mem.id, name: mem.name },
@@ -353,7 +439,7 @@ export function AddExpenseScreen({
     onExpenseAdded(optimisticExpense);
     onClose();
 
-    // Background server save/update
+    // Background server save
     try {
       setLoading(true);
       const endpoint = isEditing
@@ -371,7 +457,7 @@ export function AddExpenseScreen({
           splitType: finalSplitType,
           date: selectedDateObj.toISOString(),
           notes: notes.trim() || undefined,
-          payers: [{ memberId: payerId, amountPaisa: totalAmountPaisa }],
+          payers: finalPayers,
           splits: finalSplits,
         }),
       });
@@ -388,15 +474,14 @@ export function AddExpenseScreen({
   };
 
   const isStep1Ready = description.trim().length > 0 && Number(amountRupees) > 0;
+  const isStep2Ready = payerMode === 'SINGLE' ? Boolean(singlePayerId) : Math.abs(payersDiffPaisa) <= 2;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-center bg-slate-900/40 backdrop-blur-xs sm:py-6 animate-in fade-in duration-200 select-none">
-      {/* Centered canvas matching web app width (max-w-md) */}
-      <div className="w-full max-w-md bg-white h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom duration-250 ease-out border-slate-100">
+      <div className="w-full max-w-md bg-white h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom duration-250 ease-out border border-slate-200">
         {/* ================= STEP 1: BILL DETAILS ================= */}
         {step === 1 && (
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Navigation Header */}
             <header className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <button
                 onClick={onClose}
@@ -411,7 +496,7 @@ export function AddExpenseScreen({
                 <h2 className="text-base font-bold text-slate-900">
                   {isEditing ? 'Edit Details' : 'What did you spend money on?'}
                 </h2>
-                <span className="text-[11px] text-slate-400 font-semibold">Step 1 of 2: Details</span>
+                <span className="text-[11px] text-slate-400 font-semibold">Step 1 of 3: Details</span>
               </div>
 
               <button
@@ -426,7 +511,6 @@ export function AddExpenseScreen({
               </button>
             </header>
 
-            {/* Sub-Header: Group tag */}
             <div className="bg-slate-50/70 border-b border-slate-100 px-5 py-2 flex items-center gap-2 shrink-0">
               <span className="text-xs text-slate-500 font-bold">Group:</span>
               <span className="text-xs font-bold text-slate-800 bg-white border border-slate-200/80 px-2.5 py-0.5 rounded-full shadow-2xs">
@@ -434,18 +518,16 @@ export function AddExpenseScreen({
               </span>
             </div>
 
-            {/* Form Body */}
-            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6">
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
               {error && (
-                <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Category Icon + Description */}
+              {/* Category Icon + Description Input */}
               <div className="flex items-center gap-3 pt-1">
-                {/* Category Picker Button */}
                 <div className="relative">
                   <button
                     type="button"
@@ -456,7 +538,6 @@ export function AddExpenseScreen({
                     <CategoryIcon className="w-6 h-6" />
                   </button>
 
-                  {/* Popover */}
                   {showCategoryPicker && (
                     <div className="absolute left-0 top-14 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-2 z-20 grid grid-cols-3 gap-1.5 w-60 animate-in fade-in zoom-in-95">
                       {CATEGORIES.map((c) => {
@@ -486,7 +567,6 @@ export function AddExpenseScreen({
                   )}
                 </div>
 
-                {/* Description Input */}
                 <div className="flex-1 border-b border-slate-200 focus-within:border-emerald-600 transition-colors pb-1">
                   <input
                     type="text"
@@ -494,12 +574,12 @@ export function AddExpenseScreen({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     autoFocus
-                    className="w-full text-lg font-bold text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
+                    className="w-full text-base sm:text-lg font-bold text-slate-900 placeholder:text-slate-300 focus:outline-hidden bg-transparent"
                   />
                 </div>
               </div>
 
-              {/* Currency Symbol + Amount */}
+              {/* Amount Input */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-800 font-bold text-2xl flex items-center justify-center border border-slate-200">
                   ₹
@@ -517,313 +597,191 @@ export function AddExpenseScreen({
                 </div>
               </div>
 
-              {/* Transaction Date Row */}
-              <div className="pt-2 flex items-center flex-wrap gap-2">
+              {/* Date Row (cannot be future date) */}
+              <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                <div className="flex items-center gap-2 text-slate-600 font-semibold text-sm">
+                  <Calendar className="w-4 h-4 text-slate-400" />
+                  <span>Date</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowWheelDatePicker(true)}
-                  className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-700 text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:border-slate-300"
+                  className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-colors cursor-pointer"
                 >
-                  <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>
-                    Date: <strong className="font-bold text-slate-900">{formattedDateLabel}</strong>
-                  </span>
-                </button>
-
-                {/* Quick Date Pills */}
-                <button
-                  type="button"
-                  onClick={() => setExpenseDate(getLocalDateString())}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    expenseDate === getLocalDateString()
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const yest = new Date();
-                    yest.setDate(yest.getDate() - 1);
-                    setExpenseDate(getLocalDateString(yest));
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    (() => {
-                      const yest = new Date();
-                      yest.setDate(yest.getDate() - 1);
-                      return expenseDate === getLocalDateString(yest);
-                    })()
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Yesterday
+                  {formattedDateLabel}
                 </button>
               </div>
 
               {/* Optional Notes */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-xs text-slate-500 font-semibold">
-                  Notes or Bill # (optional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Add details, invoice number..."
+              <div>
+                <input
+                  type="text"
+                  placeholder="Add a note (optional)..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full p-3 rounded-2xl border border-slate-200/80 text-sm font-medium text-slate-800 placeholder:text-slate-300 focus:outline-hidden focus:border-emerald-600 bg-slate-50/40 resize-none"
+                  className="w-full text-xs font-medium text-slate-700 placeholder:text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-hidden focus:border-emerald-500"
                 />
               </div>
             </div>
 
-            {/* Bottom Button matching Screenshot 1 */}
-            <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
+            {/* Bottom Button */}
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
               <button
                 type="button"
                 onClick={handleGoToStep2}
                 disabled={!isStep1Ready}
-                className={`w-full py-3.5 rounded-full text-base font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  isStep1Ready
-                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 active:scale-[0.99]'
-                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                }`}
+                className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                <span>Next: Choose who paid & split</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                <span>Next: Who paid</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
-            </footer>
+            </div>
           </div>
         )}
 
-        {/* ================= STEP 2: WHO PAID & SPLIT ================= */}
+        {/* ================= STEP 2: WHO PAID FOR THIS BILL? ================= */}
         {step === 2 && (
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Navigation Header */}
             <header className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <button
                 onClick={() => setStep(1)}
                 type="button"
-                aria-label="Back to Step 1"
-                className="p-1 -ml-1 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer flex items-center gap-1 font-bold text-xs"
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-0.5 text-xs font-bold"
               >
-                <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+                <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
               </button>
 
               <div className="text-center">
-                <h2 className="text-base font-bold text-slate-900">Who paid & split</h2>
-                <span className="text-[11px] text-slate-400 font-semibold">Step 2 of 2: Allocation</span>
+                <h2 className="text-base font-bold text-slate-900">Who paid for this bill?</h2>
+                <span className="text-[11px] text-slate-400 font-semibold">Step 2 of 3: Payer</span>
               </div>
 
               <button
-                onClick={handleSubmit}
+                onClick={handleGoToStep3}
                 type="button"
-                disabled={loading}
-                className="text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                disabled={!isStep2Ready}
+                className={`text-sm font-bold transition-colors cursor-pointer ${
+                  isStep2Ready ? 'text-emerald-700 hover:text-emerald-800' : 'text-slate-300 cursor-not-allowed'
+                }`}
               >
-                {isEditing ? 'Update' : 'Save'}
+                Next
               </button>
             </header>
 
-            {/* Vibrant Summary Banner */}
-            <div className="bg-slate-50 border-b border-slate-200/80 px-5 py-3 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-2xl flex items-center justify-center ${activeCategory.color} shrink-0 shadow-2xs`}>
-                  <CategoryIcon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-sm font-bold text-slate-900 truncate block">
-                    {description}
-                  </span>
-                  <span className="text-[11px] font-semibold text-slate-500 block">
-                    {activeCategory.label} • {formattedDateLabel}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-right shrink-0">
-                <span className="text-lg font-black text-slate-900 block tracking-tight">
-                  ₹{Number(amountRupees || 0).toFixed(2)}
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">
-                  Total Bill
-                </span>
-              </div>
+            {/* Bill Summary Strip */}
+            <div className="bg-slate-50 border-b border-slate-100 px-5 py-2.5 flex items-center justify-between shrink-0">
+              <span className="text-xs font-semibold text-slate-500 truncate">{description}</span>
+              <span className="text-sm font-black text-slate-900">₹{(totalAmountPaisa / 100).toFixed(2)}</span>
             </div>
 
-            {/* Form Body */}
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {error && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Section 1: Who Paid? */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Who paid for this bill?
-                  </label>
-                  <span className="text-xs font-semibold text-slate-400">Single payer</span>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {members.map((m) => {
-                    const isSelected = payerId === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setPayerId(m.id)}
-                        className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                            : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div
-                          className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] ${
-                            isSelected ? 'bg-white/20 text-white' : getAvatarBg(m.name)
-                          }`}
-                        >
-                          {m.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span>{m.name}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      </button>
-                    );
-                  })}
-                </div>
+              {/* Mode Toggle: One Person vs Multiple People */}
+              <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setPayerMode('SINGLE')}
+                  className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    payerMode === 'SINGLE'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>One person</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchToMultiplePayers}
+                  className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    payerMode === 'MULTIPLE'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Multiple people</span>
+                </button>
               </div>
 
-              {/* Section 2: Split Mode */}
-              <div className="space-y-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    How should it be split?
-                  </label>
+              {/* MODE A: Single Payer */}
+              {payerMode === 'SINGLE' && (
+                <div className="space-y-2">
+                  <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                    {members.map((m) => {
+                      const isSelected = singlePayerId === m.id;
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => setSinglePayerId(m.id)}
+                          className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${
+                            isSelected ? 'bg-emerald-50/50' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                                m.name
+                              )}`}
+                            >
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-bold text-sm text-slate-900">{m.name}</span>
+                          </div>
 
-                  <div className="bg-slate-100/90 p-1 rounded-2xl flex gap-1 border border-slate-200/60">
-                    <button
-                      type="button"
-                      onClick={() => setSplitMode('EQUAL')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        splitMode === 'EQUAL'
-                          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
-                          : 'text-slate-500 hover:text-slate-900'
-                      }`}
-                    >
-                      Share this cost the same for everyone
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSwitchToCustom}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        splitMode === 'CUSTOM'
-                          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50'
-                          : 'text-slate-500 hover:text-slate-900'
-                      }`}
-                    >
-                      Custom (₹)
-                    </button>
+                          {isSelected ? (
+                            <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full border border-slate-200" />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+              )}
 
-                {/* EQUAL SPLIT LIST */}
-                {splitMode === 'EQUAL' && (
-                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl p-3.5 space-y-2.5">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-xs font-bold">
-                      <span className="text-slate-600">
-                        Included ({selectedMemberIds.length} of {members.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleSelectAll}
-                        className="text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer font-bold"
-                      >
-                        Select All
-                      </button>
-                    </div>
-
-                    <div className="space-y-2 pt-0.5">
-                      {members.map((m) => {
-                        const isSelected = selectedMemberIds.includes(m.id);
-                        const equalSplit = computedEqualSplits.find((s) => s.memberId === m.id);
-                        const shareRupees = equalSplit ? (equalSplit.amountPaisa / 100).toFixed(2) : '0.00';
-
-                        return (
-                          <div
-                            key={m.id}
-                            onClick={() => toggleMemberSelection(m.id)}
-                            className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                              isSelected
-                                ? 'bg-white border-slate-200 text-slate-900 shadow-2xs'
-                                : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              {/* Styled Checkbox */}
-                              <div
-                                className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
-                                  isSelected
-                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                    : 'border-2 border-slate-300 bg-white'
-                                }`}
-                              >
-                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                              </div>
-
-                              {/* Avatar */}
-                              <div
-                                className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
-                                  m.name
-                                )}`}
-                              >
-                                {m.name.charAt(0).toUpperCase()}
-                              </div>
-
-                              <span className="text-sm font-bold text-slate-900">{m.name}</span>
-                            </div>
-
-                            {isSelected && totalAmountPaisa > 0 && (
-                              <div className="bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-xl text-xs font-black text-emerald-800">
-                                ₹{shareRupees}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+              {/* MODE B: Multiple Payers with Custom Amounts */}
+              {payerMode === 'MULTIPLE' && (
+                <div className="space-y-3">
+                  {/* Status Indicator */}
+                  <div
+                    className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+                      Math.abs(payersDiffPaisa) <= 2
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : payersDiffPaisa > 0
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    <span>
+                      Paid: ₹{(multiplePayersSumPaisa / 100).toFixed(2)} of ₹{(totalAmountPaisa / 100).toFixed(2)}
+                    </span>
+                    <span>
+                      {Math.abs(payersDiffPaisa) <= 2
+                        ? '✓ All matched'
+                        : payersDiffPaisa > 0
+                        ? `₹${(payersDiffPaisa / 100).toFixed(2)} left`
+                        : `Over by ₹${(Math.abs(payersDiffPaisa) / 100).toFixed(2)}`}
+                    </span>
                   </div>
-                )}
 
-                {/* CUSTOM SPLIT LIST */}
-                {splitMode === 'CUSTOM' && (
-                  <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl p-3.5 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-xs font-bold">
-                      <span className="text-slate-600">
-                        Allocated: <strong className="text-slate-900">₹{(customSumPaisa / 100).toFixed(2)}</strong> of ₹{(totalAmountPaisa / 100).toFixed(2)}
-                      </span>
-                      {diffPaisa !== 0 ? (
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${diffPaisa > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                          {diffPaisa > 0 ? `₹${(diffPaisa / 100).toFixed(2)} left` : `₹${(Math.abs(diffPaisa) / 100).toFixed(2)} over`}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                          <Check className="w-3 h-3 stroke-[3]" /> Balanced
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {members.map((m) => {
-                        const val = customAmounts[m.id] || '';
-                        return (
-                          <div key={m.id} className="flex items-center gap-2.5 bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  {/* List of members with custom payment inputs */}
+                  <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                    {members.map((m) => {
+                      const val = multiplePayers[m.id] || '';
+                      return (
+                        <div key={m.id} className="p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <div
                               className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
                                 m.name
@@ -831,13 +789,23 @@ export function AddExpenseScreen({
                             >
                               {m.name.charAt(0).toUpperCase()}
                             </div>
-
-                            <span className="text-sm font-bold text-slate-800 w-24 truncate">
+                            <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">
                               {m.name}
                             </span>
+                          </div>
 
-                            <div className="relative flex-1">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleAutoFillPayerRemainder(m.id)}
+                              className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg cursor-pointer"
+                              title="Fill remaining bill amount"
+                            >
+                              Remainder
+                            </button>
+
+                            <div className="relative w-24">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                                 ₹
                               </span>
                               <input
@@ -845,54 +813,279 @@ export function AddExpenseScreen({
                                 step="0.01"
                                 placeholder="0.00"
                                 value={val}
-                                onChange={(e) => {
-                                  setCustomAmounts({
-                                    ...customAmounts,
+                                onChange={(e) =>
+                                  setMultiplePayers({
+                                    ...multiplePayers,
                                     [m.id]: e.target.value,
-                                  });
-                                }}
-                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 bg-slate-50/50"
+                                  })
+                                }
+                                className="w-full pl-6 pr-2 py-1.5 text-right font-bold text-xs sm:text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:border-emerald-600 text-slate-900"
                               />
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleAutoFillRemainder(m.id)}
-                              className="px-2.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors shrink-0 cursor-pointer active:scale-95"
-                              title="Fill Remaining"
-                            >
-                              Fill rest
-                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Bottom Save Button matching Screenshot 1 pill button */}
-            <footer className="p-4 border-t border-slate-100 bg-white shrink-0">
+            {/* Bottom Button */}
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={handleGoToStep3}
+                disabled={!isStep2Ready}
+                className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Next: How to split</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 3: HOW SHOULD THIS BE SPLIT? ================= */}
+        {step === 3 && (
+          <div className="flex flex-col h-full overflow-hidden">
+            <header className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+              <button
+                onClick={() => setStep(2)}
+                type="button"
+                className="p-1 -ml-1 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer flex items-center gap-0.5 text-xs font-bold"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+
+              <div className="text-center">
+                <h2 className="text-base font-bold text-slate-900">How should this be split?</h2>
+                <span className="text-[11px] text-slate-400 font-semibold">Step 3 of 3: Split</span>
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                type="button"
+                disabled={loading}
+                className="text-sm font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+              >
+                Save
+              </button>
+            </header>
+
+            {/* Bill Summary Strip */}
+            <div className="bg-slate-50 border-b border-slate-100 px-5 py-2.5 flex items-center justify-between shrink-0">
+              <span className="text-xs font-semibold text-slate-500 truncate">{description}</span>
+              <span className="text-sm font-black text-slate-900">₹{(totalAmountPaisa / 100).toFixed(2)}</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {error && (
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Mode Toggle: "Equal" vs "Custom amounts" */}
+              <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setSplitMode('EQUAL')}
+                  className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    splitMode === 'EQUAL'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Equal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchToCustomSplits}
+                  className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    splitMode === 'CUSTOM'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>Custom amounts</span>
+                </button>
+              </div>
+
+              {/* MODE A: Equal Split */}
+              {splitMode === 'EQUAL' && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+                    <span>
+                      {selectedSplitMemberIds.length > 0
+                        ? `₹${((totalAmountPaisa / selectedSplitMemberIds.length) / 100).toFixed(2)} per person`
+                        : 'No one selected'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSplitMemberIds.length === members.length) {
+                          setSelectedSplitMemberIds([members[0]?.id || '']);
+                        } else {
+                          setSelectedSplitMemberIds(members.map((m) => m.id));
+                        }
+                      }}
+                      className="text-[11px] underline cursor-pointer text-emerald-900"
+                    >
+                      {selectedSplitMemberIds.length === members.length ? 'Deselect all' : 'Select all'}
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                    {members.map((m) => {
+                      const isIncluded = selectedSplitMemberIds.includes(m.id);
+                      const shareObj = computedEqualSplits.find((s) => s.memberId === m.id);
+                      const shareRupees = shareObj ? (shareObj.amountPaisa / 100).toFixed(2) : '0.00';
+
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => toggleSplitMember(m.id)}
+                          className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${
+                            isIncluded ? 'bg-emerald-50/30' : 'hover:bg-slate-50 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                                m.name
+                              )}`}
+                            >
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="font-bold text-sm text-slate-900 block">{m.name}</span>
+                              <span className="text-xs font-medium text-slate-500">
+                                {isIncluded ? `Share: ₹${shareRupees}` : 'Not included'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isIncluded ? (
+                            <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full border border-slate-200" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* MODE B: Custom Split Amounts */}
+              {splitMode === 'CUSTOM' && (
+                <div className="space-y-3">
+                  <div
+                    className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+                      Math.abs(splitsDiffPaisa) <= 2
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : splitsDiffPaisa > 0
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    <span>
+                      Split: ₹{(customSplitsSumPaisa / 100).toFixed(2)} of ₹{(totalAmountPaisa / 100).toFixed(2)}
+                    </span>
+                    <span>
+                      {Math.abs(splitsDiffPaisa) <= 2
+                        ? '✓ All matched'
+                        : splitsDiffPaisa > 0
+                        ? `₹${(splitsDiffPaisa / 100).toFixed(2)} left`
+                        : `Over by ₹${(Math.abs(splitsDiffPaisa) / 100).toFixed(2)}`}
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                    {members.map((m) => {
+                      const val = customSplitAmounts[m.id] || '';
+                      return (
+                        <div key={m.id} className="p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div
+                              className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
+                                m.name
+                              )}`}
+                            >
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                              {m.name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleAutoFillSplitRemainder(m.id)}
+                              className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg cursor-pointer"
+                              title="Fill remaining split amount"
+                            >
+                              Remainder
+                            </button>
+
+                            <div className="relative w-24">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                                ₹
+                              </span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={val}
+                                onChange={(e) =>
+                                  setCustomSplitAmounts({
+                                    ...customSplitAmounts,
+                                    [m.id]: e.target.value,
+                                  })
+                                }
+                                className="w-full pl-6 pr-2 py-1.5 text-right font-bold text-xs sm:text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:border-emerald-600 text-slate-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Button */}
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="w-full py-3.5 rounded-full text-base font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-md shadow-emerald-700/20 transition-all cursor-pointer active:scale-[0.99]"
+                className="w-full py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                {isEditing ? 'Update Expense' : 'Save Expense'}
+                <span>{loading ? 'Saving...' : isEditing ? 'Update expense' : 'Save expense'}</span>
               </button>
-            </footer>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Standalone Wheel Date Picker Modal at highest z-index */}
+      {/* Wheel Date Picker Modal (future date blocked) */}
       <WheelDatePickerModal
         isOpen={showWheelDatePicker}
         onClose={() => setShowWheelDatePicker(false)}
-        onConfirm={(d) => setExpenseDate(d)}
         initialDate={expenseDate}
+        disableFuture={true}
+        onConfirm={(dStr) => {
+          setExpenseDate(dStr);
+          setShowWheelDatePicker(false);
+        }}
       />
     </div>
   );

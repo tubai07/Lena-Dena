@@ -21,14 +21,6 @@ export async function GET(
     const { id } = await params;
     const session = await getSession();
 
-    // Check high-speed in-memory server cache
-    const cached = getCachedServerDetail(id);
-    if (cached) {
-      return NextResponse.json(cached, {
-        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-      });
-    }
-
     const group = await db.group.findUnique({
       where: { id },
       include: {
@@ -84,9 +76,6 @@ export async function GET(
         activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
       },
     };
-
-    // Cache in server memory
-    setCachedServerDetail(id, payload);
 
     return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },

@@ -234,24 +234,36 @@ export default function GroupDetailPage({
         if (!prev) return data.group;
 
         // Preserve in-flight optimistic expenses that server hasn't returned yet
-        const serverExpIds = new Set(data.group.expenses.map((e: any) => e.id));
+        const serverExpenses = data.group.expenses || [];
         const pendingExpenses = prev.expenses.filter((e) => {
           if (deletedExpenseIdsRef.current.has(e.id)) return false;
-          if (serverExpIds.has(e.id)) return false;
-          return true;
+          if (e.id.startsWith('temp_')) {
+            const isAccountedFor = serverExpenses.some((se: any) => {
+              const sameDesc = se.description?.trim().toLowerCase() === e.description?.trim().toLowerCase();
+              const sameAmount = se.totalAmountPaisa === e.totalAmountPaisa;
+              return sameDesc && sameAmount;
+            });
+            return !isAccountedFor;
+          }
+          return !serverExpenses.some((se: any) => se.id === e.id);
         });
-        const mergedExpenses = [...pendingExpenses, ...data.group.expenses].filter(
+        const mergedExpenses = [...pendingExpenses, ...serverExpenses].filter(
           (e) => !deletedExpenseIdsRef.current.has(e.id)
         );
 
-        // Preserve in-flight optimistic settlements
-        const serverStIds = new Set(data.group.settlements.map((s: any) => s.id));
+        // Preserve in-flight optimistic settlements that server hasn't returned yet
+        const serverSettlements = data.group.settlements || [];
         const pendingSettlements = prev.settlements.filter((s) => {
           if (deletedSettlementIdsRef.current.has(s.id)) return false;
-          if (serverStIds.has(s.id)) return false;
-          return true;
+          if (s.id.startsWith('temp_')) {
+            const isAccountedFor = serverSettlements.some((ss: any) => {
+              return ss.payerId === s.payerId && ss.receiverId === s.receiverId && ss.amountPaisa === s.amountPaisa;
+            });
+            return !isAccountedFor;
+          }
+          return !serverSettlements.some((ss: any) => ss.id === s.id);
         });
-        const mergedSettlements = [...pendingSettlements, ...data.group.settlements].filter(
+        const mergedSettlements = [...pendingSettlements, ...serverSettlements].filter(
           (s) => !deletedSettlementIdsRef.current.has(s.id)
         );
 
@@ -389,7 +401,9 @@ export default function GroupDetailPage({
         const filtered = prev.expenses.filter((e) => {
           if (e.id === newExpense.id) return false;
           if (!newExpense.id.startsWith('temp_') && e.id.startsWith('temp_')) {
-            return false;
+            const sameDesc = e.description?.trim().toLowerCase() === newExpense.description?.trim().toLowerCase();
+            const sameAmount = e.totalAmountPaisa === newExpense.totalAmountPaisa;
+            if (sameDesc && sameAmount) return false;
           }
           return true;
         });
@@ -427,7 +441,10 @@ export default function GroupDetailPage({
         const filtered = prev.settlements.filter((s) => {
           if (s.id === newSettlement.id) return false;
           if (!newSettlement.id.startsWith('temp_') && s.id.startsWith('temp_')) {
-            return false;
+            const samePayer = s.payerId === newSettlement.payerId;
+            const sameReceiver = s.receiverId === newSettlement.receiverId;
+            const sameAmount = s.amountPaisa === newSettlement.amountPaisa;
+            if (samePayer && sameReceiver && sameAmount) return false;
           }
           return true;
         });

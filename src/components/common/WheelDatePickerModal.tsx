@@ -8,6 +8,7 @@ interface WheelDatePickerModalProps {
   onClose: () => void;
   onConfirm: (dateStr: string) => void;
   initialDate?: string; // YYYY-MM-DD or ISO string
+  disableFuture?: boolean;
 }
 
 const MONTHS = [
@@ -50,8 +51,18 @@ export function WheelDatePickerModal({
   onClose,
   onConfirm,
   initialDate,
+  disableFuture = false,
 }: WheelDatePickerModalProps) {
   const parsed = useMemo(() => parseSafeDate(initialDate), [initialDate, isOpen]);
+
+  const today = useMemo(() => {
+    const now = new Date();
+    return {
+      year: now.getFullYear(),
+      month: now.getMonth(),
+      day: now.getDate(),
+    };
+  }, [isOpen]);
 
   const [day, setDay] = useState(parsed.day);
   const [month, setMonth] = useState(parsed.month);
@@ -60,16 +71,32 @@ export function WheelDatePickerModal({
   // Sync state whenever modal opens or parsed changes
   useEffect(() => {
     if (isOpen) {
-      setDay(parsed.day);
-      setMonth(parsed.month);
-      setYear(parsed.year);
+      let y = parsed.year;
+      let m = parsed.month;
+      let d = parsed.day;
+
+      if (disableFuture) {
+        if (y > today.year || (y === today.year && m > today.month) || (y === today.year && m === today.month && d > today.day)) {
+          y = today.year;
+          m = today.month;
+          d = today.day;
+        }
+      }
+
+      setDay(d);
+      setMonth(m);
+      setYear(y);
     }
-  }, [isOpen, parsed]);
+  }, [isOpen, parsed, disableFuture, today]);
 
   // Max days in the selected month & year
   const maxDays = useMemo(() => {
-    return new Date(year, month + 1, 0).getDate();
-  }, [year, month]);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    if (disableFuture && year === today.year && month === today.month) {
+      return Math.min(daysInMonth, today.day);
+    }
+    return daysInMonth;
+  }, [year, month, disableFuture, today]);
 
   // Clamp day if exceeding max days
   useEffect(() => {
@@ -133,14 +160,20 @@ export function WheelDatePickerModal({
     setDay((prev) => (prev > 1 ? prev - 1 : maxDays));
   };
   const handleNextDay = () => {
+    if (disableFuture && year === today.year && month === today.month && day >= today.day) {
+      return;
+    }
     setDay((prev) => (prev < maxDays ? prev + 1 : 1));
   };
 
   // Steppers for Month
   const handlePrevMonth = () => {
-    setMonth((prev) => (prev > 0 ? prev - 1 : 11));
+    setMonth((prev) => (prev > 0 ? prev - 1 : (disableFuture && year === today.year ? today.month : 11)));
   };
   const handleNextMonth = () => {
+    if (disableFuture && year === today.year && month >= today.month) {
+      return;
+    }
     setMonth((prev) => (prev < 11 ? prev + 1 : 0));
   };
 
@@ -152,6 +185,9 @@ export function WheelDatePickerModal({
     });
   };
   const handleNextYear = () => {
+    if (disableFuture && year >= today.year) {
+      return;
+    }
     setYear((prev) => {
       const idx = YEARS.indexOf(prev);
       return idx < YEARS.length - 1 ? YEARS[idx + 1] : prev;
@@ -163,9 +199,19 @@ export function WheelDatePickerModal({
     const val = e.target.value;
     if (val) {
       const p = parseSafeDate(val);
-      setDay(p.day);
-      setMonth(p.month);
-      setYear(p.year);
+      let y = p.year;
+      let m = p.month;
+      let d = p.day;
+      if (disableFuture) {
+        if (y > today.year || (y === today.year && m > today.month) || (y === today.year && m === today.month && d > today.day)) {
+          y = today.year;
+          m = today.month;
+          d = today.day;
+        }
+      }
+      setDay(d);
+      setMonth(m);
+      setYear(y);
     }
   };
 
@@ -180,16 +226,22 @@ export function WheelDatePickerModal({
 
   // Previous and next labels for 3-row tumbler effect
   const prevDay = day > 1 ? day - 1 : maxDays;
-  const nextDay = day < maxDays ? day + 1 : 1;
+  const isNextDayFuture = disableFuture && year === today.year && month === today.month && day >= today.day;
+  const nextDay = isNextDayFuture ? '' : (day < maxDays ? day + 1 : 1);
 
   const prevMonth = month > 0 ? month - 1 : 11;
-  const nextMonth = month < 11 ? month + 1 : 0;
+  const isNextMonthFuture = disableFuture && year === today.year && month >= today.month;
+  const nextMonthName = isNextMonthFuture ? '' : MONTHS[month < 11 ? month + 1 : 0];
 
   const yearIdx = YEARS.indexOf(year);
   const prevYear = yearIdx > 0 ? YEARS[yearIdx - 1] : '';
-  const nextYear = yearIdx < YEARS.length - 1 ? YEARS[yearIdx + 1] : '';
+  const isNextYearFuture = disableFuture && year >= today.year;
+  const nextYear = isNextYearFuture ? '' : (yearIdx < YEARS.length - 1 ? YEARS[yearIdx + 1] : '');
 
   const currentDateValue = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  const maxDateValue = disableFuture
+    ? `${today.year}-${(today.month + 1).toString().padStart(2, '0')}-${today.day.toString().padStart(2, '0')}`
+    : undefined;
 
   return (
     <div
@@ -285,7 +337,7 @@ export function WheelDatePickerModal({
                 onClick={handleNextMonth}
                 className="h-10 text-lg font-semibold text-slate-300 hover:text-slate-400 transition-colors flex items-center justify-center w-full cursor-pointer"
               >
-                {MONTHS[nextMonth]}
+                {nextMonthName}
               </button>
             </div>
 
@@ -330,6 +382,7 @@ export function WheelDatePickerModal({
             <input
               type="date"
               value={currentDateValue}
+              max={maxDateValue}
               onChange={handleNativeChange}
               className="sr-only"
             />
