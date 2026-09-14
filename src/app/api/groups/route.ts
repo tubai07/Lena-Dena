@@ -46,6 +46,7 @@ export async function GET(req: Request) {
             name: true,
             isOwner: true,
             isAdmin: true,
+            isActive: true,
           },
         },
         expenses: {
@@ -96,7 +97,7 @@ export async function GET(req: Request) {
         currencySymbol: g.currencySymbol,
         joinCode: g.joinCode,
         simplifyDebts: g.simplifyDebts,
-        memberCount: g.members.length,
+        memberCount: g.members.filter((m: any) => m.isActive !== false).length,
         totalSpendPaisa,
         ownerBalancePaisa: ownerBalance,
         pendingTransfersCount: transfers.length,

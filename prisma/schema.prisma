@@ -158,6 +158,7 @@ model GroupMember {
   upiId               String?
   isOwner             Boolean           @default(false)
   isAdmin             Boolean           @default(false)
+  isActive            Boolean           @default(true)
   expensePayers       ExpensePayer[]
   splits              ExpenseSplit[]
   settlementsPaid     GroupSettlement[] @relation("PayerSettlements")

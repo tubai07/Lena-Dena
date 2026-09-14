@@ -33,10 +33,11 @@ export async function POST(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    const memberIds = new Set(group.members.map((m) => m.id));
-    if (!memberIds.has(payerId) || !memberIds.has(receiverId)) {
+    const activeMembers = group.members.filter((m) => m.isActive !== false);
+    const activeMemberIds = new Set(activeMembers.map((m) => m.id));
+    if (!activeMemberIds.has(payerId) || !activeMemberIds.has(receiverId)) {
       return NextResponse.json(
-        { error: 'Payer and receiver must be valid members of this group' },
+        { error: 'Payer and receiver must be active members of this group' },
         { status: 400 }
       );
     }

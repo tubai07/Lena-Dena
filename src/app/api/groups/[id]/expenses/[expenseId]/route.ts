@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function PUT(
@@ -8,6 +9,7 @@ export async function PUT(
 ) {
   try {
     const { id, expenseId } = await params;
+    const session = await getSession();
     const body = await req.json();
 
     const {
@@ -45,6 +47,17 @@ export async function PUT(
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Verify caller is an admin or group owner
+    const callerIsOwner = session?.businessId === group.businessId;
+    const callerMember = group.members.find(
+      (m) => session?.phone && m.phone === session.phone
+    );
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+
+    if (!callerIsAdmin) {
+      return NextResponse.json({ error: 'Only group admins can edit expenses' }, { status: 403 });
     }
 
     const existingExpense = await db.groupExpense.findFirst({
@@ -191,11 +204,27 @@ export async function DELETE(
 ) {
   try {
     const { id, expenseId } = await params;
+    const session = await getSession();
 
     const group = await db.group.findUnique({
       where: { id },
-      select: { businessId: true },
+      include: { members: true },
     });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Verify caller is an admin or group owner
+    const callerIsOwner = session?.businessId === group.businessId;
+    const callerMember = group.members.find(
+      (m) => session?.phone && m.phone === session.phone
+    );
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+
+    if (!callerIsAdmin) {
+      return NextResponse.json({ error: 'Only group admins can delete expenses' }, { status: 403 });
+    }
 
     const existingExpense = await db.groupExpense.findFirst({
       where: { id: expenseId, groupId: id },
@@ -212,7 +241,7 @@ export async function DELETE(
       },
     });
 
-    invalidateAllGroupServerCaches(id, group?.businessId);
+    invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

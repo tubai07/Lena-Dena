@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getSession } from '@/lib/auth';
 import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 import { calculateMemberNetBalances } from '@/lib/splitwise';
 
@@ -9,6 +10,7 @@ export async function PATCH(
 ) {
   try {
     const { id, memberId } = await params;
+    const session = await getSession();
     const body = await req.json();
     const { isAdmin } = body;
 
@@ -23,6 +25,17 @@ export async function PATCH(
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Verify caller is an admin or group owner
+    const callerIsOwner = session?.businessId === group.businessId;
+    const callerMember = group.members.find(
+      (m) => session?.phone && m.phone === session.phone
+    );
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+
+    if (!callerIsAdmin) {
+      return NextResponse.json({ error: 'Only group admins can modify member roles' }, { status: 403 });
     }
 
     const member = group.members.find((m) => m.id === memberId);
@@ -58,6 +71,7 @@ export async function DELETE(
 ) {
   try {
     const { id, memberId } = await params;
+    const session = await getSession();
 
     const group = await db.group.findUnique({
       where: { id },
@@ -75,6 +89,17 @@ export async function DELETE(
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    // Verify caller is an admin or group owner
+    const callerIsOwner = session?.businessId === group.businessId;
+    const callerMember = group.members.find(
+      (m) => session?.phone && m.phone === session.phone
+    );
+    const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
+
+    if (!callerIsAdmin) {
+      return NextResponse.json({ error: 'Only group admins can remove members' }, { status: 403 });
     }
 
     const member = group.members.find((m) => m.id === memberId);
@@ -105,24 +130,46 @@ export async function DELETE(
       );
     }
 
-    // Delete the member (cascades splits, payers, settlements)
-    await db.groupMember.delete({
+    // Check if member participated in any past expenses or settlements
+    const history = await db.groupMember.findUnique({
       where: { id: memberId },
-    });
-
-    // Clean up any orphaned expenses without payers or splits
-    await db.groupExpense.deleteMany({
-      where: {
-        groupId: id,
-        OR: [{ payers: { none: {} } }, { splits: { none: {} } }],
+      include: {
+        expensePayers: { take: 1 },
+        splits: { take: 1 },
+        settlementsPaid: { take: 1 },
+        settlementsReceived: { take: 1 },
       },
     });
+
+    const hasHistory = Boolean(
+      history?.expensePayers.length ||
+      history?.splits.length ||
+      history?.settlementsPaid.length ||
+      history?.settlementsReceived.length
+    );
+
+    if (hasHistory) {
+      // Soft-deactivate: Preserve mathematical ledger integrity for remaining members
+      await db.groupMember.update({
+        where: { id: memberId },
+        data: {
+          isActive: false,
+          isAdmin: false,
+        },
+      });
+    } else {
+      // Safe hard-delete: Member has zero transaction history
+      await db.groupMember.delete({
+        where: { id: memberId },
+      });
+    }
 
     invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({
       success: true,
       removedMemberId: memberId,
+      softDeleted: hasHistory,
       message: `${member.name} removed from the group`,
     });
   } catch (err: any) {

@@ -48,23 +48,24 @@ export async function POST(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    const groupMemberIds = new Set(group.members.map((m) => m.id));
+    const activeMembers = group.members.filter((m) => m.isActive !== false);
+    const activeMemberIds = new Set(activeMembers.map((m) => m.id));
 
-    // Verify all payers are valid group members
+    // Verify all payers are active group members
     for (const p of payers) {
-      if (!p.memberId || !groupMemberIds.has(p.memberId)) {
+      if (!p.memberId || !activeMemberIds.has(p.memberId)) {
         return NextResponse.json(
-          { error: 'Payer must be a valid member of this group' },
+          { error: 'Payer must be an active member of this group' },
           { status: 400 }
         );
       }
     }
 
-    // Verify all split members are valid group members
+    // Verify all split members are active group members
     for (const s of splits) {
-      if (!s.memberId || !groupMemberIds.has(s.memberId)) {
+      if (!s.memberId || !activeMemberIds.has(s.memberId)) {
         return NextResponse.json(
-          { error: 'Split person must be a valid member of this group' },
+          { error: 'Split person must be an active member of this group' },
           { status: 400 }
         );
       }
