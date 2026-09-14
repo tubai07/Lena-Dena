@@ -136,7 +136,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
             />
           </div>
 
-          {/* Group Icon & Category Picker */}
+          {/* Group Icon & Category Horizontal Slider */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider">
@@ -147,7 +147,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2 bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80">
+            <div className="flex items-center gap-2 overflow-x-auto p-2 bg-slate-50/90 rounded-2xl border border-slate-200/80 scroll-smooth snap-x overscroll-x-contain">
               {GROUP_CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const isSelected = category === cat.id;
@@ -156,20 +156,24 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
                     key={cat.id}
                     type="button"
                     onClick={() => setCategory(cat.id)}
-                    className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer relative ${
+                    className={`w-[70px] py-2.5 px-1.5 rounded-xl flex flex-col items-center gap-1.5 transition-all cursor-pointer relative shrink-0 snap-start select-none ${
                       isSelected
-                        ? 'bg-white shadow-xs ring-2 ring-emerald-600'
-                        : 'hover:bg-white/60 text-slate-600 opacity-80 hover:opacity-100'
+                        ? 'bg-white shadow-xs ring-2 ring-emerald-600 scale-[1.02]'
+                        : 'hover:bg-white/70 text-slate-600 opacity-75 hover:opacity-100'
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${cat.bg} ${cat.color}`}>
-                      <Icon className="w-4 h-4" />
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-transform ${
+                        isSelected ? `${cat.bg} ${cat.color} scale-105 shadow-2xs` : `${cat.bg} ${cat.color}`
+                      }`}
+                    >
+                      <Icon className="w-4.5 h-4.5" />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-800 truncate w-full text-center">
+                    <span className="text-[10px] font-extrabold text-slate-800 truncate w-full text-center leading-tight">
                       {cat.id}
                     </span>
                     {isSelected && (
-                      <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-emerald-600 text-white rounded-full flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-xs">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                       </span>
                     )}
