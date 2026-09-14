@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   UsersRound,
   Plus,
@@ -24,6 +25,7 @@ interface GroupSummary {
 }
 
 export default function GroupsPage() {
+  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,7 +248,6 @@ export default function GroupsPage() {
                   href={`/groups/${group.id}`}
                   prefetch={true}
                   onMouseEnter={() => prefetchGroupDetail(group.id)}
-                  onPointerDown={() => prefetchGroupDetail(group.id)}
                   className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xs transition-all block group"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -308,9 +309,12 @@ export default function GroupsPage() {
       <CreateGroupModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        onGroupCreated={() => {
+        onGroupCreated={(newGroup) => {
           fetchGroups();
           setIsCreateOpen(false);
+          if (newGroup?.id) {
+            router.push(`/groups/${newGroup.id}`);
+          }
         }}
       />
     </div>

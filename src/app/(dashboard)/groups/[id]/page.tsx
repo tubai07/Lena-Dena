@@ -141,19 +141,12 @@ interface GroupDetail {
 
 export default function GroupDetailPage() {
   const urlParams = useParams();
-  const paramId = (urlParams?.id as string) || '';
-  const [id, setId] = useState(paramId);
-
-  useEffect(() => {
-    if (paramId) {
-      setId(paramId);
-    } else if (typeof window !== 'undefined') {
-      const parts = window.location.pathname.split('/groups/');
-      if (parts[1]) {
-        setId(decodeURIComponent(parts[1].split('/')[0].split('?')[0]));
-      }
-    }
-  }, [paramId]);
+  const rawId = Array.isArray(urlParams?.id) ? urlParams.id[0] : (urlParams?.id as string) || '';
+  const pathnameId =
+    typeof window !== 'undefined'
+      ? decodeURIComponent(window.location.pathname.split('/groups/')[1]?.split('/')[0]?.split('?')[0] || '')
+      : '';
+  const id = (rawId || pathnameId || '').trim();
 
   const router = useRouter();
 
@@ -235,119 +228,25 @@ export default function GroupDetailPage() {
       if (!data?.group) throw new Error('Invalid group data received');
       setFetchError('');
 
-      setGroup((prev) => {
-        if (!prev) return data.group;
+      setGroup(data.group);
+      setCachedItem(`group_${targetId}`, data.group);
 
-        // Clean up any in-flight optimistic items that are older than 30s
-        const now = Date.now();
-        for (const [k, v] of inFlightExpensesRef.current.entries()) {
-          if (now - v.timestamp > 30000) inFlightExpensesRef.current.delete(k);
-        }
-        for (const [k, v] of inFlightSettlementsRef.current.entries()) {
-          if (now - v.timestamp > 30000) inFlightSettlementsRef.current.delete(k);
-        }
-
-        const serverExpenses = (data.group.expenses || []).filter(
-          (e: any) => !deletedExpenseIdsRef.current.has(e.id)
-        );
-
-        // If server returned expenses matching in-flight ones, clear them from in-flight ref
-        for (const se of serverExpenses) {
-          for (const [k, v] of inFlightExpensesRef.current.entries()) {
-            if (se.id === k) {
-              inFlightExpensesRef.current.delete(k);
-            } else if (
-              se.description?.trim().toLowerCase() === v.expense.description?.trim().toLowerCase() &&
-              se.totalAmountPaisa === v.expense.totalAmountPaisa &&
-              Math.abs(new Date(se.date).getTime() - new Date(v.expense.date).getTime()) < 60000
-            ) {
-              inFlightExpensesRef.current.delete(k);
-            }
+      // Synchronize all_groups overview cache with fresh member count and spend
+      try {
+        const allGroups = getCachedItem<any[]>('all_groups');
+        if (allGroups && Array.isArray(allGroups)) {
+          const idx = allGroups.findIndex((g: any) => g.id === targetId);
+          if (idx !== -1) {
+            allGroups[idx].memberCount = (data.group.members || []).filter((m: any) => m.isActive !== false).length;
+            allGroups[idx].totalSpendPaisa = data.group.totalSpendPaisa || 0;
+            setCachedItem('all_groups', allGroups);
           }
         }
-
-        // Merge active in-flight optimistic expenses
-        const inFlightExpensesList = Array.from(inFlightExpensesRef.current.values())
-          .map((v) => v.expense)
-          .filter((e) => !deletedExpenseIdsRef.current.has(e.id) && !serverExpenses.some((se: any) => se.id === e.id));
-
-        const mergedExpenses = [...inFlightExpensesList, ...serverExpenses];
-
-        const serverSettlements = (data.group.settlements || []).filter(
-          (s: any) => !deletedSettlementIdsRef.current.has(s.id)
-        );
-
-        // If server returned settlements matching in-flight ones, clear them from in-flight ref
-        for (const ss of serverSettlements) {
-          for (const [k, v] of inFlightSettlementsRef.current.entries()) {
-            if (ss.id === k) {
-              inFlightSettlementsRef.current.delete(k);
-            } else if (
-              ss.payerId === v.settlement.payerId &&
-              ss.receiverId === v.settlement.receiverId &&
-              ss.amountPaisa === v.settlement.amountPaisa &&
-              Math.abs(new Date(ss.date).getTime() - new Date(v.settlement.date).getTime()) < 60000
-            ) {
-              inFlightSettlementsRef.current.delete(k);
-            }
-          }
-        }
-
-        // Merge active in-flight optimistic settlements
-        const inFlightSettlementsList = Array.from(inFlightSettlementsRef.current.values())
-          .map((v) => v.settlement)
-          .filter((s) => !deletedSettlementIdsRef.current.has(s.id) && !serverSettlements.some((ss: any) => ss.id === s.id));
-
-        const mergedSettlements = [...inFlightSettlementsList, ...serverSettlements];
-
-        // Filter out locally removed members
-        const mergedMembers = (data.group.members || []).filter(
-          (m: any) => !deletedMemberIdsRef.current.has(m.id)
-        );
-
-        const balances = calculateMemberNetBalances(mergedMembers, mergedExpenses, mergedSettlements);
-        const simplifiedTransfers = simplifyDebts(balances);
-        const directTransfers = calculateDirectPairwiseDebts(mergedMembers, mergedExpenses, mergedSettlements);
-        const totalSpendPaisa = mergedExpenses.reduce((sum, e) => sum + (Number(e.totalAmountPaisa) || 0), 0);
-
-        const updated = {
-          ...data.group,
-          category: prev.category || data.group.category,
-          simplifyDebts:
-            typeof prev.simplifyDebts === 'boolean'
-              ? prev.simplifyDebts
-              : Boolean(data.group.simplifyDebts ?? true),
-          members: mergedMembers,
-          expenses: mergedExpenses,
-          settlements: mergedSettlements,
-          totalSpendPaisa,
-          balances,
-          simplifiedTransfers,
-          directTransfers,
-          activeTransfers: (typeof prev.simplifyDebts === 'boolean' ? prev.simplifyDebts : Boolean(data.group.simplifyDebts ?? true)) ? simplifiedTransfers : directTransfers,
-        };
-
-        setCachedItem(`group_${id}`, updated);
-
-        // Synchronize all_groups overview cache with fresh member count and spend
-        try {
-          const allGroups = getCachedItem<any[]>('all_groups');
-          if (allGroups && Array.isArray(allGroups)) {
-            const idx = allGroups.findIndex((g: any) => g.id === id);
-            if (idx !== -1) {
-              allGroups[idx].memberCount = mergedMembers.filter((m: any) => m.isActive !== false).length;
-              allGroups[idx].totalSpendPaisa = totalSpendPaisa;
-              setCachedItem('all_groups', allGroups);
-            }
-          }
-        } catch {
-          // ignore cache write error
-        }
-
-        return updated;
-      });
+      } catch {
+        // ignore cache write error
+      }
     } catch (e: any) {
-      console.error(e);
+      console.error('Error fetching group:', e);
       setFetchError(e.message || 'Failed to load group');
     } finally {
       setLoading(false);
@@ -364,46 +263,6 @@ export default function GroupDetailPage() {
     if (cachedFull) {
       setGroup(cachedFull);
       setLoading(false);
-    } else {
-      const allGroups = getCachedItem<any[]>('all_groups');
-      const summary = allGroups?.find((g: any) => g.id === targetId || g.joinCode?.toUpperCase() === targetId.toUpperCase());
-      if (summary) {
-        setGroup({
-          id: summary.id,
-          name: summary.name,
-          category: summary.category,
-          joinCode: summary.joinCode,
-          simplifyDebts: true,
-          totalSpendPaisa: summary.totalSpendPaisa || 0,
-          members: [
-            {
-              id: 'current_user',
-              name: 'You',
-              isOwner: true,
-              phone: null,
-              upiId: null,
-            },
-          ],
-          expenses: [],
-          settlements: [],
-          balances: [
-            {
-              memberId: 'current_user',
-              name: 'You',
-              isOwner: true,
-              totalPaidPaisa: 0,
-              totalOwedPaisa: 0,
-              settlementsPaidPaisa: 0,
-              settlementsReceivedPaisa: 0,
-              netBalancePaisa: summary.ownerBalancePaisa || 0,
-            },
-          ],
-          simplifiedTransfers: [],
-          directTransfers: [],
-          activeTransfers: [],
-        });
-        setLoading(false);
-      }
     }
 
     fetchGroup();
@@ -1041,16 +900,17 @@ export default function GroupDetailPage() {
   }
 
   const ownerMember =
-    (claimedMemberId ? group.members.find((m) => m.id === claimedMemberId) : null) ||
-    group.members.find((m) => m.isOwner) ||
-    group.members[0];
+    (claimedMemberId ? (group?.members || []).find((m) => m.id === claimedMemberId) : null) ||
+    (group?.members || []).find((m) => m.isOwner) ||
+    (group?.members || [])[0] ||
+    null;
   const isCurrentUserAdmin = Boolean(ownerMember?.isOwner || ownerMember?.isAdmin);
 
   // Real-time dynamic member net balances (single source of truth for all dues)
   const memberBalances = useMemo(() => {
     if (!group?.members) return [];
     return calculateMemberNetBalances(
-      group.members,
+      group.members || [],
       group.expenses || [],
       group.settlements || []
     );
@@ -1190,13 +1050,19 @@ export default function GroupDetailPage() {
     return ReceiptText;
   };
 
+  const parseSafeDate = (val: any): Date => {
+    if (!val) return new Date();
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
   const activityItems = useMemo(() => {
     if (!group) return [];
 
     const expItems = (group.expenses || []).map((exp) => ({
       type: 'EXPENSE' as const,
       id: exp.id,
-      date: new Date(exp.date),
+      date: parseSafeDate(exp.date),
       category: exp.category || 'General',
       title: exp.description,
       totalAmountPaisa: exp.totalAmountPaisa,
@@ -1209,7 +1075,7 @@ export default function GroupDetailPage() {
     const stItems = (group.settlements || []).map((st) => ({
       type: 'SETTLEMENT' as const,
       id: st.id,
-      date: new Date(st.date || Date.now()),
+      date: parseSafeDate(st.date),
       category: 'Settlement',
       title: `${st.payer?.name} paid ${st.receiver?.name}`,
       totalAmountPaisa: st.amountPaisa,
@@ -1244,7 +1110,8 @@ export default function GroupDetailPage() {
     const map = new Map<string, typeof activityItems>();
 
     activityItems.forEach((item) => {
-      const key = item.date.toLocaleDateString('en-US', {
+      const safeDate = isNaN(item.date?.getTime()) ? new Date() : item.date;
+      const key = safeDate.toLocaleDateString('en-US', {
         month: 'long',
         year: 'numeric',
       });
@@ -1574,8 +1441,9 @@ export default function GroupDetailPage() {
 
                     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs divide-y divide-slate-100 overflow-hidden">
                       {groupMonth.items.map((item) => {
-                        const monthShort = item.date.toLocaleDateString('en-US', { month: 'short' });
-                        const dayNum = item.date.getDate();
+                        const safeDate = isNaN(item.date?.getTime()) ? new Date() : item.date;
+                        const monthShort = safeDate.toLocaleDateString('en-US', { month: 'short' });
+                        const dayNum = safeDate.getDate();
 
                         if (item.type === 'EXPENSE') {
                           const exp = item.raw;
