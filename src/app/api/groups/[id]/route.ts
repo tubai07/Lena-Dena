@@ -11,6 +11,7 @@ import {
   setCachedServerDetail,
   invalidateServerDetail,
   invalidateServerSummary,
+  invalidateAllGroupServerCaches,
 } from '@/lib/serverGroupCache';
 
 export async function GET(
@@ -118,8 +119,7 @@ export async function PUT(
       data,
     });
 
-    invalidateServerDetail(id);
-    invalidateServerSummary(session.businessId);
+    invalidateAllGroupServerCaches(id, session.businessId);
 
     return NextResponse.json({ group: updated });
   } catch (err: any) {

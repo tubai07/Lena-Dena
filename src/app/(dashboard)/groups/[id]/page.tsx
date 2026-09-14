@@ -298,6 +298,10 @@ export default function GroupDetailPage({
         const updated = {
           ...data.group,
           category: prev.category || data.group.category,
+          simplifyDebts:
+            typeof prev.simplifyDebts === 'boolean'
+              ? prev.simplifyDebts
+              : Boolean(data.group.simplifyDebts ?? true),
           members: mergedMembers,
           expenses: mergedExpenses,
           settlements: mergedSettlements,
@@ -305,7 +309,7 @@ export default function GroupDetailPage({
           balances,
           simplifiedTransfers,
           directTransfers,
-          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+          activeTransfers: (typeof prev.simplifyDebts === 'boolean' ? prev.simplifyDebts : Boolean(data.group.simplifyDebts ?? true)) ? simplifiedTransfers : directTransfers,
         };
 
         setCachedItem(`group_${id}`, updated);
@@ -367,14 +371,15 @@ export default function GroupDetailPage({
 
   // Instant optimistic simplify toggle
   const handleToggleSimplify = async (enabled: boolean) => {
-    if (!group) return;
-    const updated = {
-      ...group,
-      simplifyDebts: enabled,
-      activeTransfers: enabled ? group.simplifiedTransfers : group.directTransfers,
-    };
-    setGroup(updated);
-    setCachedItem(`group_${id}`, updated);
+    setGroup((prev) => {
+      if (!prev) return null;
+      const updated = {
+        ...prev,
+        simplifyDebts: enabled,
+      };
+      setCachedItem(`group_${id}`, updated);
+      return updated;
+    });
 
     try {
       await fetch(`/api/groups/${id}`, {
@@ -383,7 +388,7 @@ export default function GroupDetailPage({
         body: JSON.stringify({ simplifyDebts: enabled }),
       });
     } catch (e) {
-      console.error(e);
+      console.error('Error updating simplifyDebts:', e);
     }
   };
 
@@ -752,9 +757,37 @@ export default function GroupDetailPage({
     ? group.balances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0
     : 0;
 
-  const displayedTransfers = group.simplifyDebts
-    ? group.simplifiedTransfers
-    : group.directTransfers;
+  // Real-time dynamic member net balances
+  const memberBalances = useMemo(() => {
+    if (!group?.members) return [];
+    return calculateMemberNetBalances(
+      group.members,
+      group.expenses || [],
+      group.settlements || []
+    );
+  }, [group?.members, group?.expenses, group?.settlements]);
+
+  // Real-time dynamic simplified transfers (Splitwise debt minimization algorithm)
+  const dynamicSimplifiedTransfers = useMemo(() => {
+    return simplifyDebts(memberBalances);
+  }, [memberBalances]);
+
+  // Real-time dynamic direct bilateral transfers (pairwise debts)
+  const dynamicDirectTransfers = useMemo(() => {
+    if (!group?.members) return [];
+    return calculateDirectPairwiseDebts(
+      group.members,
+      group.expenses || [],
+      group.settlements || []
+    );
+  }, [group?.members, group?.expenses, group?.settlements]);
+
+  const isSimplifyEnabled = Boolean(group.simplifyDebts ?? true);
+
+  const displayedTransfers = useMemo(() => {
+    const list = isSimplifyEnabled ? dynamicSimplifiedTransfers : dynamicDirectTransfers;
+    return list || [];
+  }, [isSimplifyEnabled, dynamicSimplifiedTransfers, dynamicDirectTransfers]);
 
   // Calculate user share for an expense
   const getExpenseUserShare = (exp: Expense, currentMemberId?: string) => {
@@ -1370,27 +1403,62 @@ export default function GroupDetailPage({
               </button>
             </div>
 
-            {/* Clean up who pays who (Simplify debts) toggle */}
-            <div className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4 stroke-[2]" />
+            {/* Clean up who pays who (Simplify debts) toggle switch */}
+            <div
+              onClick={() => handleToggleSimplify(!isSimplifyEnabled)}
+              className="flex items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all cursor-pointer select-none group"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleToggleSimplify(!isSimplifyEnabled);
+                }
+              }}
+              aria-label={`Clean up who pays who, currently ${isSimplifyEnabled ? 'enabled' : 'disabled'}`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    isSimplifyEnabled
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : 'bg-slate-100 text-slate-400'
+                  }`}
+                >
+                  <Sparkles className="w-4.5 h-4.5 stroke-[2]" />
                 </div>
                 <div className="min-w-0">
-                  <span className="font-bold text-slate-900 text-xs sm:text-sm block">Clean up who pays who</span>
-                  <span className="text-[10px] sm:text-xs text-slate-500 font-medium block truncate">Minimize transactions between people</span>
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm block">
+                    Clean up who pays who
+                  </span>
+                  <span className="text-[11px] sm:text-xs text-slate-500 font-medium block truncate mt-0.5">
+                    {isSimplifyEnabled
+                      ? 'Minimizing transactions between people'
+                      : 'Showing direct pairwise debts'}
+                  </span>
                 </div>
               </div>
+
+              {/* iOS-Style Sliding Toggle Switch */}
               <button
                 type="button"
-                onClick={() => handleToggleSimplify(!group.simplifyDebts)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  group.simplifyDebts
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                role="switch"
+                aria-checked={isSimplifyEnabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleSimplify(!isSimplifyEnabled);
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                  isSimplifyEnabled ? 'bg-emerald-600' : 'bg-slate-300'
                 }`}
+                title={isSimplifyEnabled ? 'Turn off simplification' : 'Turn on simplification'}
               >
-                {group.simplifyDebts ? 'ON' : 'OFF'}
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    isSimplifyEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
               </button>
             </div>
 
