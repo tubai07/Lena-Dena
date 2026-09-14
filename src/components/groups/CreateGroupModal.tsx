@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, Check } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { GROUP_CATEGORIES, getGroupCategoryInfo } from '@/lib/groupIcons';
 
@@ -15,8 +15,6 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
   const router = useRouter();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Trip');
-  const [memberName, setMemberName] = useState('');
-  const [members, setMembers] = useState<{ name: string; phone?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,29 +22,6 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
 
   const currentCategoryInfo = getGroupCategoryInfo(category);
   const CurrentIcon = currentCategoryInfo.icon;
-
-  const handleAddMemberChip = () => {
-    const trimmed = memberName.trim();
-    if (!trimmed) return;
-    if (members.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) {
-      setError('Member already added');
-      return;
-    }
-    setMembers([...members, { name: trimmed }]);
-    setMemberName('');
-    setError('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      handleAddMemberChip();
-    }
-  };
-
-  const handleRemoveMember = (idx: number) => {
-    setMembers(members.filter((_, i) => i !== idx));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +40,7 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
         body: JSON.stringify({
           name: name.trim(),
           category,
-          initialMembers: members,
+          initialMembers: [],
         }),
       });
 
@@ -180,59 +155,6 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Add Members */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider">
-                Add Members
-              </label>
-              <span className="text-xs text-slate-400 font-semibold">You are auto-added</span>
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Friend's name (e.g. Rahul)"
-                value={memberName}
-                onChange={(e) => setMemberName(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-600 text-sm font-semibold text-slate-900 bg-slate-50/50 placeholder:text-slate-400"
-              />
-              <button
-                type="button"
-                onClick={handleAddMemberChip}
-                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-xl transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Add
-              </button>
-            </div>
-
-            {/* Added Members Chips */}
-            <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/60 rounded-full text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                You (Creator)
-              </span>
-
-              {members.map((m, idx) => (
-                <span
-                  key={idx}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-800 border border-slate-200 rounded-full text-xs font-bold"
-                >
-                  {m.name}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMember(idx)}
-                    className="hover:text-rose-600 ml-1 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              ))}
             </div>
           </div>
 
