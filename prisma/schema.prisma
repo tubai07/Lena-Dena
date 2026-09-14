@@ -159,6 +159,7 @@ model GroupMember {
   isOwner             Boolean           @default(false)
   isAdmin             Boolean           @default(false)
   isActive            Boolean           @default(true)
+  status              String            @default("APPROVED") // APPROVED, PENDING, REJECTED
   expensePayers       ExpensePayer[]
   splits              ExpenseSplit[]
   settlementsPaid     GroupSettlement[] @relation("PayerSettlements")

@@ -12,11 +12,7 @@ export async function PATCH(
     const { id, memberId } = await params;
     const session = await getSession();
     const body = await req.json();
-    const { isAdmin } = body;
-
-    if (typeof isAdmin !== 'boolean') {
-      return NextResponse.json({ error: 'isAdmin must be a boolean' }, { status: 400 });
-    }
+    const { isAdmin, status } = body;
 
     const group = await db.group.findUnique({
       where: { id },
@@ -35,7 +31,7 @@ export async function PATCH(
     const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
 
     if (!callerIsAdmin) {
-      return NextResponse.json({ error: 'Only group admins can modify member roles' }, { status: 403 });
+      return NextResponse.json({ error: 'Only group admins can approve requests or modify roles' }, { status: 403 });
     }
 
     const member = group.members.find((m) => m.id === memberId);
@@ -44,23 +40,37 @@ export async function PATCH(
     }
 
     // Owner is always an admin
-    if (member.isOwner && !isAdmin) {
+    if (member.isOwner && isAdmin === false) {
       return NextResponse.json(
         { error: 'Group creator/owner must remain an admin' },
         { status: 400 }
       );
     }
 
+    const updateData: any = {};
+    if (typeof isAdmin === 'boolean') updateData.isAdmin = isAdmin;
+    if (status && ['APPROVED', 'PENDING', 'REJECTED'].includes(status)) {
+      updateData.status = status;
+      if (status === 'APPROVED') updateData.isActive = true;
+    }
+
+    if (status === 'REJECTED') {
+      // If rejected, delete the unapproved request
+      await db.groupMember.delete({ where: { id: memberId } });
+      invalidateAllGroupServerCaches(id, group.businessId);
+      return NextResponse.json({ success: true, rejectedMemberId: memberId });
+    }
+
     const updatedMember = await db.groupMember.update({
       where: { id: memberId },
-      data: { isAdmin },
+      data: updateData,
     });
 
     invalidateAllGroupServerCaches(id, group.businessId);
 
     return NextResponse.json({ success: true, member: updatedMember });
   } catch (err: any) {
-    console.error('Error updating member admin status:', err);
+    console.error('Error updating member:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }
@@ -91,20 +101,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
-    // Verify caller is an admin or group owner
+    const member = group.members.find((m) => m.id === memberId);
+    if (!member) {
+      return NextResponse.json({ error: 'Member not found in this group' }, { status: 404 });
+    }
+
+    // Verify caller is an admin, owner, or the member themselves leaving the group
     const callerIsOwner = session?.businessId === group.businessId;
     const callerMember = group.members.find(
       (m) => session?.phone && m.phone === session.phone
     );
+    const isSelfLeaving = callerMember?.id === memberId;
     const callerIsAdmin = callerIsOwner || Boolean(callerMember?.isAdmin || callerMember?.isOwner);
 
-    if (!callerIsAdmin) {
-      return NextResponse.json({ error: 'Only group admins can remove members' }, { status: 403 });
-    }
-
-    const member = group.members.find((m) => m.id === memberId);
-    if (!member) {
-      return NextResponse.json({ error: 'Member not found in this group' }, { status: 404 });
+    if (!callerIsAdmin && !isSelfLeaving) {
+      return NextResponse.json({ error: 'Only group admins or the member themselves can perform this action' }, { status: 403 });
     }
 
     // Creator / Owner cannot be removed

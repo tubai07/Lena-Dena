@@ -52,6 +52,7 @@ export async function GET(req: Request) {
             isOwner: true,
             isAdmin: true,
             isActive: true,
+            status: true,
           },
         },
         expenses: {
@@ -84,16 +85,17 @@ export async function GET(req: Request) {
     });
 
     const formatted = groups.map((g) => {
+      const approvedMembers = g.members.filter((m: any) => m.isActive !== false && m.status === 'APPROVED');
       const totalSpendPaisa = g.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
-      const balances = calculateMemberNetBalances(g.members, g.expenses, g.settlements);
-      const ownerMember = g.members.find((m) => m.isOwner) || g.members[0];
+      const balances = calculateMemberNetBalances(approvedMembers, g.expenses, g.settlements);
+      const ownerMember = approvedMembers.find((m) => m.isOwner) || approvedMembers[0];
       const ownerBalance = ownerMember
         ? balances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0
         : 0;
 
       const transfers = g.simplifyDebts
         ? simplifyDebts(balances)
-        : calculateDirectPairwiseDebts(g.members, g.expenses, g.settlements);
+        : calculateDirectPairwiseDebts(approvedMembers, g.expenses, g.settlements);
 
       return {
         id: g.id,
@@ -102,7 +104,7 @@ export async function GET(req: Request) {
         currencySymbol: g.currencySymbol,
         joinCode: g.joinCode,
         simplifyDebts: g.simplifyDebts,
-        memberCount: g.members.filter((m: any) => m.isActive !== false).length,
+        memberCount: approvedMembers.length,
         totalSpendPaisa,
         ownerBalancePaisa: ownerBalance,
         pendingTransfersCount: transfers.length,

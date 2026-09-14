@@ -57,10 +57,13 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const balances = calculateMemberNetBalances(group.members, group.expenses, group.settlements);
+    const approvedMembers = group.members.filter((m) => m.status === 'APPROVED' && m.isActive !== false);
+    const pendingMembers = group.members.filter((m) => m.status === 'PENDING');
+
+    const balances = calculateMemberNetBalances(approvedMembers, group.expenses, group.settlements);
     const simplifiedTransfers = simplifyDebts(balances);
     const directTransfers = calculateDirectPairwiseDebts(
-      group.members,
+      approvedMembers,
       group.expenses,
       group.settlements
     );
@@ -70,6 +73,9 @@ export async function GET(
     const payload = {
       group: {
         ...group,
+        members: approvedMembers,
+        pendingMembers,
+        allMembers: group.members,
         totalSpendPaisa,
         balances,
         simplifiedTransfers,

@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Activity,
   Trash2,
+  Clock,
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
@@ -270,6 +271,15 @@ export default function JoinGroupDetailPage({
     );
   }
 
+  // Find active member record for claimed identity
+  const currentMemberRecord = useMemo(() => {
+    if (!claimedMember || !group) return null;
+    const all = (group as any).allMembers || (group as any).pendingMembers?.concat(group.members) || group.members || [];
+    return all.find((m: any) => m.id === claimedMember.id);
+  }, [claimedMember, group]);
+
+  const isPendingApproval = currentMemberRecord?.status === 'PENDING';
+
   // Identity selection screen if friend hasn't claimed their name yet
   if (!claimedMember) {
     return (
@@ -346,6 +356,47 @@ export default function JoinGroupDetailPage({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Approval Pending View: Joined user waiting for admin approval
+  if (isPendingApproval) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 select-none">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xl space-y-6 text-center animate-in fade-in zoom-in-95">
+          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center mx-auto shadow-xs">
+            <Clock className="w-8 h-8 stroke-[2.2]" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-amber-700 font-mono tracking-wider">
+              Code: {group.joinCode}
+            </span>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Approval Pending</h1>
+            <p className="text-sm font-semibold text-slate-600">
+              Hi <span className="font-bold text-slate-900">{claimedMember.name}</span>, your request to join <span className="font-bold text-slate-900">{group.name}</span> has been sent to the group admin.
+            </p>
+            <p className="text-xs text-slate-400 font-medium">
+              You will automatically gain full access as soon as an admin approves your request.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center gap-2 text-xs font-bold text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            <span>Checking for approval in real-time...</span>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleSwitchIdentity}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            >
+              Cancel or switch name
+            </button>
           </div>
         </div>
       </div>

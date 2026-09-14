@@ -48,6 +48,8 @@ interface Member {
   upiId?: string | null;
   isOwner: boolean;
   isAdmin?: boolean;
+  status?: string;
+  createdAt?: string;
 }
 
 const getAvatarBg = (name: string) => {
@@ -129,6 +131,7 @@ interface GroupDetail {
   simplifyDebts: boolean;
   totalSpendPaisa: number;
   members: Member[];
+  pendingMembers?: Member[];
   expenses: Expense[];
   settlements: Settlement[];
   balances: MemberBalance[];
@@ -205,6 +208,7 @@ export default function GroupDetailPage({
   const [selectedMember, setSelectedMember] = useState<MemberBalanceDetail | null>(null);
   const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
@@ -845,6 +849,126 @@ export default function GroupDetailPage({
       console.error('Failed to remove member:', e);
       deletedMemberIdsRef.current.delete(memberId);
       fetchGroup(true);
+    }
+  };
+
+  // Instant optimistic approval for join requests
+  const handleApproveJoinRequest = async (memberId: string) => {
+    if (!group) return;
+    const pendingItem = (group.pendingMembers || []).find((m) => m.id === memberId);
+    if (!pendingItem) return;
+
+    // 0ms Optimistic UI update
+    const updatedPending = (group.pendingMembers || []).filter((m) => m.id !== memberId);
+    const approvedMember: Member = { ...pendingItem, status: 'APPROVED' };
+    const updatedMembers = [...group.members, approvedMember];
+    const balances = calculateMemberNetBalances(updatedMembers, group.expenses, group.settlements);
+    const simplifiedTransfers = simplifyDebts(balances);
+    const directTransfers = calculateDirectPairwiseDebts(updatedMembers, group.expenses, group.settlements);
+
+    const updated = {
+      ...group,
+      members: updatedMembers,
+      pendingMembers: updatedPending,
+      balances,
+      simplifiedTransfers,
+      directTransfers,
+      activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
+    try {
+      const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED' }),
+      });
+      if (!res.ok) {
+        fetchGroup(true);
+      }
+    } catch (e) {
+      console.error('Failed to approve member:', e);
+      fetchGroup(true);
+    }
+  };
+
+  // Instant optimistic rejection for join requests
+  const handleRejectJoinRequest = async (memberId: string) => {
+    if (!group) return;
+    const updatedPending = (group.pendingMembers || []).filter((m) => m.id !== memberId);
+    const updated = {
+      ...group,
+      pendingMembers: updatedPending,
+    };
+    setGroup(updated);
+    setCachedItem(`group_${id}`, updated);
+
+    try {
+      const res = await fetch(`/api/groups/${id}/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'REJECTED' }),
+      });
+      if (!res.ok) {
+        fetchGroup(true);
+      }
+    } catch (e) {
+      console.error('Failed to reject member:', e);
+      fetchGroup(true);
+    }
+  };
+
+  // Strict zero-balance leave group handler
+  const handleLeaveGroup = async () => {
+    if (!group || !ownerMember) return;
+    if (ownerMember.isOwner) {
+      alert('As the group creator, you cannot leave the group. You can delete the group in settings if needed.');
+      return;
+    }
+
+    if (Math.abs(userBalance) > 0) {
+      const amt = (Math.abs(userBalance) / 100).toFixed(2);
+      const direction = userBalance > 0 ? 'are owed' : 'owe';
+      alert(
+        `Cannot leave group! You have an unsettled balance (${direction} ₹${amt}). All dues must be completely settled (₹0.00) before leaving.`
+      );
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to leave ${group.name}?`)) {
+      return;
+    }
+
+    setIsLeavingGroup(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/members/${ownerMember.id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to leave group');
+        setIsLeavingGroup(false);
+        return;
+      }
+
+      // Clear local storage for join
+      try {
+        localStorage.removeItem(`lena_dena_member_${group.joinCode.toUpperCase()}`);
+        const allGroups = getCachedItem<any[]>('all_groups');
+        if (allGroups && Array.isArray(allGroups)) {
+          const filtered = allGroups.filter((g) => g.id !== id);
+          setCachedItem('all_groups', filtered);
+        }
+      } catch {
+        // ignore
+      }
+
+      router.push('/groups');
+    } catch (e: any) {
+      console.error('Error leaving group:', e);
+      alert(e.message || 'Error leaving group');
+      setIsLeavingGroup(false);
     }
   };
 
@@ -1740,6 +1864,59 @@ export default function GroupDetailPage({
               </button>
             </div>
 
+            {/* Pending Join Requests (for Admins) */}
+            {isCurrentUserAdmin && (group.pendingMembers?.length || 0) > 0 && (
+              <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                      Pending Join Requests ({group.pendingMembers!.length})
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded-full">
+                    Admin Approval Required
+                  </span>
+                </div>
+
+                <div className="divide-y divide-amber-200/60 bg-white/70 rounded-xl border border-amber-200/50 px-3">
+                  {group.pendingMembers!.map((pm) => (
+                    <div key={pm.id} className="py-2.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
+                          {pm.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-slate-900 block truncate">{pm.name}</span>
+                          {pm.phone && <span className="text-xs text-slate-500 font-medium block">{pm.phone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRejectJoinRequest(pm.id)}
+                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          title="Decline join request"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Decline</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveJoinRequest(pm.id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+                          title="Approve member"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>Approve</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Quick Add Friend with Mandatory Phone Number */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Add Friend to Group</h4>
@@ -1932,36 +2109,65 @@ export default function GroupDetailPage({
               </div>
             </div>
 
-            {/* Danger Zone: Delete Group */}
-            <div className="bg-rose-50/70 rounded-2xl p-4 border border-rose-200/80 shadow-2xs space-y-3">
+            {/* Danger Zone */}
+            <div className="bg-rose-50/70 rounded-2xl p-4 border border-rose-200/80 shadow-2xs space-y-4">
               <div className="flex items-center gap-1.5 text-rose-700">
                 <AlertCircle className="w-4 h-4 stroke-[2.5]" />
                 <h4 className="text-[11px] font-extrabold uppercase tracking-wider">Danger Zone</h4>
               </div>
 
-              <div className="space-y-1">
-                <h5 className="text-sm font-bold text-slate-900">Delete this group</h5>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  Permanently delete this group and remove all associated expenses, splits, and payment history. This action cannot be undone.
-                </p>
-              </div>
-
-              {isCurrentUserAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteGroupModal(true)}
-                  className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Delete Group</span>
-                </button>
-              ) : (
-                <div className="p-2.5 bg-white/80 rounded-xl border border-rose-200 text-center">
-                  <span className="text-xs font-semibold text-rose-700">
-                    Only group admins can delete this group
-                  </span>
+              {/* Leave Group (Available for non-owner members) */}
+              {!ownerMember?.isOwner && (
+                <div className="p-3 bg-white/90 rounded-xl border border-rose-200/60 space-y-2.5">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-900">Leave this group</h5>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed mt-0.5">
+                      {Math.abs(userBalance) === 0
+                        ? 'Your balance is settled (₹0.00). You can leave this group now.'
+                        : `You have an unsettled balance (${userBalance > 0 ? 'owed' : 'owing'} ₹${(Math.abs(userBalance) / 100).toFixed(2)}). All dues must be ₹0.00 to leave.`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLeaveGroup}
+                    disabled={isLeavingGroup || Math.abs(userBalance) > 0}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5 ${
+                      Math.abs(userBalance) === 0
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-75'
+                    }`}
+                  >
+                    <span>{isLeavingGroup ? 'Leaving Group...' : 'Leave Group'}</span>
+                  </button>
                 </div>
               )}
+
+              {/* Delete Group (Admin only) */}
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <h5 className="text-sm font-bold text-slate-900">Delete this group</h5>
+                  <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                    Permanently delete this group and remove all associated expenses, splits, and payment history. This action cannot be undone.
+                  </p>
+                </div>
+
+                {isCurrentUserAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteGroupModal(true)}
+                    className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Group</span>
+                  </button>
+                ) : (
+                  <div className="p-2.5 bg-white/80 rounded-xl border border-rose-200 text-center">
+                    <span className="text-xs font-semibold text-rose-700">
+                      Only group admins can delete this group
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

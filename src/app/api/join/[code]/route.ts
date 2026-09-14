@@ -27,6 +27,8 @@ export async function GET(
             upiId: true,
             isOwner: true,
             isAdmin: true,
+            isActive: true,
+            status: true,
           },
         },
         expenses: {
@@ -54,10 +56,13 @@ export async function GET(
       return NextResponse.json({ error: 'Group not found with this code' }, { status: 404 });
     }
 
-    const balances = calculateMemberNetBalances(group.members, group.expenses, group.settlements);
+    const approvedMembers = group.members.filter((m) => m.status === 'APPROVED' && m.isActive !== false);
+    const pendingMembers = group.members.filter((m) => m.status === 'PENDING');
+
+    const balances = calculateMemberNetBalances(approvedMembers, group.expenses, group.settlements);
     const simplifiedTransfers = simplifyDebts(balances);
     const directTransfers = calculateDirectPairwiseDebts(
-      group.members,
+      approvedMembers,
       group.expenses,
       group.settlements
     );
@@ -73,7 +78,9 @@ export async function GET(
           joinCode: group.joinCode,
           simplifyDebts: group.simplifyDebts,
           totalSpendPaisa,
-          members: group.members,
+          members: approvedMembers,
+          pendingMembers,
+          allMembers: group.members,
           balances,
           activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
           expenses: group.expenses,
@@ -119,12 +126,13 @@ export async function POST(
       return NextResponse.json({
         success: true,
         member: existing,
+        status: existing.status,
         groupId: group.id,
         groupName: group.name,
       });
     }
 
-    // 2. If adding a new member to the group
+    // 2. If adding a new member to the group (Created with PENDING status for admin approval)
     if (newMemberName && typeof newMemberName === 'string' && newMemberName.trim()) {
       const trimmedName = newMemberName.trim();
       const duplicate = group.members.some(
@@ -144,6 +152,8 @@ export async function POST(
           phone: phone?.trim() || null,
           upiId: upiId?.trim() || null,
           isOwner: false,
+          isAdmin: false,
+          status: 'PENDING',
         },
       });
 
@@ -152,6 +162,8 @@ export async function POST(
       return NextResponse.json({
         success: true,
         member: createdMember,
+        status: 'PENDING',
+        requiresApproval: true,
         groupId: group.id,
         groupName: group.name,
       });
