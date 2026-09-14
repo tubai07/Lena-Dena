@@ -1291,13 +1291,13 @@ export default function GroupDetailPage() {
         <div className="relative z-10 mt-4 flex items-end justify-between gap-3">
           <div className="space-y-2 min-w-0 flex-1">
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight truncate">
-              {group.name}
+              {group?.name || 'Group'}
             </h1>
 
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 backdrop-blur-md text-white/90 text-xs font-bold">
                 <Users className="w-3.5 h-3.5" />
-                <span>{group.members.length} people</span>
+                <span>{group?.members?.length || 0} people</span>
               </div>
 
               {/* Share Group link button */}
@@ -1711,7 +1711,7 @@ export default function GroupDetailPage() {
         {activeTab === 'members' && (
           <div className="space-y-4 animate-in fade-in duration-150">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">People ({group.members.length})</h3>
+              <h3 className="text-base font-bold text-slate-900">People ({group?.members?.length || 0})</h3>
               <button
                 type="button"
                 onClick={() => setActiveTab('activity')}
@@ -1848,18 +1848,18 @@ export default function GroupDetailPage() {
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div>
                   <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">Group Name</span>
-                  <h3 className="text-lg font-black text-slate-900 mt-0.5">{group.name}</h3>
+                  <h3 className="text-lg font-black text-slate-900 mt-0.5">{group?.name || 'Group'}</h3>
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">Category</span>
-                  <span className="text-sm font-bold text-slate-700 mt-0.5 block">{group.category || 'Trip'}</span>
+                  <span className="text-sm font-bold text-slate-700 mt-0.5 block">{group?.category || 'Trip'}</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Members</span>
-                  <span className="text-lg font-black text-slate-900 mt-0.5 block">{group.members.length} people</span>
+                  <span className="text-lg font-black text-slate-900 mt-0.5 block">{group?.members?.length || 0} people</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Group Spend</span>
@@ -2142,8 +2142,8 @@ export default function GroupDetailPage() {
           setEditingExpense(null);
         }}
         groupId={group.id}
-        groupName={group.name}
-        members={group.members}
+        groupName={group?.name || 'Group'}
+        members={group?.members || []}
         onExpenseAdded={handleExpenseAdded}
         initialExpense={editingExpense}
       />
@@ -2155,8 +2155,8 @@ export default function GroupDetailPage() {
           setEditingSettlement(null);
         }}
         groupId={group.id}
-        members={group.members}
-        transfers={displayedTransfers}
+        members={group?.members || []}
+        transfers={displayedTransfers || []}
         currentUserId={ownerMember?.id}
         onSettled={handleSettled}
         initialPayerId={settlePreload.payerId}
@@ -2169,8 +2169,8 @@ export default function GroupDetailPage() {
         isOpen={Boolean(selectedMember)}
         onClose={() => setSelectedMember(null)}
         member={selectedMember ? memberBalances.find((b) => b.memberId === selectedMember.memberId) || selectedMember : null}
-        groupName={group.name}
-        transfers={displayedTransfers}
+        groupName={group?.name || 'Group'}
+        transfers={displayedTransfers || []}
         currentMemberId={ownerMember?.id}
         isCurrentUserAdmin={isCurrentUserAdmin}
         isCurrentUserCreator={Boolean(ownerMember?.isOwner)}
