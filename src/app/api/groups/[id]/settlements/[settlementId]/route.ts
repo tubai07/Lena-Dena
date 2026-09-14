@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
 
 export async function DELETE(
   req: Request,
@@ -14,6 +15,8 @@ export async function DELETE(
         groupId: id,
       },
     });
+
+    invalidateAllGroupServerCaches(id);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

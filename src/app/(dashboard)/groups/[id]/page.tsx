@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
+import { TransactionDetailsModal } from '@/components/groups/TransactionDetailsModal';
 import {
   generateUpiUrl,
   calculateMemberNetBalances,
@@ -197,6 +198,8 @@ export default function GroupDetailPage({
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'settlements'>('all');
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
+  const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
     payerId?: string;
@@ -204,6 +207,23 @@ export default function GroupDetailPage({
     amountPaisa?: number;
   }>({});
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Sync claimed identity for joined members
+  useEffect(() => {
+    if (group?.joinCode) {
+      try {
+        const saved = localStorage.getItem(`lena_dena_member_${group.joinCode.toUpperCase()}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.id) {
+            setClaimedMemberId(parsed.id);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [group?.joinCode]);
 
   // Add Member inputs with mandatory phone number
   const [newMemberName, setNewMemberName] = useState('');
@@ -471,6 +491,10 @@ export default function GroupDetailPage({
 
   // Instant 0ms optimistic expense deletion
   const handleDeleteExpense = async (expenseId: string) => {
+    if (!isCurrentUserAdmin) {
+      alert('Only group admins can delete expenses');
+      return;
+    }
     deletedExpenseIdsRef.current.add(expenseId);
     if (group) {
       const updatedExpenses = group.expenses.filter((e) => e.id !== expenseId);
@@ -502,6 +526,10 @@ export default function GroupDetailPage({
 
   // Instant 0ms optimistic settlement deletion
   const handleDeleteSettlement = async (settlementId: string) => {
+    if (!isCurrentUserAdmin) {
+      alert('Only group admins can delete payments');
+      return;
+    }
     deletedSettlementIdsRef.current.add(settlementId);
     if (group) {
       const updatedSettlements = group.settlements.filter((s) => s.id !== settlementId);
@@ -701,7 +729,11 @@ export default function GroupDetailPage({
 
   if (!group) return null;
 
-  const ownerMember = group.members.find((m) => m.isOwner) || group.members[0];
+  const ownerMember =
+    (claimedMemberId ? group.members.find((m) => m.id === claimedMemberId) : null) ||
+    group.members.find((m) => m.isOwner) ||
+    group.members[0];
+  const isCurrentUserAdmin = Boolean(ownerMember?.isOwner || ownerMember?.isAdmin);
   const userBalance = ownerMember
     ? group.balances.find((b) => b.memberId === ownerMember.id)?.netBalancePaisa || 0
     : 0;
@@ -1283,10 +1315,7 @@ export default function GroupDetailPage({
                           return (
                             <div
                               key={item.id}
-                              onClick={() => {
-                                setEditingExpense(item.raw);
-                                setIsAddExpenseOpen(true);
-                              }}
+                              onClick={() => setSelectedTransaction(item)}
                               className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer group"
                             >
                               {/* Left Column: Date Block + Category Icon Tile */}
@@ -1325,18 +1354,6 @@ export default function GroupDetailPage({
                                     ₹{share.amountText}
                                   </span>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteExpense(item.id);
-                                  }}
-                                  className="p-1.5 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
-                                  title="Delete Expense"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
                               </div>
                             </div>
                           );
@@ -1348,6 +1365,7 @@ export default function GroupDetailPage({
                           return (
                             <div
                               key={item.id}
+                              onClick={() => setSelectedTransaction(item)}
                               className="p-3 sm:p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer group"
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1383,18 +1401,6 @@ export default function GroupDetailPage({
                                     ₹{share.amountText}
                                   </span>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteSettlement(item.id);
-                                  }}
-                                  className="p-1.5 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg cursor-pointer"
-                                  title="Delete Settlement"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
                               </div>
                             </div>
                           );
@@ -1777,6 +1783,45 @@ export default function GroupDetailPage({
       </nav>
 
       {/* Modals */}
+      <TransactionDetailsModal
+        isOpen={Boolean(selectedTransaction)}
+        onClose={() => setSelectedTransaction(null)}
+        item={selectedTransaction}
+        members={group.members}
+        currentUserId={ownerMember?.id}
+        isAdmin={isCurrentUserAdmin}
+        onEdit={(tx) => {
+          if (!isCurrentUserAdmin) {
+            alert('Only group admins can edit transactions');
+            return;
+          }
+          setSelectedTransaction(null);
+          if (tx.type === 'EXPENSE') {
+            setEditingExpense(tx.raw);
+            setIsAddExpenseOpen(true);
+          } else {
+            setSettlePreload({
+              payerId: tx.raw.payerId,
+              receiverId: tx.raw.receiverId,
+              amountPaisa: tx.raw.amountPaisa,
+            });
+            setIsSettleOpen(true);
+          }
+        }}
+        onDelete={(tx) => {
+          if (!isCurrentUserAdmin) {
+            alert('Only group admins can delete transactions');
+            return;
+          }
+          setSelectedTransaction(null);
+          if (tx.type === 'EXPENSE') {
+            handleDeleteExpense(tx.id);
+          } else {
+            handleDeleteSettlement(tx.id);
+          }
+        }}
+      />
+
       <AddExpenseScreen
         isOpen={isAddExpenseOpen}
         onClose={() => {

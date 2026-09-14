@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
+import { TransactionDetailsModal } from '@/components/groups/TransactionDetailsModal';
 import {
   generateUpiUrl,
   calculateMemberNetBalances,
@@ -105,6 +106,8 @@ export default function JoinGroupDetailPage({
   const [newMemberName, setNewMemberName] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<any | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
     payerId?: string;
@@ -424,6 +427,53 @@ export default function JoinGroupDetailPage({
     });
   }, [group?.expenses, group?.settlements, activityFilter, activitySearch]);
 
+  const currentMemberObj = group?.members.find((m) => m.id === claimedMember?.id) || group?.members.find((m) => m.isOwner) || group?.members?.[0];
+  const isUserAdmin = Boolean(currentMemberObj?.isOwner || currentMemberObj?.isAdmin);
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!isUserAdmin || !group) return;
+    const updatedExpenses = group.expenses.filter((e) => e.id !== expenseId);
+    const balances = calculateMemberNetBalances(group.members, updatedExpenses, group.settlements);
+    const simplifiedTransfers = simplifyDebts(balances);
+    const directTransfers = calculateDirectPairwiseDebts(group.members, updatedExpenses, group.settlements);
+    const totalSpendPaisa = updatedExpenses.reduce((sum, e) => sum + e.totalAmountPaisa, 0);
+
+    setGroup({
+      ...group,
+      expenses: updatedExpenses,
+      totalSpendPaisa,
+      balances,
+      activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+    });
+
+    try {
+      await fetch(`/api/groups/${group.id}/expenses/${expenseId}`, { method: 'DELETE' });
+    } catch {
+      fetchGroup(true);
+    }
+  };
+
+  const handleDeleteSettlement = async (settlementId: string) => {
+    if (!isUserAdmin || !group) return;
+    const updatedSettlements = group.settlements.filter((s) => s.id !== settlementId);
+    const balances = calculateMemberNetBalances(group.members, group.expenses, updatedSettlements);
+    const simplifiedTransfers = simplifyDebts(balances);
+    const directTransfers = calculateDirectPairwiseDebts(group.members, group.expenses, updatedSettlements);
+
+    setGroup({
+      ...group,
+      settlements: updatedSettlements,
+      balances,
+      activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
+    });
+
+    try {
+      await fetch(`/api/groups/${group.id}/settlements/${settlementId}`, { method: 'DELETE' });
+    } catch {
+      fetchGroup(true);
+    }
+  };
+
   const handleExpenseAdded = (newExpense?: any) => {
     if (newExpense) {
       setGroup((prev) => {
@@ -718,7 +768,8 @@ export default function JoinGroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-200 transition-colors flex items-center justify-between gap-3 text-xs"
+                      onClick={() => setSelectedTransaction(item)}
+                      className="bg-white p-4 rounded-2xl border border-slate-100/90 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3 text-xs cursor-pointer group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`w-10 h-10 rounded-xl ${badge.bg} flex items-center justify-center shrink-0`}>
@@ -748,7 +799,8 @@ export default function JoinGroupDetailPage({
                   return (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3 text-xs"
+                      onClick={() => setSelectedTransaction(item)}
+                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-colors flex items-center justify-between gap-3 text-xs cursor-pointer group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
@@ -782,14 +834,51 @@ export default function JoinGroupDetailPage({
       </div>
 
       {/* Modals for Friend */}
+      <TransactionDetailsModal
+        isOpen={Boolean(selectedTransaction)}
+        onClose={() => setSelectedTransaction(null)}
+        item={selectedTransaction}
+        members={group.members}
+        currentUserId={claimedMember?.id}
+        isAdmin={isUserAdmin}
+        onEdit={(tx) => {
+          if (!isUserAdmin) return;
+          setSelectedTransaction(null);
+          if (tx.type === 'EXPENSE') {
+            setEditingExpense(tx.raw);
+            setIsAddExpenseOpen(true);
+          } else {
+            setSettlePreload({
+              payerId: tx.raw.payerId,
+              receiverId: tx.raw.receiverId,
+              amountPaisa: tx.raw.amountPaisa,
+            });
+            setIsSettleOpen(true);
+          }
+        }}
+        onDelete={(tx) => {
+          if (!isUserAdmin) return;
+          setSelectedTransaction(null);
+          if (tx.type === 'EXPENSE') {
+            handleDeleteExpense(tx.id);
+          } else {
+            handleDeleteSettlement(tx.id);
+          }
+        }}
+      />
+
       <AddExpenseScreen
         isOpen={isAddExpenseOpen}
-        onClose={() => setIsAddExpenseOpen(false)}
+        onClose={() => {
+          setIsAddExpenseOpen(false);
+          setEditingExpense(null);
+        }}
         groupId={group.id}
         groupName={group.name}
         members={group.members}
         onExpenseAdded={handleExpenseAdded}
-        defaultPayerId={claimedMember.id}
+        defaultPayerId={claimedMember?.id}
+        initialExpense={editingExpense}
       />
 
       <SettleUpModal
