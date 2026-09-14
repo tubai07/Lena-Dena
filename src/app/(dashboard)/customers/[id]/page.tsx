@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, use } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
   Search,
@@ -79,16 +79,14 @@ function prepareCustomerLedgerData(customer: any, globalTransactions: any[] = []
   };
 }
 
-export default function PersonChatLedgerPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const resolvedParams = use(params);
+export default function PersonChatLedgerPage() {
+  const urlParams = useParams();
+  const customerId = (urlParams?.id as string) || '';
+  const resolvedParams = { id: customerId };
   const router = useRouter();
   const { allCustomers, allTransactions, openTransactionModal, openReminderModal, openCustomerModal, refreshAppData, deleteCustomerFromApp, lastUpdated } = useApp();
 
-  const cachedCustomer = allCustomers.find((c) => c.id === resolvedParams.id);
+  const cachedCustomer = allCustomers.find((c) => c.id === customerId);
   const timelineEndRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<any>(() => prepareCustomerLedgerData(cachedCustomer, allTransactions));
   const [loading, setLoading] = useState(!cachedCustomer);

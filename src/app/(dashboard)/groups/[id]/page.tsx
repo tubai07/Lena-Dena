@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, use } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
   Plus,
@@ -140,12 +140,9 @@ interface GroupDetail {
   activeTransfers: DebtTransfer[];
 }
 
-export default function GroupDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+export default function GroupDetailPage() {
+  const urlParams = useParams();
+  const id = (urlParams?.id as string) || '';
   const router = useRouter();
 
   // Instant render from cache (0ms)

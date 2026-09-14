@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, use } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Users,
   Smartphone,
@@ -84,22 +85,19 @@ interface GroupData {
   settlements: any[];
 }
 
-const getAvatarBg = (name: string) => {
+const getAvatarBg = (name?: string) => {
+  if (!name || typeof name !== 'string') return 'bg-slate-100 text-slate-700';
   if (name.includes('🐰')) return 'bg-pink-100 text-pink-700';
-  const firstChar = name.charAt(0).toUpperCase();
+  const firstChar = (name.charAt(0) || 'U').toUpperCase();
   if (['R', 'S', 'P'].includes(firstChar)) return 'bg-blue-100 text-blue-700';
   if (['T', 'B', 'A'].includes(firstChar)) return 'bg-orange-100 text-orange-700';
   return 'bg-emerald-100 text-emerald-700';
 };
 
-export default function JoinGroupDetailPage({
-  params,
-}: {
-  params: Promise<{ code: string }> | { code: string };
-}) {
-  const resolvedParams = typeof (params as any)?.then === 'function' ? use(params as Promise<{ code: string }>) : (params as { code: string });
-  const code = resolvedParams?.code || '';
-  const upperCode = (code || '').toUpperCase().trim();
+export default function JoinGroupDetailPage() {
+  const urlParams = useParams();
+  const rawCode = (urlParams?.code as string) || '';
+  const upperCode = rawCode.toUpperCase().trim();
 
   const [group, setGroup] = useState<GroupData | null>(null);
   const [loading, setLoading] = useState(true);
