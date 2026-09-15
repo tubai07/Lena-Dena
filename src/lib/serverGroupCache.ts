@@ -52,10 +52,14 @@ export function invalidateServerDetail(groupId?: string) {
 }
 
 export function invalidateAllGroupServerCaches(groupId?: string, businessId?: string) {
-  if (groupId) detailCache.delete(groupId);
-  if (businessId) summaryCache.delete(businessId);
-  if (!groupId && !businessId) {
-    detailCache.clear();
-    summaryCache.clear();
+  if (groupId) {
+    detailCache.delete(groupId);
+    detailCache.delete(groupId.toUpperCase());
   }
+  if (businessId) {
+    summaryCache.delete(businessId);
+  }
+  // Clear all detail entries to avoid stale joinCode vs cuid alias discrepancies
+  detailCache.clear();
+  summaryCache.clear();
 }

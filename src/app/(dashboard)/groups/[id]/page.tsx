@@ -210,6 +210,7 @@ export default function GroupDetailPage() {
   const deletedSettlementIdsRef = useRef<Set<string>>(new Set());
   const deletedMemberIdsRef = useRef<Set<string>>(new Set());
   const inFlightFetchRef = useRef<Promise<void> | null>(null);
+  const inFlightSimplifyRef = useRef<boolean | null>(null);
 
   const fetchGroup = async (isBackground = false) => {
     const targetId = id || (typeof window !== 'undefined' ? window.location.pathname.split('/groups/')[1]?.split('/')[0]?.split('?')[0] : '');
@@ -293,8 +294,13 @@ export default function GroupDetailPage() {
         const directTransfers = calculateDirectPairwiseDebts(activeMembers, mergedExpenses, mergedSettlements);
         const totalSpendPaisa = mergedExpenses.reduce((sum: number, e: any) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
+        const isSimplified = inFlightSimplifyRef.current !== null
+          ? inFlightSimplifyRef.current
+          : (data.group.simplifyDebts ?? prev.simplifyDebts ?? true);
+
         const mergedGroup = {
           ...data.group,
+          simplifyDebts: isSimplified,
           members: activeMembers,
           expenses: mergedExpenses,
           settlements: mergedSettlements,
@@ -302,7 +308,7 @@ export default function GroupDetailPage() {
           balances,
           simplifiedTransfers,
           directTransfers,
-          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+          activeTransfers: isSimplified ? simplifiedTransfers : directTransfers,
         };
 
         setCachedItem(`group_${targetId}`, mergedGroup);
@@ -408,6 +414,7 @@ export default function GroupDetailPage() {
   // Instant optimistic simplify toggle
   const handleToggleSimplify = async (enabled: boolean) => {
     setIsTogglingSimplify(true);
+    inFlightSimplifyRef.current = enabled;
     setGroup((prev) => {
       if (!prev) return null;
       const updated = {
@@ -419,17 +426,21 @@ export default function GroupDetailPage() {
     });
 
     try {
-      await fetch(`/api/groups/${id}`, {
+      const res = await fetch(`/api/groups/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ simplifyDebts: enabled }),
       });
+      if (res.ok) {
+        // Confirm server persisted the new setting
+        inFlightSimplifyRef.current = null;
+      }
     } catch (e) {
       console.error('Error updating simplifyDebts:', e);
     } finally {
       setTimeout(() => {
         setIsTogglingSimplify(false);
-      }, 250);
+      }, 200);
     }
   };
 
