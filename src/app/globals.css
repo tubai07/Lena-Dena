@@ -187,11 +187,11 @@ body {
 }
 
 .animate-linear-loader {
-  animation: linearLoaderMove 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: linearLoaderMove 0.95s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .animate-linear-loader-secondary {
-  animation: linearLoaderSecondaryMove 1.4s cubic-bezier(0.4, 0, 0.2, 1) 0.4s infinite;
+  animation: linearLoaderSecondaryMove 0.95s cubic-bezier(0.4, 0, 0.2, 1) 0.3s infinite;
 }
 
 

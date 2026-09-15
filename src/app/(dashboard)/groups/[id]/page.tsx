@@ -226,8 +226,81 @@ export default function GroupDetailPage() {
       if (!data?.group) throw new Error('Invalid group data received');
       setFetchError('');
 
-      setGroup(data.group);
-      setCachedItem(`group_${targetId}`, data.group);
+      setGroup((prev) => {
+        if (!prev) {
+          setCachedItem(`group_${targetId}`, data.group);
+          return data.group;
+        }
+
+        const serverExpenseIds = new Set((data.group.expenses || []).map((e: any) => e.id));
+        const serverSettlementIds = new Set((data.group.settlements || []).map((s: any) => s.id));
+        const now = Date.now();
+
+        // 1. In-flight expenses retention
+        const pendingExpenseMap = new Map<string, any>();
+        inFlightExpensesRef.current.forEach((val, key) => {
+          if (now - val.timestamp > 45000 || serverExpenseIds.has(key) || deletedExpenseIdsRef.current.has(key)) {
+            inFlightExpensesRef.current.delete(key);
+          } else {
+            pendingExpenseMap.set(key, val.expense);
+          }
+        });
+
+        (prev.expenses || []).forEach((e) => {
+          if (e.id.startsWith('temp_') && !serverExpenseIds.has(e.id) && !deletedExpenseIdsRef.current.has(e.id)) {
+            pendingExpenseMap.set(e.id, e);
+          }
+        });
+
+        // 2. In-flight settlements retention
+        const pendingSettlementMap = new Map<string, any>();
+        inFlightSettlementsRef.current.forEach((val, key) => {
+          if (now - val.timestamp > 45000 || serverSettlementIds.has(key) || deletedSettlementIdsRef.current.has(key)) {
+            inFlightSettlementsRef.current.delete(key);
+          } else {
+            pendingSettlementMap.set(key, val.settlement);
+          }
+        });
+
+        (prev.settlements || []).forEach((s) => {
+          if (s.id.startsWith('temp_') && !serverSettlementIds.has(s.id) && !deletedSettlementIdsRef.current.has(s.id)) {
+            pendingSettlementMap.set(s.id, s);
+          }
+        });
+
+        // 3. Merge server and pending items
+        const serverExpenses = (data.group.expenses || []).filter((e: any) => !deletedExpenseIdsRef.current.has(e.id));
+        const serverSettlements = (data.group.settlements || []).filter((s: any) => !deletedSettlementIdsRef.current.has(s.id));
+
+        const mergedExpenses = [...Array.from(pendingExpenseMap.values()), ...serverExpenses].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        const mergedSettlements = [...Array.from(pendingSettlementMap.values()), ...serverSettlements].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        const activeMembers = (data.group.members && data.group.members.length > 0) ? data.group.members : (prev.members || []);
+        const balances = calculateMemberNetBalances(activeMembers, mergedExpenses, mergedSettlements);
+        const simplifiedTransfers = simplifyDebts(balances);
+        const directTransfers = calculateDirectPairwiseDebts(activeMembers, mergedExpenses, mergedSettlements);
+        const totalSpendPaisa = mergedExpenses.reduce((sum: number, e: any) => sum + (Number(e.totalAmountPaisa) || 0), 0);
+
+        const mergedGroup = {
+          ...data.group,
+          members: activeMembers,
+          expenses: mergedExpenses,
+          settlements: mergedSettlements,
+          totalSpendPaisa,
+          balances,
+          simplifiedTransfers,
+          directTransfers,
+          activeTransfers: data.group.simplifyDebts ? simplifiedTransfers : directTransfers,
+        };
+
+        setCachedItem(`group_${targetId}`, mergedGroup);
+        return mergedGroup;
+      });
 
       // Synchronize all_groups overview cache with fresh member count and spend
       try {

@@ -26,13 +26,16 @@ export async function GET(
     }
     const session = await getSession();
 
+    const isDirectId = cleanId.length > 10;
     const group = await db.group.findFirst({
-      where: {
-        OR: [
-          { id: cleanId },
-          { joinCode: cleanId.toUpperCase() },
-        ],
-      },
+      where: isDirectId
+        ? { id: cleanId }
+        : {
+            OR: [
+              { id: cleanId },
+              { joinCode: cleanId.toUpperCase() },
+            ],
+          },
       include: {
         members: {
           orderBy: [{ isOwner: 'desc' }, { createdAt: 'asc' }],

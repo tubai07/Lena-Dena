@@ -40,14 +40,23 @@ export async function POST(
 
     // Verify group exists and get members
     const cleanId = id?.trim() || '';
+    const isDirectId = cleanId.length > 10;
     const group = await db.group.findFirst({
-      where: {
-        OR: [
-          { id: cleanId },
-          { joinCode: cleanId.toUpperCase() },
-        ],
+      where: isDirectId
+        ? { id: cleanId }
+        : {
+            OR: [
+              { id: cleanId },
+              { joinCode: cleanId.toUpperCase() },
+            ],
+          },
+      select: {
+        id: true,
+        businessId: true,
+        members: {
+          select: { id: true, name: true, isActive: true },
+        },
       },
-      include: { members: true },
     });
 
     if (!group) {
@@ -130,38 +139,38 @@ export async function POST(
       );
     }
 
-    // Create inside Prisma transaction
-    const expense = await db.$transaction(async (tx) => {
-      const createdExpense = await tx.groupExpense.create({
-        data: {
-          groupId: group.id,
-          description: description.trim(),
-          totalAmountPaisa: parsedTotal,
-          category,
-          splitType,
-          notes: notes?.trim() || null,
-          date: parsedDate,
-          payers: {
-            create: adjustedPayers.map((p: any) => ({
-              memberId: p.memberId,
-              amountPaisa: p.amountPaisa,
-            })),
-          },
-          splits: {
-            create: adjustedSplits.map((s: any) => ({
-              memberId: s.memberId,
-              amountPaisa: s.amountPaisa,
-              shareValue: s.shareValue,
-            })),
-          },
+    // Single-query atomic creation with Prisma nested relations
+    const expense = await db.groupExpense.create({
+      data: {
+        groupId: group.id,
+        description: description.trim(),
+        totalAmountPaisa: parsedTotal,
+        category,
+        splitType,
+        notes: notes?.trim() || null,
+        date: parsedDate,
+        payers: {
+          create: adjustedPayers.map((p: any) => ({
+            memberId: p.memberId,
+            amountPaisa: p.amountPaisa,
+          })),
         },
-        include: {
-          payers: { include: { member: true } },
-          splits: { include: { member: true } },
+        splits: {
+          create: adjustedSplits.map((s: any) => ({
+            memberId: s.memberId,
+            amountPaisa: s.amountPaisa,
+            shareValue: s.shareValue,
+          })),
         },
-      });
-
-      return createdExpense;
+      },
+      include: {
+        payers: {
+          include: { member: { select: { id: true, name: true } } },
+        },
+        splits: {
+          include: { member: { select: { id: true, name: true } } },
+        },
+      },
     });
 
     invalidateAllGroupServerCaches(group.id, group.businessId);
