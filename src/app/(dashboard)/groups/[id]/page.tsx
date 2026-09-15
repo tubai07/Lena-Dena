@@ -6,8 +6,6 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
   Plus,
-  Copy,
-  Check,
   ReceiptText,
   ChevronDown,
   ChevronUp,
@@ -174,7 +172,6 @@ export default function GroupDetailPage() {
     receiverId?: string;
     amountPaisa?: number;
   }>({});
-  const [copiedCode, setCopiedCode] = useState(false);
 
   // Sync claimed identity for joined members
   useEffect(() => {
@@ -322,15 +319,6 @@ export default function GroupDetailPage() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handleCopyCode = () => {
-    if (!group) return;
-    if (typeof window !== 'undefined') {
-      navigator.clipboard.writeText(window.location.href);
-    }
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
 
   // Instant optimistic simplify toggle
   const handleToggleSimplify = async (enabled: boolean) => {
@@ -1303,25 +1291,6 @@ export default function GroupDetailPage() {
                 <Users className="w-3.5 h-3.5" />
                 <span>{group?.members?.length || 0} people</span>
               </div>
-
-              {/* Share Group link button */}
-              <button
-                type="button"
-                onClick={handleCopyCode}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 backdrop-blur-md text-white/90 text-xs font-semibold tap-effect cursor-pointer"
-                title="Copy shareable group link"
-              >
-                {copiedCode ? (
-                  <span className="text-emerald-300 font-bold flex items-center gap-1 text-[11px]">
-                    <Check className="w-3 h-3 stroke-[3]" /> Link Copied
-                  </span>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3 opacity-70" />
-                    <span>Share Group</span>
-                  </>
-                )}
-              </button>
             </div>
           </div>
 
@@ -1871,22 +1840,6 @@ export default function GroupDetailPage() {
                     ₹{((totalGroupSpendPaisa || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </span>
                 </div>
-              </div>
-
-              {/* Share Group Link Section */}
-              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200/70 rounded-xl flex items-center justify-between gap-3">
-                <div className="space-y-0.5 min-w-0">
-                  <span className="text-xs font-bold text-emerald-900 block">Share Group</span>
-                  <p className="text-[11px] text-emerald-700 font-medium">Share link with friends so they can view and split expenses.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
-                >
-                  {copiedCode ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5 opacity-80" />}
-                  <span>{copiedCode ? 'Copied' : 'Copy Link'}</span>
-                </button>
               </div>
             </div>
 
