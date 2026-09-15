@@ -17,15 +17,22 @@ export function StraightLineLoader({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4 transition-opacity duration-300 ${
+      className={`fixed inset-0 z-[9999] flex items-center justify-center pointer-events-auto touch-none select-none cursor-wait bg-slate-900/15 backdrop-blur-[1px] p-4 transition-all duration-200 ${
         isLoading ? 'opacity-100' : 'opacity-0'
       } ${className}`}
       aria-label="Loading..."
       role="progressbar"
       aria-busy={isLoading}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {/* Centered Glass Capsule with straight line loader */}
-      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 px-6 py-4 flex flex-col items-center gap-2.5 w-60 max-w-[85vw] animate-in fade-in zoom-in-95 duration-200">
+      <div 
+        className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 px-6 py-4 flex flex-col items-center gap-2.5 w-60 max-w-[85vw] animate-in fade-in zoom-in-95 duration-200 pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <span className="text-xs font-bold text-slate-700 tracking-wide select-none">
           {label}
         </span>
