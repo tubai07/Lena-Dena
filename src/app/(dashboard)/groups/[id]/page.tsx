@@ -208,16 +208,22 @@ export default function GroupDetailPage() {
   const deletedExpenseIdsRef = useRef<Set<string>>(new Set());
   const deletedSettlementIdsRef = useRef<Set<string>>(new Set());
   const deletedMemberIdsRef = useRef<Set<string>>(new Set());
+  const inFlightFetchRef = useRef<Promise<void> | null>(null);
 
   const fetchGroup = async (isBackground = false) => {
     const targetId = id || (typeof window !== 'undefined' ? window.location.pathname.split('/groups/')[1]?.split('/')[0]?.split('?')[0] : '');
     if (!targetId) return;
 
-    try {
-      if (!isBackground && !group) setLoading(true);
-      const res = await fetch(`/api/groups/${targetId}?t=${Date.now()}`, {
-        cache: 'no-store',
-      });
+    if (inFlightFetchRef.current) {
+      return inFlightFetchRef.current;
+    }
+
+    const executeFetch = async () => {
+      try {
+        if (!isBackground && !group) setLoading(true);
+        const res = await fetch(`/api/groups/${targetId}?t=${Date.now()}`, {
+          cache: 'no-store',
+        });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Group not found');
@@ -316,12 +322,17 @@ export default function GroupDetailPage() {
       } catch {
         // ignore cache write error
       }
-    } catch (e: any) {
-      console.error('Error fetching group:', e);
-      setFetchError(e.message || 'Failed to load group');
-    } finally {
-      setLoading(false);
-    }
+      } catch (e: any) {
+        console.error('Error fetching group:', e);
+        setFetchError(e.message || 'Failed to load group');
+      } finally {
+        setLoading(false);
+        inFlightFetchRef.current = null;
+      }
+    };
+
+    inFlightFetchRef.current = executeFetch();
+    return inFlightFetchRef.current;
   };
 
   useEffect(() => {

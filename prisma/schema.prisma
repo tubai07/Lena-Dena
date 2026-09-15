@@ -185,6 +185,8 @@ model GroupExpense {
   updatedAt        DateTime       @updatedAt
 
   @@index([groupId])
+  @@index([groupId, date(sort: Desc)])
+  @@index([groupId, createdAt(sort: Desc)])
 }
 
 model ExpensePayer {
@@ -197,6 +199,7 @@ model ExpensePayer {
 
   @@index([expenseId])
   @@index([memberId])
+  @@index([expenseId, memberId])
 }
 
 model ExpenseSplit {
@@ -210,6 +213,7 @@ model ExpenseSplit {
 
   @@index([expenseId])
   @@index([memberId])
+  @@index([expenseId, memberId])
 }
 
 model GroupSettlement {
@@ -227,5 +231,7 @@ model GroupSettlement {
   createdAt     DateTime    @default(now())
 
   @@index([groupId])
+  @@index([groupId, date(sort: Desc)])
+  @@index([groupId, createdAt(sort: Desc)])
 }
 
