@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { GROUP_CATEGORIES, getGroupCategoryInfo } from '@/lib/groupIcons';
+import { StraightLineLoader } from '@/components/common/StraightLineLoader';
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -64,7 +65,8 @@ export function CreateGroupModal({ isOpen, onClose, onGroupCreated }: CreateGrou
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] relative">
+        <StraightLineLoader isLoading={loading} />
         {/* Header with larger text */}
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">

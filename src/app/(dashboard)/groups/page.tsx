@@ -10,6 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CreateGroupModal } from '@/components/groups/CreateGroupModal';
+import { StraightLineLoader } from '@/components/common/StraightLineLoader';
 import { getCachedItem, setCachedItem } from '@/lib/groupCache';
 import { getGroupCategoryInfo } from '@/lib/groupIcons';
 
@@ -130,7 +131,8 @@ export default function GroupsPage() {
   const isNegative = netBalancePaisa < 0;
 
   return (
-    <div className="w-full pb-28">
+    <div className="w-full pb-28 relative">
+      <StraightLineLoader isLoading={loading} />
       {/* Top Header with Larger Typography */}
       <header className="px-4 py-4 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-100">
         <div>

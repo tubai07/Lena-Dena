@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { distributeEqualSplits } from '@/lib/splitwise';
 import { WheelDatePickerModal } from '@/components/common/WheelDatePickerModal';
+import { StraightLineLoader } from '@/components/common/StraightLineLoader';
 
 const getAvatarBg = (name: string) => {
   if (name.includes('🐰')) return 'bg-pink-100 text-pink-700';
@@ -490,6 +491,7 @@ export function AddExpenseScreen({
   return (
     <div className="fixed inset-0 z-50 flex justify-center bg-slate-900/40 backdrop-blur-xs sm:py-6 animate-in fade-in duration-200 select-none">
       <div className="w-full max-w-md bg-white h-full sm:h-auto sm:max-h-[92vh] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom duration-250 ease-out border border-slate-200">
+        <StraightLineLoader isLoading={loading} />
         {/* ================= STEP 1: BILL DETAILS ================= */}
         {step === 1 && (
           <div className="flex flex-col h-full overflow-hidden">

@@ -12,6 +12,7 @@ import {
   User,
   AlertCircle,
 } from 'lucide-react';
+import { StraightLineLoader } from '@/components/common/StraightLineLoader';
 
 interface Member {
   id: string;
@@ -258,7 +259,8 @@ export function SettleUpModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 select-none">
-      <div className="bg-white text-slate-900 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white text-slate-900 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] relative">
+        <StraightLineLoader isLoading={loading} />
         {/* ================= STEP 1: SELECT BALANCE (Screenshot 2) ================= */}
         {step === 1 && (
           <div className="flex flex-col h-full overflow-hidden">

@@ -33,6 +33,7 @@ import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
 import { TransactionDetailsModal } from '@/components/groups/TransactionDetailsModal';
 import { MemberDetailsModal, MemberBalanceDetail } from '@/components/groups/MemberDetailsModal';
+import { StraightLineLoader } from '@/components/common/StraightLineLoader';
 import {
   generateUpiUrl,
   calculateMemberNetBalances,
@@ -1230,7 +1231,8 @@ export default function GroupDetailPage() {
 
   if (!isMounted || (loading && !group)) {
     return (
-      <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen">
+      <div className="p-4 space-y-4 animate-pulse bg-slate-50 min-h-screen relative">
+        <StraightLineLoader isLoading={true} />
         <div className="h-12 bg-slate-200 rounded-2xl w-3/4"></div>
         <div className="h-32 bg-slate-200 rounded-3xl"></div>
         <div className="h-44 bg-slate-200 rounded-3xl"></div>
@@ -1240,7 +1242,8 @@ export default function GroupDetailPage() {
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center space-y-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center space-y-4 relative">
+        <StraightLineLoader isLoading={loading} />
         <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
           <Users className="w-7 h-7" />
         </div>
@@ -1266,6 +1269,7 @@ export default function GroupDetailPage() {
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-36 relative">
+      <StraightLineLoader isLoading={loading || addingMember || isDeletingGroup || isLeavingGroup} />
       {/* Group Header Banner with Emerald Gradient Pattern */}
       <div className="relative bg-gradient-to-b from-teal-700 via-emerald-700 to-emerald-800 text-white px-4 pt-4 pb-5 overflow-hidden">
         {/* Decorative geometric overlay */}
