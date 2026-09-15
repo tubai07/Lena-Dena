@@ -1682,6 +1682,11 @@ export default function GroupDetailPage() {
               <div className="space-y-2.5">
                 {displayedTransfers.map((t, idx) => {
                   const numRupees = t.amountPaisa / 100;
+                  const isFromMe = t.fromId === ownerMember?.id;
+                  const isToMe = t.toId === ownerMember?.id;
+                  const fromDisplay = isFromMe ? 'You' : t.fromName;
+                  const toDisplay = isToMe ? 'you' : t.toName;
+
                   const upiUrl = t.toUpiId
                     ? generateUpiUrl({
                         upiId: t.toUpiId,
@@ -1693,25 +1698,37 @@ export default function GroupDetailPage() {
 
                   return (
                     <div
-                      key={idx}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3"
+                      key={`${t.fromId}_${t.toId}_${idx}`}
+                      className={`bg-white p-4 rounded-2xl border shadow-xs space-y-3 transition-all ${
+                        isFromMe
+                          ? 'border-amber-200/80 bg-gradient-to-r from-amber-50/30 to-white'
+                          : isToMe
+                          ? 'border-emerald-200/80 bg-gradient-to-r from-emerald-50/30 to-white'
+                          : 'border-slate-200/80'
+                      }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div
-                            className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${getAvatarBg(
-                              t.fromName
-                            )}`}
+                            className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${
+                              isFromMe
+                                ? 'bg-amber-100 text-amber-800 ring-2 ring-amber-300'
+                                : getAvatarBg(t.fromName)
+                            }`}
                           >
-                            {t.fromName.charAt(0).toUpperCase()}
+                            {fromDisplay.charAt(0).toUpperCase()}
                           </div>
                           <div className="text-sm truncate">
-                            <span className="font-bold text-slate-900">{t.fromName}</span>
-                            <span className="text-slate-500 mx-1 text-xs">owes</span>
-                            <span className="font-bold text-emerald-700">{t.toName}</span>
+                            <span className={`font-bold ${isFromMe ? 'text-amber-700' : 'text-slate-900'}`}>
+                              {fromDisplay}
+                            </span>
+                            <span className="text-slate-500 mx-1.5 text-xs font-medium">owes</span>
+                            <span className={`font-bold ${isToMe ? 'text-emerald-700' : 'text-slate-900'}`}>
+                              {toDisplay}
+                            </span>
                           </div>
                         </div>
-                        <div className="font-black text-amber-600 text-lg tracking-tight shrink-0">
+                        <div className={`font-black text-lg tracking-tight shrink-0 ${isFromMe ? 'text-amber-600' : 'text-slate-900'}`}>
                           ₹{numRupees.toFixed(2)}
                         </div>
                       </div>

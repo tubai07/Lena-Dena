@@ -59,7 +59,7 @@ export async function POST(
       },
       include: {
         payer: { select: { id: true, name: true } },
-        receiver: { select: { id: true, name: true } },
+        receiver: { select: { id: true, name: true, upiId: true, phone: true } },
       },
     });
 

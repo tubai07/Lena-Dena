@@ -112,6 +112,7 @@ export interface SettlementData {
 
 /**
  * Calculates net balance for every group member based on expenses and settlements.
+ * All math is strictly in integer paise with zero drift.
  */
 export function calculateMemberNetBalances(
   members: { id: string; name: string; phone?: string | null; upiId?: string | null; isOwner: boolean; isAdmin?: boolean }[],
@@ -126,7 +127,7 @@ export function calculateMemberNetBalances(
       name: m.name,
       phone: m.phone,
       upiId: m.upiId,
-      isOwner: m.isOwner,
+      isOwner: Boolean(m.isOwner),
       isAdmin: Boolean(m.isAdmin || m.isOwner),
       totalPaidPaisa: 0,
       totalOwedPaisa: 0,
@@ -137,35 +138,38 @@ export function calculateMemberNetBalances(
   }
 
   // Aggregate expenses
-  for (const exp of expenses) {
-    for (const p of exp.payers) {
+  for (const exp of expenses || []) {
+    if (!exp) continue;
+    for (const p of exp.payers || []) {
       const rec = map.get(p.memberId);
-      if (rec) rec.totalPaidPaisa += p.amountPaisa;
+      if (rec) rec.totalPaidPaisa += Math.round(Number(p.amountPaisa) || 0);
     }
-    for (const s of exp.splits) {
+    for (const s of exp.splits || []) {
       const rec = map.get(s.memberId);
-      if (rec) rec.totalOwedPaisa += s.amountPaisa;
+      if (rec) rec.totalOwedPaisa += Math.round(Number(s.amountPaisa) || 0);
     }
   }
 
   // Aggregate settlements
-  for (const st of settlements) {
+  for (const st of settlements || []) {
+    if (!st) continue;
     const payer = map.get(st.payerId);
-    if (payer) payer.settlementsPaidPaisa += st.amountPaisa;
+    if (payer) payer.settlementsPaidPaisa += Math.round(Number(st.amountPaisa) || 0);
 
     const receiver = map.get(st.receiverId);
-    if (receiver) receiver.settlementsReceivedPaisa += st.amountPaisa;
+    if (receiver) receiver.settlementsReceivedPaisa += Math.round(Number(st.amountPaisa) || 0);
   }
 
   // Compute net balance:
   // (Total paid for bills - Total consumed) + (Settlement money paid out - Settlement money received)
   const result: MemberBalance[] = [];
   for (const item of map.values()) {
-    item.netBalancePaisa =
+    item.netBalancePaisa = Math.round(
       item.totalPaidPaisa -
       item.totalOwedPaisa +
       item.settlementsPaidPaisa -
-      item.settlementsReceivedPaisa;
+      item.settlementsReceivedPaisa
+    );
     result.push(item);
   }
 
@@ -184,37 +188,90 @@ export interface DebtTransfer {
 
 /**
  * Simplified Debts: Greedy Minimum Cash Flow solver.
- * Minimizes total number of transactions between members.
+ * Minimizes total number of transactions between members with exact-match pre-pass and zero floating drift.
  */
 export function simplifyDebts(memberBalances: MemberBalance[]): DebtTransfer[] {
-  const debtors: { id: string; name: string; balance: number }[] = [];
+  const debtors: { id: string; name: string; upiId?: string | null; phone?: string | null; balance: number }[] = [];
   const creditors: { id: string; name: string; upiId?: string | null; phone?: string | null; balance: number }[] = [];
 
   for (const m of memberBalances) {
-    if (m.netBalancePaisa < 0) {
-      debtors.push({ id: m.memberId, name: m.name, balance: -m.netBalancePaisa });
-    } else if (m.netBalancePaisa > 0) {
+    const net = Math.round(m.netBalancePaisa || 0);
+    if (net < 0) {
+      debtors.push({
+        id: m.memberId,
+        name: m.name,
+        upiId: m.upiId,
+        phone: m.phone,
+        balance: -net,
+      });
+    } else if (net > 0) {
       creditors.push({
         id: m.memberId,
         name: m.name,
         upiId: m.upiId,
         phone: m.phone,
-        balance: m.netBalancePaisa,
+        balance: net,
       });
     }
   }
 
-  debtors.sort((a, b) => b.balance - a.balance);
-  creditors.sort((a, b) => b.balance - a.balance);
+  if (debtors.length === 0 || creditors.length === 0) {
+    return [];
+  }
+
+  // Reconcile minor 1-3 paise rounding drift so total debt strictly equals total credit
+  const totalDebt = debtors.reduce((s, d) => s + d.balance, 0);
+  const totalCredit = creditors.reduce((s, c) => s + c.balance, 0);
+  const drift = totalDebt - totalCredit;
+  if (drift !== 0 && Math.abs(drift) <= 5) {
+    if (drift > 0 && creditors.length > 0) {
+      creditors[0].balance += drift;
+    } else if (drift < 0 && debtors.length > 0) {
+      debtors[0].balance += Math.abs(drift);
+    }
+  }
 
   const transfers: DebtTransfer[] = [];
+
+  // Pass 1: Match exact direct pairs (e.g. Debtor owes ₹50, Creditor is owed ₹50)
+  for (let d = 0; d < debtors.length; d++) {
+    const debtor = debtors[d];
+    if (debtor.balance <= 0) continue;
+
+    for (let c = 0; c < creditors.length; c++) {
+      const creditor = creditors[c];
+      if (creditor.balance <= 0) continue;
+
+      if (debtor.balance === creditor.balance && debtor.balance > 0) {
+        transfers.push({
+          fromId: debtor.id,
+          fromName: debtor.name,
+          toId: creditor.id,
+          toName: creditor.name,
+          toUpiId: creditor.upiId,
+          toPhone: creditor.phone,
+          amountPaisa: debtor.balance,
+        });
+        debtor.balance = 0;
+        creditor.balance = 0;
+        break;
+      }
+    }
+  }
+
+  // Filter remaining active debtors and creditors
+  const remainingDebtors = debtors.filter((d) => d.balance > 0).sort((a, b) => b.balance - a.balance);
+  const remainingCreditors = creditors.filter((c) => c.balance > 0).sort((a, b) => b.balance - a.balance);
+
+  // Pass 2: Greedy solver for remaining net balances
   let dIdx = 0;
   let cIdx = 0;
 
-  while (dIdx < debtors.length && cIdx < creditors.length) {
-    const debtor = debtors[dIdx];
-    const creditor = creditors[cIdx];
-    const settle = Math.min(debtor.balance, creditor.balance);
+  while (dIdx < remainingDebtors.length && cIdx < remainingCreditors.length) {
+    const debtor = remainingDebtors[dIdx];
+    const creditor = remainingCreditors[cIdx];
+
+    const settle = Math.round(Math.min(debtor.balance, creditor.balance));
 
     if (settle > 0) {
       transfers.push({
@@ -231,8 +288,8 @@ export function simplifyDebts(memberBalances: MemberBalance[]): DebtTransfer[] {
       creditor.balance -= settle;
     }
 
-    if (debtor.balance === 0) dIdx++;
-    if (creditor.balance === 0) cIdx++;
+    if (debtor.balance <= 0) dIdx++;
+    if (creditor.balance <= 0) cIdx++;
   }
 
   return transfers;
@@ -247,7 +304,12 @@ export function calculateDirectPairwiseDebts(
   expenses: ExpenseData[],
   settlements: SettlementData[]
 ): DebtTransfer[] {
-  // matrix[fromId][toId] = amount from owes to
+  const memberMap = new Map<string, { id: string; name: string; upiId?: string | null; phone?: string | null }>();
+  for (const m of members || []) {
+    memberMap.set(m.id, m);
+  }
+
+  // matrix[fromId][toId] = total paise from owes to
   const matrix = new Map<string, Map<string, number>>();
 
   const getDebt = (from: string, to: string) => matrix.get(from)?.get(to) || 0;
@@ -256,18 +318,26 @@ export function calculateDirectPairwiseDebts(
     matrix.get(from)!.set(to, amt);
   };
   const addDebt = (from: string, to: string, amt: number) => {
+    if (amt <= 0) return;
     setDebt(from, to, getDebt(from, to) + amt);
   };
 
-  // Process each expense:
+  // 1. Process each expense:
   // Each payer lent money to each consumer in proportion to their payment share
-  for (const exp of expenses) {
-    if (exp.totalAmountPaisa <= 0) continue;
-    for (const split of exp.splits) {
-      for (const payer of exp.payers) {
+  for (const exp of expenses || []) {
+    if (!exp || exp.totalAmountPaisa <= 0) continue;
+    const totalExp = exp.totalAmountPaisa;
+
+    for (const split of exp.splits || []) {
+      const splitAmount = Math.round(Number(split.amountPaisa) || 0);
+      if (splitAmount <= 0) continue;
+
+      for (const payer of exp.payers || []) {
         if (split.memberId === payer.memberId) continue;
-        const payerFraction = payer.amountPaisa / exp.totalAmountPaisa;
-        const owedToPayer = Math.round(split.amountPaisa * payerFraction);
+        const payerPaid = Math.round(Number(payer.amountPaisa) || 0);
+        if (payerPaid <= 0) continue;
+
+        const owedToPayer = Math.round((splitAmount * payerPaid) / totalExp);
         if (owedToPayer > 0) {
           addDebt(split.memberId, payer.memberId, owedToPayer);
         }
@@ -275,19 +345,22 @@ export function calculateDirectPairwiseDebts(
     }
   }
 
-  // Deduct settlements
-  for (const st of settlements) {
-    const current = getDebt(st.payerId, st.receiverId);
-    setDebt(st.payerId, st.receiverId, Math.max(0, current - st.amountPaisa));
+  // 2. Process settlements:
+  // When payerId pays receiverId, payerId lent money to receiverId, reducing receiverId's claim on payerId
+  for (const st of settlements || []) {
+    if (!st || st.amountPaisa <= 0) continue;
+    addDebt(st.receiverId, st.payerId, Math.round(Number(st.amountPaisa) || 0));
   }
 
-  // Net pairwise debts between (A, B) and (B, A)
+  // 3. Symmetrical Bilateral Netting between all unique pairs (A, B)
   const transfers: DebtTransfer[] = [];
   const processed = new Set<string>();
 
-  for (const m1 of members) {
-    for (const m2 of members) {
-      if (m1.id === m2.id) continue;
+  const memberList = Array.from(memberMap.values());
+  for (let i = 0; i < memberList.length; i++) {
+    for (let j = i + 1; j < memberList.length; j++) {
+      const m1 = memberList[i];
+      const m2 = memberList[j];
       const pairKey = [m1.id, m2.id].sort().join(':');
       if (processed.has(pairKey)) continue;
       processed.add(pairKey);
@@ -296,7 +369,7 @@ export function calculateDirectPairwiseDebts(
       const d21 = getDebt(m2.id, m1.id); // m2 owes m1
 
       if (d12 > d21) {
-        const net = d12 - d21;
+        const net = Math.round(d12 - d21);
         if (net > 0) {
           transfers.push({
             fromId: m1.id,
@@ -309,7 +382,7 @@ export function calculateDirectPairwiseDebts(
           });
         }
       } else if (d21 > d12) {
-        const net = d21 - d12;
+        const net = Math.round(d21 - d12);
         if (net > 0) {
           transfers.push({
             fromId: m2.id,
