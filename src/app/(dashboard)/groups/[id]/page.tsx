@@ -167,6 +167,7 @@ export default function GroupDetailPage() {
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
+  const [isTogglingSimplify, setIsTogglingSimplify] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
     payerId?: string;
     receiverId?: string;
@@ -406,6 +407,7 @@ export default function GroupDetailPage() {
 
   // Instant optimistic simplify toggle
   const handleToggleSimplify = async (enabled: boolean) => {
+    setIsTogglingSimplify(true);
     setGroup((prev) => {
       if (!prev) return null;
       const updated = {
@@ -424,6 +426,10 @@ export default function GroupDetailPage() {
       });
     } catch (e) {
       console.error('Error updating simplifyDebts:', e);
+    } finally {
+      setTimeout(() => {
+        setIsTogglingSimplify(false);
+      }, 250);
     }
   };
 
@@ -1660,27 +1666,52 @@ export default function GroupDetailPage() {
                 </div>
               </div>
 
-              {/* iOS-Style Sliding Toggle Switch */}
+              {/* iOS-Style Sliding Toggle Switch with smooth loading spinner */}
               <button
                 type="button"
                 role="switch"
+                disabled={isTogglingSimplify}
                 aria-checked={isSimplifyEnabled}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleSimplify(!isSimplifyEnabled);
                 }}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
                   isSimplifyEnabled ? 'bg-emerald-600' : 'bg-slate-300'
-                }`}
+                } ${isTogglingSimplify ? 'opacity-80' : ''}`}
                 title={isSimplifyEnabled ? 'Turn off simplification' : 'Turn on simplification'}
               >
                 <span
                   aria-hidden="true"
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  className={`pointer-events-none inline-flex items-center justify-center h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
                     isSimplifyEnabled ? 'translate-x-5' : 'translate-x-0'
                   }`}
-                />
+                >
+                  {isTogglingSimplify && (
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+                  )}
+                </span>
               </button>
+            </div>
+
+            {/* Mode & Result Status Indicator */}
+            <div className="flex items-center justify-between px-1 text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                {isSimplifyEnabled ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                    <span>Cleaned Up (Optimal settlements)</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                    <span>Direct Bill Breakdown</span>
+                  </>
+                )}
+              </span>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {displayedTransfers.length} {displayedTransfers.length === 1 ? 'settlement' : 'settlements'} needed
+              </span>
             </div>
 
             {displayedTransfers.length === 0 ? (
