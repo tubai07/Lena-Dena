@@ -24,6 +24,13 @@ export async function GET(
     if (!cleanId) {
       return NextResponse.json({ error: 'Group ID is required' }, { status: 400 });
     }
+    const cached = getCachedServerDetail(cleanId);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      });
+    }
+
     const session = await getSession();
 
     const isDirectId = cleanId.length > 10;
@@ -89,6 +96,11 @@ export async function GET(
         activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
       },
     };
+
+    setCachedServerDetail(group.id, payload);
+    if (group.joinCode) {
+      setCachedServerDetail(group.joinCode.toUpperCase(), payload);
+    }
 
     return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },

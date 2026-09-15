@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     }
 
     const url = new URL(req.url);
-    const forceFresh = url.searchParams.has('t') || url.searchParams.has('fresh');
+    const forceFresh = url.searchParams.get('fresh') === '1' || url.searchParams.get('fresh') === 'true';
 
     if (!forceFresh) {
       const cached = getCachedServerSummary(session.businessId);

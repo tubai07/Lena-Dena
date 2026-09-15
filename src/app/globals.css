@@ -186,12 +186,27 @@ body {
   }
 }
 
+@keyframes loaderCapsuleFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 25px 30px -5px rgba(16, 185, 129, 0.15), 0 10px 12px -6px rgba(16, 185, 129, 0.08);
+  }
+}
+
 .animate-linear-loader {
-  animation: linearLoaderMove 0.95s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: linearLoaderMove 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .animate-linear-loader-secondary {
-  animation: linearLoaderSecondaryMove 0.95s cubic-bezier(0.4, 0, 0.2, 1) 0.3s infinite;
+  animation: linearLoaderSecondaryMove 0.85s cubic-bezier(0.4, 0, 0.2, 1) 0.25s infinite;
+}
+
+.animate-loader-capsule {
+  animation: loaderCapsuleFloat 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite ease-in-out;
 }
 
 
