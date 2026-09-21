@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
+  process.env.NEXTAUTH_SECRET ||
   'lena_dena_secure_session_secret_change_in_production_key_1234567890';
 
 /**

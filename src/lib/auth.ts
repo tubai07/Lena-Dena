@@ -15,21 +15,10 @@ const COOKIE_NAME = 'lena_dena_session';
 export function parseSessionCookie(cookieValue: string): SessionData | null {
   if (!cookieValue) return null;
 
-  // 1. Check modern cryptographically signed format (payload.signature)
+  // Cryptographically signed format (payload.signature) must be verified
   const verified = verifyAndExtractPayload<SessionData>(cookieValue);
   if (verified?.userId && verified?.businessId) {
     return verified;
-  }
-
-  // 2. Backward compatibility for older/existing user sessions (legacy base64 format)
-  try {
-    const raw = Buffer.from(cookieValue, 'base64').toString('utf-8');
-    const legacy = JSON.parse(raw);
-    if (legacy?.userId && legacy?.businessId) {
-      return legacy as SessionData;
-    }
-  } catch {
-    // Ignore invalid base64
   }
 
   return null;
@@ -51,15 +40,6 @@ export async function getSession(): Promise<SessionData | null> {
       // Ignore if called in read-only render context
     }
     return null;
-  }
-
-  // Auto-upgrade legacy cookie to HMAC-signed format seamlessly
-  if (!sessionCookie.value.includes('.')) {
-    try {
-      await setSession(parsed, true);
-    } catch {
-      // Ignore if called in read-only render context
-    }
   }
 
   return parsed;

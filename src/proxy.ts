@@ -1,17 +1,37 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import crypto from 'node:crypto';
+
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  process.env.NEXTAUTH_SECRET ||
+  'lena_dena_secure_session_secret_change_in_production_key_1234567890';
+
 function parseSessionPayload(cookieValue: string | undefined): any | null {
-  if (!cookieValue) return null;
+  if (!cookieValue || typeof cookieValue !== 'string') return null;
   try {
-    if (cookieValue.includes('.')) {
-      const [payloadB64] = cookieValue.split('.');
-      const json = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
-      if (json?.userId && json?.businessId) return json;
-    } else {
-      const json = JSON.parse(Buffer.from(cookieValue, 'base64').toString('utf-8'));
-      if (json?.userId && json?.businessId) return json;
+    const parts = cookieValue.split('.');
+    if (parts.length !== 2) return null;
+
+    const [base64Payload, signature] = parts;
+    if (!base64Payload || !signature) return null;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', SESSION_SECRET)
+      .update(base64Payload)
+      .digest('hex');
+
+    const sigBuffer = Buffer.from(signature, 'hex');
+    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      return null;
     }
+
+    const jsonStr = Buffer.from(base64Payload, 'base64url').toString('utf-8');
+    const json = JSON.parse(jsonStr);
+    if (json?.userId && json?.businessId) return json;
   } catch {
     return null;
   }

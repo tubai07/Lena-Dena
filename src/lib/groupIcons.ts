@@ -12,7 +12,6 @@ import {
   Gamepad2,
   Sparkles,
   Plane,
-  Users,
   LucideIcon,
 } from 'lucide-react';
 

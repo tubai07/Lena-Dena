@@ -2292,7 +2292,7 @@ export default function GroupDetailPage() {
 
             <div className="text-center space-y-1.5">
               <h3 className="text-lg font-black text-slate-900">
-                Delete "{group.name}"?
+                Delete &ldquo;{group.name}&rdquo;?
               </h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed">
                 This will permanently delete this group along with all its expenses, splits, settlements, and member records. This action cannot be undone.

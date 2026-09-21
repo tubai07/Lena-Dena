@@ -104,7 +104,7 @@ export function TransactionDetailsModal({
     year: 'numeric',
   });
 
-  const ItemIcon = isExpense
+  const iconComponent = isExpense
     ? getExpenseItemIcon(raw.category, raw.description || item.title)
     : CheckCircle2;
 
@@ -251,7 +251,7 @@ export function TransactionDetailsModal({
           {/* Top Hero Card */}
           <div className="text-center py-2 space-y-2">
             <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-800 mx-auto shadow-2xs">
-              <ItemIcon className="w-7 h-7 stroke-[1.8]" />
+              {React.createElement(iconComponent, { className: 'w-7 h-7 stroke-[1.8]' })}
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900 tracking-tight">

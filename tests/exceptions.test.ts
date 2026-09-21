@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateMemberNetBalances,
   simplifyDebts,
-  calculateDirectPairwiseDebts,
   distributeEqualSplits,
 } from '../src/lib/splitwise';
 

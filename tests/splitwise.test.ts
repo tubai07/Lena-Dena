@@ -5,7 +5,6 @@ import {
   distributeSharesSplits,
   calculateMemberNetBalances,
   simplifyDebts,
-  calculateDirectPairwiseDebts,
   generateUpiUrl,
   generateWhatsAppSummary,
   JOIN_CODE_ALPHABET,
@@ -264,19 +263,6 @@ describe('Splitwise Engine & Debt Simplification', () => {
       { id: 'm1', name: 'Creator', isOwner: true, isAdmin: true },
       { id: 'm2', name: 'Member To Remove', isOwner: false, isAdmin: false },
       { id: 'm3', name: 'Remaining Friend', isOwner: false, isAdmin: false },
-    ];
-
-    const expenses = [
-      {
-        id: 'exp1',
-        totalAmountPaisa: 30000,
-        payers: [{ memberId: 'm1', amountPaisa: 30000 }],
-        splits: [
-          { memberId: 'm1', amountPaisa: 10000 },
-          { memberId: 'm2', amountPaisa: 10000 },
-          { memberId: 'm3', amountPaisa: 10000 },
-        ],
-      },
     ];
 
     // Creator removes m2

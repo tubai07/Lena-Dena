@@ -102,7 +102,7 @@ export async function PUT(
     }
 
     // Auto-balance minor 1-2 paise floating point rounding differences
-    let adjustedPayers = payers.map((p: any) => ({
+    const adjustedPayers = payers.map((p: any) => ({
       memberId: p.memberId,
       amountPaisa: Math.round(Number(p.amountPaisa) || 0),
     }));
@@ -127,7 +127,7 @@ export async function PUT(
       );
     }
 
-    let adjustedSplits = splits.map((s: any) => ({
+    const adjustedSplits = splits.map((s: any) => ({
       memberId: s.memberId,
       amountPaisa: Math.round(Number(s.amountPaisa) || 0),
       shareValue: s.shareValue ? Number(s.shareValue) : null,

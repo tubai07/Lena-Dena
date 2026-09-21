@@ -52,29 +52,27 @@ describe('Security & Authentication Engine', () => {
     expect(extracted?.businessId).toBe('biz_456');
   });
 
-  it('parses legacy unsigned base64 cookies for older users without crashing', () => {
-    const legacySession = {
-      userId: 'legacy_user_789',
-      businessId: 'legacy_biz_789',
-      userName: 'Old User',
-      businessName: 'Personal Khata',
+  it('rejects legacy unsigned base64 cookies to prevent forgery attacks', () => {
+    const forgedSession = {
+      userId: 'victim_user_789',
+      businessId: 'victim_biz_789',
+      userName: 'Victim User',
+      businessName: 'Victim Khata',
       phone: '9988776655',
     };
 
-    // The old cookie format was Buffer.from(JSON.stringify(data)).toString('base64')
-    const legacyCookie = Buffer.from(JSON.stringify(legacySession)).toString('base64');
-    expect(legacyCookie).not.toContain('.');
+    // Unsigned base64 cookies must be rejected to prevent session forgery
+    const unsignedCookie = Buffer.from(JSON.stringify(forgedSession)).toString('base64');
+    expect(unsignedCookie).not.toContain('.');
 
-    const parsed = parseSessionCookie(legacyCookie);
-    expect(parsed).not.toBeNull();
-    expect(parsed?.userId).toBe('legacy_user_789');
-    expect(parsed?.businessId).toBe('legacy_biz_789');
+    const parsed = parseSessionCookie(unsignedCookie);
+    expect(parsed).toBeNull();
 
-    // Also handles modern signed cookie
-    const modernCookie = signPayload(legacySession);
+    // Verifies modern cryptographically signed cookie works properly
+    const modernCookie = signPayload(forgedSession);
     const parsedModern = parseSessionCookie(modernCookie);
     expect(parsedModern).not.toBeNull();
-    expect(parsedModern?.userId).toBe('legacy_user_789');
+    expect(parsedModern?.userId).toBe('victim_user_789');
 
     // Rejects garbage cookie
     expect(parseSessionCookie('garbage-not-json')).toBeNull();

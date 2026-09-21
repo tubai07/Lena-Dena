@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  calculateMemberNetBalances,
-  simplifyDebts,
-  calculateDirectPairwiseDebts,
-} from '../src/lib/splitwise';
+import { calculateMemberNetBalances } from '../src/lib/splitwise';
 
 describe('Transaction Details & Admin Permissions Engine', () => {
   const members = [

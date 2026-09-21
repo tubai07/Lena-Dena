@@ -1,10 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 
-const fallbackUrl =
-  'postgresql://postgres.guhhzkrkmfqzvqcgdsya:NRHHcSuurAde6yRz@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true';
-
 function getOptimizedDatabaseUrl(): string {
-  let url = process.env.DATABASE_URL || process.env.DIRECT_URL || fallbackUrl;
+  let url = process.env.DATABASE_URL || process.env.DIRECT_URL;
+  if (!url) {
+    throw new Error(
+      'DATABASE_URL or DIRECT_URL environment variable is required. Please set it in your .env file.'
+    );
+  }
   if (url.includes('pgbouncer=true')) {
     if (!url.includes('connection_limit=')) {
       url += '&connection_limit=5';

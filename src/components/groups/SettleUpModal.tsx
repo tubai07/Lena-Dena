@@ -52,6 +52,10 @@ const getAvatarBg = (name: string) => {
   return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 };
 
+const generateOptimisticSettlementId = (): string => {
+  return `temp_st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+};
+
 export function SettleUpModal({
   isOpen,
   onClose,
@@ -185,7 +189,7 @@ export function SettleUpModal({
     // ⚡ INSTANT OPTIMISTIC SUBMIT (0ms latency!)
     const tempId = isEditing
       ? initialSettlement.id
-      : `temp_st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      : generateOptimisticSettlementId();
     const optimisticSettlement = {
       ...(initialSettlement || {}),
       id: tempId,

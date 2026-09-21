@@ -119,6 +119,8 @@ export async function PUT(
     const { id } = await params;
     const cleanId = id?.trim() || '';
 
+    const session = await getSession();
+
     const existing = await db.group.findFirst({
       where: {
         OR: [
@@ -126,6 +128,7 @@ export async function PUT(
           { joinCode: cleanId.toUpperCase() },
         ],
       },
+      include: { members: true },
     });
 
     if (!existing) {
@@ -133,7 +136,20 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, category, simplifyDebts } = body;
+    const { name, category, simplifyDebts, memberId } = body;
+
+    const isBusinessOwner = Boolean(session?.businessId && existing.businessId === session.businessId);
+    const requestingMember = memberId
+      ? existing.members.find((m) => m.id === memberId && m.isActive !== false)
+      : null;
+    const isMemberAdmin = Boolean(requestingMember?.isAdmin || requestingMember?.isOwner);
+
+    if (!isBusinessOwner && !isMemberAdmin) {
+      return NextResponse.json(
+        { error: 'Only group admins can update the group' },
+        { status: 403 }
+      );
+    }
 
     const data: any = {};
     if (typeof name === 'string' && name.trim()) data.name = name.trim();
