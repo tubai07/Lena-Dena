@@ -24,35 +24,51 @@ export default async function DashboardLayout({
     );
   }
 
-  // Fetch business, initial customers, and recent activity concurrently in 1 parallel query batch
-  const [business, initialCustomers, initialTransactions] = await Promise.all([
-    db.business.findUnique({
-      where: { id: session.businessId },
-      include: { owner: true, settings: true },
-    }),
-    db.customer.findMany({
-      where: { businessId: session.businessId },
-      orderBy: { currentBalancePaisa: 'desc' },
-      include: {
-        transactions: {
-          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  let business: any = null;
+  let initialCustomers: any[] = [];
+  let initialTransactions: any[] = [];
+
+  try {
+    const results = await Promise.all([
+      db.business.findUnique({
+        where: { id: session.businessId },
+        include: { owner: true, settings: true },
+      }),
+      db.customer.findMany({
+        where: { businessId: session.businessId },
+        orderBy: { currentBalancePaisa: 'desc' },
+        include: {
+          transactions: {
+            orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+          },
         },
-      },
-    }),
-    db.transaction.findMany({
-      where: { businessId: session.businessId },
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      include: {
-        customer: {
-          select: { id: true, name: true, phone: true, currentBalancePaisa: true },
+      }),
+      db.transaction.findMany({
+        where: { businessId: session.businessId },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          customer: {
+            select: { id: true, name: true, phone: true, currentBalancePaisa: true },
+          },
         },
-      },
-      take: 100,
-    }),
-  ]);
+        take: 100,
+      }),
+    ]);
+    business = results[0];
+    initialCustomers = results[1] || [];
+    initialTransactions = results[2] || [];
+  } catch (err) {
+    console.error('Error fetching dashboard initial data:', err);
+  }
 
   if (!business) {
-    redirect('/login');
+    return (
+      <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
+        <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
+          <div className="flex-1 w-full">{children}</div>
+        </div>
+      </div>
+    );
   }
 
   return (
