@@ -35,7 +35,8 @@ export const supabase = createClient(
 );
 
 /**
- * Sends a 6-digit Email OTP via Supabase Auth
+ * Sends a 6-digit Email OTP via Supabase Auth.
+ * Pre-confirms user in Supabase Auth to prevent sending "Confirm signup" link emails.
  */
 export async function sendEmailOtp(email: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -54,16 +55,52 @@ export async function sendEmailOtp(email: string): Promise<{ success: boolean; e
 
     const cleanEmail = email.trim().toLowerCase();
     const client = getSupabaseAdmin();
-    const { error } = await client.auth.signInWithOtp({
+
+    // 1. Ensure user exists in Supabase auth and is marked as email-confirmed.
+    // This prevents Supabase from sending a "Confirm your signup" confirmation link email.
+    try {
+      await client.auth.admin.createUser({
+        email: cleanEmail,
+        email_confirm: true,
+      });
+    } catch {
+      // User might already exist in auth.users; ensure email is confirmed
+      try {
+        const { data: usersData } = await client.auth.admin.listUsers();
+        const existingAuthUser = usersData?.users?.find(
+          (u) => u.email?.toLowerCase() === cleanEmail
+        );
+        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
+          await client.auth.admin.updateUserById(existingAuthUser.id, {
+            email_confirm: true,
+          });
+        }
+      } catch {
+        // Ignore lookup errors
+      }
+    }
+
+    // 2. Dispatch OTP via signInWithOtp
+    let { error } = await client.auth.signInWithOtp({
       email: cleanEmail,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: false,
       },
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      // Fallback with shouldCreateUser: true if user was not found
+      const fallback = await client.auth.signInWithOtp({
+        email: cleanEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+      if (fallback.error) {
+        return { success: false, error: fallback.error.message };
+      }
     }
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to send OTP' };
@@ -71,7 +108,8 @@ export async function sendEmailOtp(email: string): Promise<{ success: boolean; e
 }
 
 /**
- * Verifies a 6-digit Email OTP via Supabase Auth
+ * Verifies a 6-digit Email OTP via Supabase Auth.
+ * Attempts both 'email' and 'signup' OTP types for bulletproof verification.
  */
 export async function verifyEmailOtp(email: string, token: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -92,17 +130,33 @@ export async function verifyEmailOtp(email: string, token: string): Promise<{ su
     const cleanToken = token.trim();
 
     const client = getSupabaseAdmin();
-    const { data, error } = await client.auth.verifyOtp({
+
+    // 1. Try with type: 'email' (standard for confirmed user OTPs)
+    const emailRes = await client.auth.verifyOtp({
       email: cleanEmail,
       token: cleanToken,
       type: 'email',
     });
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (!emailRes.error) {
+      return { success: true };
     }
 
-    return { success: true };
+    // 2. Fallback to type: 'signup' (in case Supabase generated a signup OTP)
+    const signupRes = await client.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'signup',
+    });
+
+    if (!signupRes.error) {
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: emailRes.error?.message || signupRes.error?.message || 'Invalid or expired OTP',
+    };
   } catch (err: any) {
     return { success: false, error: err.message || 'OTP verification failed' };
   }

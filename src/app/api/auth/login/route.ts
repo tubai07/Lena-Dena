@@ -27,16 +27,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const phoneVariants = getPhoneLookupVariants(cleanIdentifier);
+    const isEmail = cleanIdentifier.includes('@');
+    const phoneVariants = isEmail ? [] : getPhoneLookupVariants(cleanIdentifier);
 
-    // Fast, lightweight lookup by email or any phone format variant
+    // Fast, lightweight targeted lookup leveraging unique indexes (email or phone)
     const user = await db.user.findFirst({
-      where: {
-        OR: [
-          { email: cleanIdentifier.toLowerCase() },
-          ...phoneVariants.map((p) => ({ phone: p })),
-        ],
-      },
+      where: isEmail
+        ? { email: cleanIdentifier.toLowerCase() }
+        : { phone: { in: phoneVariants } },
       select: {
         id: true,
         name: true,

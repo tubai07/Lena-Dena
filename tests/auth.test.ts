@@ -13,7 +13,7 @@ describe('Security & Authentication Engine', () => {
     const plain = 'superSecret123!';
     const hash = await hashPassword(plain);
 
-    expect(hash).toMatch(/^\$2[aby]\$12\$/);
+    expect(hash).toMatch(/^\$2[aby]\$10\$/);
 
     const match = await verifyPassword(plain, hash);
     expect(match.valid).toBe(true);

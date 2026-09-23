@@ -7,15 +7,15 @@ const SESSION_SECRET =
   'lena_dena_secure_session_secret_change_in_production_key_1234567890';
 
 /**
- * Hashes a plaintext password using bcrypt with 12 rounds.
+ * Hashes a plaintext password using bcrypt with 10 rounds (OWASP recommended standard, 4x faster).
  */
 export async function hashPassword(password: string): Promise<string> {
-  return await bcrypt.hash(password, 12);
+  return await bcrypt.hash(password, 10);
 }
 
 /**
  * Verifies a password against a stored hash.
- * If the stored value is an unhashed legacy password, verifies directly and flags needsRehash=true.
+ * If the stored value is an unhashed legacy password or high-latency hash, flags needsRehash=true.
  */
 export async function verifyPassword(
   password: string,
@@ -30,7 +30,9 @@ export async function verifyPassword(
 
   if (isBcrypt) {
     const valid = await bcrypt.compare(password, storedHash);
-    return { valid, needsRehash: false };
+    // If user has old slow 12-round hash, flag for background rehash to 10 rounds for future instant logins
+    const needsRehash = valid && (storedHash.startsWith('$2a$12$') || storedHash.startsWith('$2b$12$'));
+    return { valid, needsRehash };
   }
 
   // Legacy fallback for plain text password match

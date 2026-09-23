@@ -52,8 +52,14 @@ export default function LoginPage() {
         // Ignore localStorage restrictions
       }
 
-      // Fast immediate browser navigation
-      window.location.href = data.redirect || '/';
+      // Fast immediate navigation using router with replace and instant refresh
+      router.replace(data.redirect || '/');
+      router.refresh();
+      setTimeout(() => {
+        if (window.location.pathname.startsWith('/login')) {
+          window.location.replace(data.redirect || '/');
+        }
+      }, 250);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
       setLoading(false);
