@@ -167,7 +167,6 @@ export default function GroupDetailPage() {
   const [isLeavingGroup, setIsLeavingGroup] = useState(false);
   const [claimedMemberId, setClaimedMemberId] = useState<string | null>(null);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
-  const [isTogglingSimplify, setIsTogglingSimplify] = useState(false);
   const [settlePreload, setSettlePreload] = useState<{
     payerId?: string;
     receiverId?: string;
@@ -294,8 +293,13 @@ export default function GroupDetailPage() {
         const directTransfers = calculateDirectPairwiseDebts(activeMembers, mergedExpenses, mergedSettlements);
         const totalSpendPaisa = mergedExpenses.reduce((sum: number, e: any) => sum + (Number(e.totalAmountPaisa) || 0), 0);
 
+        const savedPref = typeof window !== 'undefined'
+          ? localStorage.getItem(`lena_dena_simplify_${data.group.id || targetId}`)
+          : null;
         const isSimplified = inFlightSimplifyRef.current !== null
           ? inFlightSimplifyRef.current
+          : savedPref !== null
+          ? savedPref === 'true'
           : (data.group.simplifyDebts ?? prev.simplifyDebts ?? true);
 
         const mergedGroup = {
@@ -411,64 +415,43 @@ export default function GroupDetailPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Instant optimistic simplify toggle
-  const handleToggleSimplify = async (enabled: boolean) => {
-    setIsTogglingSimplify(true);
+  // 0ms instantaneous simplify toggle with persistence
+  const handleToggleSimplify = (enabled: boolean) => {
+    const targetId = group?.id || id;
+    if (typeof window !== 'undefined' && targetId) {
+      localStorage.setItem(`lena_dena_simplify_${targetId}`, String(enabled));
+      if (group?.id && group.id !== targetId) {
+        localStorage.setItem(`lena_dena_simplify_${group.id}`, String(enabled));
+      }
+    }
     inFlightSimplifyRef.current = enabled;
-    const previousSetting = group?.simplifyDebts ?? true;
 
     setGroup((prev) => {
       if (!prev) return null;
       const updated = {
         ...prev,
         simplifyDebts: enabled,
+        activeTransfers: enabled ? prev.simplifiedTransfers : prev.directTransfers,
       };
       setCachedItem(`group_${id}`, updated);
+      if (prev.id) setCachedItem(`group_${prev.id}`, updated);
       return updated;
     });
 
-    try {
-      const res = await fetch(`/api/groups/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          simplifyDebts: enabled,
-          memberId: claimedMemberId || ownerMember?.id,
-        }),
-      });
-      if (res.ok) {
-        // Confirm server persisted the new setting
-        inFlightSimplifyRef.current = null;
-      } else {
-        // Server rejected, revert to previous setting
-        inFlightSimplifyRef.current = null;
-        setGroup((prev) => {
-          if (!prev) return null;
-          const reverted = {
-            ...prev,
-            simplifyDebts: previousSetting,
-          };
-          setCachedItem(`group_${id}`, reverted);
-          return reverted;
-        });
-      }
-    } catch (e) {
-      console.error('Error updating simplifyDebts:', e);
+    // Fire-and-forget background server persistence
+    fetch(`/api/groups/${targetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        simplifyDebts: enabled,
+        memberId: claimedMemberId || ownerMember?.id,
+      }),
+    }).then(() => {
       inFlightSimplifyRef.current = null;
-      setGroup((prev) => {
-        if (!prev) return null;
-        const reverted = {
-          ...prev,
-          simplifyDebts: previousSetting,
-        };
-        setCachedItem(`group_${id}`, reverted);
-        return reverted;
-      });
-    } finally {
-      setTimeout(() => {
-        setIsTogglingSimplify(false);
-      }, 200);
-    }
+    }).catch((e) => {
+      console.warn('Background sync error for simplifyDebts:', e);
+      inFlightSimplifyRef.current = null;
+    });
   };
 
   // Instant optimistic expense addition or modification
@@ -1704,11 +1687,10 @@ export default function GroupDetailPage() {
                 </div>
               </div>
 
-              {/* iOS-Style Sliding Toggle Switch with smooth loading spinner */}
+              {/* Clean iOS-Style Sliding Toggle Switch with 0ms instant response */}
               <button
                 type="button"
                 role="switch"
-                disabled={isTogglingSimplify}
                 aria-checked={isSimplifyEnabled}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1716,7 +1698,7 @@ export default function GroupDetailPage() {
                 }}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none ${
                   isSimplifyEnabled ? 'bg-emerald-600' : 'bg-slate-300'
-                } ${isTogglingSimplify ? 'opacity-80' : ''}`}
+                }`}
                 title={isSimplifyEnabled ? 'Turn off simplification' : 'Turn on simplification'}
               >
                 <span
@@ -1724,11 +1706,7 @@ export default function GroupDetailPage() {
                   className={`pointer-events-none inline-flex items-center justify-center h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
                     isSimplifyEnabled ? 'translate-x-5' : 'translate-x-0'
                   }`}
-                >
-                  {isTogglingSimplify && (
-                    <div className="w-2.5 h-2.5 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
-                  )}
-                </span>
+                />
               </button>
             </div>
 

@@ -70,10 +70,7 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/join') ||
-    (request.method === 'POST' && pathname.includes('/expenses')) ||
-    (request.method === 'POST' && pathname.includes('/settlements')) ||
-    pathname.includes('/members') ||
-    (request.method === 'GET' && pathname.startsWith('/api/groups/'));
+    pathname.startsWith('/api/groups/');
 
   // Public API routes
   if (isPublicApi) {
