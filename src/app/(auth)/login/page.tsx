@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   const [registerHref, setRegisterHref] = useState('/register');
+  const [forgotHref, setForgotHref] = useState('/forgot-password');
 
   // Pre-fill remembered phone/email, pre-warm dashboard, and resolve register link
   useEffect(() => {
@@ -29,8 +30,10 @@ export default function LoginPage() {
       const pending = localStorage.getItem('lena_dena_pending_join_code');
       if (search.includes('redirect=')) {
         setRegisterHref(`/register${search}`);
+        setForgotHref(`/forgot-password${search}`);
       } else if (pending) {
         setRegisterHref(`/register?redirect=${encodeURIComponent(`/join/${pending}`)}`);
+        setForgotHref(`/forgot-password?redirect=${encodeURIComponent(`/join/${pending}`)}`);
       }
     } catch {
       // Ignore localStorage restrictions
@@ -163,7 +166,7 @@ export default function LoginPage() {
                 </span>
               </label>
               <Link
-                href="/forgot-password"
+                href={forgotHref}
                 className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
               >
                 Forgot Password?

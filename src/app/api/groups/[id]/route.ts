@@ -46,10 +46,18 @@ export async function GET(
     if (!cleanId) {
       return NextResponse.json({ error: 'Group ID is required' }, { status: 400 });
     }
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const cached = getCachedServerDetail(cleanId);
     if (cached && cached.group) {
-      const session = await getSession();
+      const isOwner = cached.group.businessId === session.businessId;
       const currentUserMemberId = resolveCurrentUserMemberId(cached.group.members, cached.group.businessId, session);
+      if (!isOwner && !currentUserMemberId) {
+        return NextResponse.json({ error: 'You do not have access to this group' }, { status: 403 });
+      }
       return NextResponse.json({
         ...cached,
         group: {
@@ -191,8 +199,11 @@ export async function GET(
       setCachedServerDetail(group.joinCode.toUpperCase(), payload);
     }
 
-    const session = await getSession();
+    const isOwner = group.businessId === session.businessId;
     const currentUserMemberId = resolveCurrentUserMemberId(group.members, group.businessId, session);
+    if (!isOwner && !currentUserMemberId) {
+      return NextResponse.json({ error: 'You do not have access to this group' }, { status: 403 });
+    }
 
     return NextResponse.json({
       group: {

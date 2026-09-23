@@ -162,3 +162,78 @@ export async function verifyEmailOtp(email: string, token: string): Promise<{ su
   }
 }
 
+/**
+ * Sends a passwordless 1-click Magic Sign-in Link via Supabase Auth.
+ * When clicked, the user is redirected to /auth/callback and signed in instantly without an OTP or password reset.
+ */
+export async function sendMagicLink(
+  email: string,
+  redirectTo: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const url = getSupabaseUrl();
+    const key =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SECRET_KEY ||
+      getSupabaseAnonKey();
+
+    if (!url || !key) {
+      return {
+        success: false,
+        error: 'Supabase is not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to your environment variables.',
+      };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const client = getSupabaseAdmin();
+
+    // Ensure user exists and is confirmed in Supabase auth
+    try {
+      await client.auth.admin.createUser({
+        email: cleanEmail,
+        email_confirm: true,
+      });
+    } catch {
+      try {
+        const { data: usersData } = await client.auth.admin.listUsers();
+        const existingAuthUser = usersData?.users?.find(
+          (u) => u.email?.toLowerCase() === cleanEmail
+        );
+        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
+          await client.auth.admin.updateUserById(existingAuthUser.id, {
+            email_confirm: true,
+          });
+        }
+      } catch {
+        // Ignore lookup errors
+      }
+    }
+
+    // Send magic link with custom redirect target
+    const { error } = await client.auth.signInWithOtp({
+      email: cleanEmail,
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: false,
+      },
+    });
+
+    if (error) {
+      const fallback = await client.auth.signInWithOtp({
+        email: cleanEmail,
+        options: {
+          emailRedirectTo: redirectTo,
+          shouldCreateUser: true,
+        },
+      });
+      if (fallback.error) {
+        return { success: false, error: fallback.error.message };
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to send sign-in link' };
+  }
+}
+

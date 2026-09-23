@@ -65,14 +65,12 @@ export function proxy(request: NextRequest) {
 
   const isPublicPage =
     pathname.startsWith('/join') ||
-    pathname.startsWith('/groups') ||
     pathname.startsWith('/auth/callback');
 
   const isPublicApi =
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/cron') ||
-    pathname.startsWith('/api/join') ||
-    pathname.startsWith('/api/groups/');
+    pathname.startsWith('/api/join');
 
   // Public API routes
   if (isPublicApi) {
@@ -88,6 +86,9 @@ export function proxy(request: NextRequest) {
     }
     if (!isAuthPage && !isPublicPage) {
       const loginUrl = new URL('/login', request.url);
+      if (pathname && pathname !== '/') {
+        loginUrl.searchParams.set('redirect', pathname);
+      }
       const res = NextResponse.redirect(loginUrl);
       if (sessionCookie) {
         res.cookies.delete('lena_dena_session');
