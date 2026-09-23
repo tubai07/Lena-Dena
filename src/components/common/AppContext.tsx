@@ -382,10 +382,22 @@ export function AppProvider({
   );
 }
 
+const defaultAppContext: AppContextType = {
+  openTransactionModal: () => {},
+  openCustomerModal: () => {},
+  openReminderModal: () => {},
+  refreshAppData: () => {},
+  lastUpdated: 0,
+  business: null,
+  setBusiness: () => {},
+  allCustomers: [],
+  setAllCustomers: () => {},
+  allTransactions: [],
+  setAllTransactions: () => {},
+  deleteCustomerFromApp: async () => {},
+};
+
 export function useApp() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
+  return context || defaultAppContext;
 }

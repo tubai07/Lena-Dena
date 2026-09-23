@@ -16,11 +16,13 @@ export default async function DashboardLayout({
   const session = await getSession();
   if (!session?.businessId) {
     return (
-      <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
-        <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
-          <div className="flex-1 w-full">{children}</div>
+      <AppProvider>
+        <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
+          <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
+            <div className="flex-1 w-full">{children}</div>
+          </div>
         </div>
-      </div>
+      </AppProvider>
     );
   }
 
@@ -63,11 +65,13 @@ export default async function DashboardLayout({
 
   if (!business) {
     return (
-      <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
-        <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
-          <div className="flex-1 w-full">{children}</div>
+      <AppProvider>
+        <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
+          <div className="w-full max-w-md bg-white min-h-screen sm:min-h-[844px] sm:rounded-3xl sm:shadow-2xl sm:border sm:border-slate-200/80 overflow-x-clip flex flex-col relative">
+            <div className="flex-1 w-full">{children}</div>
+          </div>
         </div>
-      </div>
+      </AppProvider>
     );
   }
 
