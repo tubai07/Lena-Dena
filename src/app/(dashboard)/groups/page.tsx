@@ -250,6 +250,7 @@ export default function GroupsPage() {
                   href={`/groups/${group.id}`}
                   prefetch={true}
                   onMouseEnter={() => prefetchGroupDetail(group.id)}
+                  onTouchStart={() => prefetchGroupDetail(group.id)}
                   className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xs transition-all block group"
                 >
                   <div className="flex items-center justify-between gap-3">

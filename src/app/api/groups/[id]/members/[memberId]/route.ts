@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { invalidateAllGroupServerCaches } from '@/lib/serverGroupCache';
+import { invalidateAllGroupServerCaches, invalidateServerSummary } from '@/lib/serverGroupCache';
 import { calculateMemberNetBalances } from '@/lib/splitwise';
 
 export async function PATCH(
@@ -204,6 +204,9 @@ export async function DELETE(
     }
 
     invalidateAllGroupServerCaches(group.id, group.businessId);
+    if (session?.businessId) {
+      invalidateServerSummary(session.businessId);
+    }
 
     return NextResponse.json({
       success: true,

@@ -446,6 +446,29 @@ export default function GroupDetailPage() {
     if (cachedFull) {
       setGroup(cachedFull);
       setLoading(false);
+    } else {
+      const allGroups = getCachedItem<any[]>('all_groups');
+      const summary = allGroups?.find(
+        (g: any) => g.id === targetId || (g.joinCode && g.joinCode.toUpperCase() === targetId.toUpperCase())
+      );
+      if (summary) {
+        setGroup({
+          id: summary.id,
+          name: summary.name,
+          category: summary.category || 'OTHER',
+          currencySymbol: summary.currencySymbol || '₹',
+          joinCode: summary.joinCode || '',
+          simplifyDebts: summary.simplifyDebts ?? true,
+          members: summary.members || [],
+          expenses: [],
+          settlements: [],
+          totalSpendPaisa: summary.totalSpendPaisa || 0,
+          balances: [],
+          simplifiedTransfers: [],
+          directTransfers: [],
+          activeTransfers: [],
+        } as any);
+      }
     }
 
     fetchGroup();
@@ -992,9 +1015,19 @@ export default function GroupDetailPage() {
         return;
       }
 
-      // Clear local storage for join
+      // Clear local storage and caches for this group
       try {
-        localStorage.removeItem(`lena_dena_member_${group.joinCode.toUpperCase()}`);
+        if (group.joinCode) {
+          localStorage.removeItem(`lena_dena_member_${group.joinCode.toUpperCase()}`);
+        }
+        localStorage.removeItem(`lena_dena_member_id_${id}`);
+        sessionStorage.removeItem(`group_${id}`);
+        localStorage.removeItem(`group_${id}`);
+        if (group.joinCode) {
+          sessionStorage.removeItem(`group_${group.joinCode.toUpperCase()}`);
+          localStorage.removeItem(`group_${group.joinCode.toUpperCase()}`);
+        }
+
         const allGroups = getCachedItem<any[]>('all_groups');
         if (allGroups && Array.isArray(allGroups)) {
           const filtered = allGroups.filter((g) => g.id !== id);
@@ -1004,7 +1037,8 @@ export default function GroupDetailPage() {
         // ignore
       }
 
-      router.push('/groups');
+      broadcastGroupChange();
+      window.location.href = '/groups';
     } catch (e: any) {
       console.error('Error leaving group:', e);
       alert(e.message || 'Error leaving group');

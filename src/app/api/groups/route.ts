@@ -48,7 +48,19 @@ export async function GET(req: Request) {
       OR: [
         { businessId: session.businessId },
         ...(memberMatchConditions.length > 0
-          ? [{ members: { some: { OR: memberMatchConditions } } }]
+          ? [
+              {
+                members: {
+                  some: {
+                    AND: [
+                      { isActive: true },
+                      { status: { not: 'REJECTED' } },
+                      { OR: memberMatchConditions },
+                    ],
+                  },
+                },
+              },
+            ]
           : []),
       ],
     };

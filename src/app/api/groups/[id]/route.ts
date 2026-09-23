@@ -101,32 +101,13 @@ export async function GET(
       },
     };
 
-    let group = null;
-    if (cleanId.length === 5) {
-      group = await db.group.findUnique({
-        where: { joinCode: cleanId.toUpperCase() },
-        include: groupInclude,
-      });
-    }
-
-    if (!group) {
-      group = await db.group.findUnique({
-        where: { id: cleanId },
-        include: groupInclude,
-      }).catch(() => null);
-    }
-
-    if (!group) {
-      group = await db.group.findFirst({
-        where: {
-          OR: [
-            { id: cleanId },
-            { joinCode: cleanId.toUpperCase() },
-          ],
-        },
-        include: groupInclude,
-      });
-    }
+    const isCode = cleanId.length === 5 && !cleanId.includes('-');
+    const group = await db.group.findFirst({
+      where: isCode
+        ? { joinCode: cleanId.toUpperCase() }
+        : { OR: [{ id: cleanId }, { joinCode: cleanId.toUpperCase() }] },
+      include: groupInclude,
+    });
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
