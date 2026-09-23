@@ -8,6 +8,7 @@ export interface SessionData {
   userName: string;
   businessName: string;
   phone: string;
+  email?: string;
 }
 
 const COOKIE_NAME = 'lena_dena_session';

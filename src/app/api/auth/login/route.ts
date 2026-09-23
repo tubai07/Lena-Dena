@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         id: true,
         name: true,
         phone: true,
+        email: true,
         passwordHash: true,
         businesses: {
           select: { id: true, name: true, phone: true },
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
 
     if (!user) {
       return NextResponse.json(
-        { error: 'No account found with this mobile number. Please register first.' },
+        { error: 'No account found with this mobile number or email. Please register first.' },
         { status: 404 }
       );
     }
@@ -100,6 +101,7 @@ export async function POST(req: Request) {
         userName: user.name,
         businessName: business.name,
         phone: user.phone || '',
+        email: user.email || '',
       },
       Boolean(rememberMe)
     );

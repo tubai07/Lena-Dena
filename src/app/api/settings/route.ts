@@ -95,13 +95,14 @@ export async function PUT(req: Request) {
       },
     });
 
-    // Refresh session cookie with updated name/phone
+    // Refresh session cookie with updated name/phone/email
     await setSession({
       userId: session.userId,
       businessId: session.businessId,
       userName: updatedBusiness.owner?.name || updatedBusiness.name,
       businessName: updatedBusiness.name,
       phone: updatedBusiness.phone || session.phone,
+      email: updatedBusiness.owner?.email || session.email,
     });
 
     return NextResponse.json({

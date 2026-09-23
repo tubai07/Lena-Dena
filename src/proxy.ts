@@ -60,6 +60,7 @@ export function proxy(request: NextRequest) {
   const isAuthPage =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
     pathname.startsWith('/onboarding');
 
   const isPublicPage =

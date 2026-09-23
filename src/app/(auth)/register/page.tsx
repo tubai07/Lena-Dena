@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { User, Phone, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { User, Phone, Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +34,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           name,
           phone,
+          email,
           password,
         }),
       });
@@ -102,6 +104,23 @@ export default function RegisterPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="98765 43210"
                   className="w-full pl-14 pr-4 py-3.5 sm:py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-base sm:text-lg font-semibold text-slate-900 focus:bg-white focus:border-emerald-600 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-2">
+                Email Address *
+              </label>
+              <div className="relative">
+                <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-12 pr-4 py-3.5 sm:py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-base sm:text-lg font-semibold text-slate-900 focus:bg-white focus:border-emerald-600 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
             </div>

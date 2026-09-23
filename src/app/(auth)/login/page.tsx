@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Phone, Lock, Loader2, CheckSquare, Square } from 'lucide-react';
+import { User, Lock, Loader2, CheckSquare, Square } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,13 +13,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Pre-fill remembered phone number and pre-warm dashboard
+  // Pre-fill remembered phone/email and pre-warm dashboard
   useEffect(() => {
     try {
       router.prefetch('/');
-      const savedPhone = localStorage.getItem('lena_dena_saved_phone');
-      if (savedPhone) {
-        setIdentifier(savedPhone);
+      const savedIdentifier = localStorage.getItem('lena_dena_saved_identifier') || localStorage.getItem('lena_dena_saved_phone');
+      if (savedIdentifier) {
+        setIdentifier(savedIdentifier);
         setRememberMe(true);
       }
     } catch {
@@ -38,13 +38,14 @@ export default function LoginPage() {
         body: JSON.stringify({ identifier, password, rememberMe }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Invalid mobile number or password');
+      if (!res.ok) throw new Error(data.error || 'Invalid credentials');
 
-      // Persist or clear remembered phone number
+      // Persist or clear remembered identifier
       try {
         if (rememberMe && identifier) {
-          localStorage.setItem('lena_dena_saved_phone', identifier.trim());
+          localStorage.setItem('lena_dena_saved_identifier', identifier.trim());
         } else {
+          localStorage.removeItem('lena_dena_saved_identifier');
           localStorage.removeItem('lena_dena_saved_phone');
         }
       } catch {
@@ -86,16 +87,16 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-2">
-                Mobile Number
+                Mobile Number or Email
               </label>
               <div className="relative">
-                <Phone className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <User className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
                 <input
-                  type="tel"
+                  type="text"
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="9830012345"
+                  placeholder="9830012345 or you@example.com"
                   className="w-full pl-12 pr-4 py-3.5 sm:py-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-base sm:text-lg font-semibold text-slate-900 focus:bg-white focus:border-emerald-600 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
                 />
               </div>
@@ -118,8 +119,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me Option */}
-            <div className="flex items-center justify-between py-1">
+            {/* Remember Me & Forgot Password Options */}
+            <div className="flex items-center justify-between py-1 gap-2 flex-wrap">
               <label className="flex items-center gap-2.5 cursor-pointer select-none group">
                 <input
                   type="checkbox"
@@ -131,6 +132,12 @@ export default function LoginPage() {
                   Keep me logged in
                 </span>
               </label>
+              <Link
+                href="/forgot-password"
+                className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+              >
+                Forgot Password?
+              </Link>
             </div>
 
             <button

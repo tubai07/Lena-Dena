@@ -124,4 +124,30 @@ describe('Security & Authentication Engine', () => {
     resetRateLimit(key);
     expect(checkRateLimit(key, 3, 60000).allowed).toBe(true);
   });
+
+  it('includes and verifies optional email in session payload', () => {
+    const sessionWithEmail = {
+      userId: 'user_email_1',
+      businessId: 'biz_email_1',
+      userName: 'Email User',
+      businessName: 'Email Khata',
+      phone: '9876543210',
+      email: 'user@example.com',
+    };
+
+    const token = signPayload(sessionWithEmail);
+    const parsed = parseSessionCookie(token);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.email).toBe('user@example.com');
+  });
+
+  it('correctly discriminates email vs phone identifier format', () => {
+    const isEmail = (val: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+
+    expect(isEmail('test@example.com')).toBe(true);
+    expect(isEmail('user.name+tag@domain.co.in')).toBe(true);
+    expect(isEmail('9876543210')).toBe(false);
+    expect(isEmail('+919876543210')).toBe(false);
+    expect(isEmail('invalid-email@')).toBe(false);
+  });
 });
