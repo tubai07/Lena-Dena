@@ -135,97 +135,73 @@ export async function POST(
       return NextResponse.json({ error: 'Group not found with this code' }, { status: 404 });
     }
 
-    const body = await req.json();
-    const { memberId, newMemberName, phone, upiId } = body;
+    const session = await getSession();
 
-    // 1. If choosing an existing member
-    if (memberId) {
-      const existing = group.members.find((m) => m.id === memberId);
-      if (!existing) {
-        return NextResponse.json({ error: 'Member not found in this group' }, { status: 404 });
-      }
-      return NextResponse.json({
-        success: true,
-        member: existing,
-        status: existing.status,
-        groupId: group.id,
-        groupName: group.name,
-      });
-    }
-
-    // 2. If adding a new member to the group (Created with PENDING status for admin approval)
-    if (newMemberName && typeof newMemberName === 'string' && newMemberName.trim()) {
-      const trimmedName = newMemberName.trim();
-      const existingMember = group.members.find(
-        (m) => m.name.toLowerCase() === trimmedName.toLowerCase()
+    if (!session?.userId) {
+      return NextResponse.json(
+        { error: 'Please log in to join this group', requiresAuth: true },
+        { status: 401 }
       );
+    }
 
-      if (existingMember) {
-        // If already pending or approved, seamlessly return their membership
-        if (existingMember.status === 'PENDING') {
-          return NextResponse.json({
-            success: true,
-            member: existingMember,
-            status: 'PENDING',
-            requiresApproval: true,
-            groupId: group.id,
-            groupName: group.name,
-          });
-        }
+    // Check if the authenticated user is already in this group
+    const cleanSessionPhone = (session.phone || '').replace(/\D/g, '');
+    const cleanSessionName = (session.userName || '').trim().toLowerCase();
 
-        if (existingMember.status === 'APPROVED' || !existingMember.status) {
-          return NextResponse.json({
-            success: true,
-            member: existingMember,
-            status: 'APPROVED',
-            groupId: group.id,
-            groupName: group.name,
-          });
-        }
-
-        if (existingMember.status === 'REJECTED') {
-          // Allow re-applying
-          const updated = await db.groupMember.update({
-            where: { id: existingMember.id },
-            data: { status: 'PENDING' },
-          });
-          invalidateAllGroupServerCaches(group.id, group.businessId);
-          return NextResponse.json({
-            success: true,
-            member: updated,
-            status: 'PENDING',
-            requiresApproval: true,
-            groupId: group.id,
-            groupName: group.name,
-          });
-        }
+    const existingMember = group.members.find((m) => {
+      const memberCleanPhone = (m.phone || '').replace(/\D/g, '');
+      if (cleanSessionPhone && memberCleanPhone && cleanSessionPhone === memberCleanPhone) {
+        return true;
       }
+      if (m.name.trim().toLowerCase() === cleanSessionName) {
+        return true;
+      }
+      return false;
+    });
 
-      const createdMember = await db.groupMember.create({
-        data: {
-          groupId: group.id,
-          name: trimmedName,
-          phone: phone?.trim() || null,
-          upiId: upiId?.trim() || null,
-          isOwner: false,
-          isAdmin: false,
-          status: 'PENDING',
-        },
-      });
-
-      invalidateAllGroupServerCaches(group.id, group.businessId);
+    if (existingMember) {
+      // Ensure member is APPROVED if they joined via link
+      if (existingMember.status !== 'APPROVED') {
+        await db.groupMember.update({
+          where: { id: existingMember.id },
+          data: { status: 'APPROVED', isActive: true },
+        });
+        invalidateAllGroupServerCaches(group.id, group.businessId);
+      }
 
       return NextResponse.json({
         success: true,
-        member: createdMember,
-        status: 'PENDING',
-        requiresApproval: true,
+        member: existingMember,
+        status: 'APPROVED',
         groupId: group.id,
         groupName: group.name,
+        alreadyMember: true,
       });
     }
 
-    return NextResponse.json({ error: 'Either select an existing member or provide a new name' }, { status: 400 });
+    // Instantly add the authenticated user as an APPROVED member via the invite link
+    const newMember = await db.groupMember.create({
+      data: {
+        groupId: group.id,
+        name: session.userName || 'Member',
+        phone: session.phone || null,
+        status: 'APPROVED',
+        isOwner: false,
+        isAdmin: false,
+        isActive: true,
+      },
+    });
+
+    invalidateAllGroupServerCaches(group.id, group.businessId);
+
+    return NextResponse.json({
+      success: true,
+      member: newMember,
+      status: 'APPROVED',
+      groupId: group.id,
+      groupName: group.name,
+      newlyJoined: true,
+    });
   } catch (err: any) {
     console.error('Error joining group:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });

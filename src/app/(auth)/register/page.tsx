@@ -41,8 +41,10 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-      // Fast immediate browser navigation
-      window.location.href = data.redirect || '/';
+      // Fast immediate browser navigation honoring ?redirect= parameter if present
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const targetUrl = searchParams?.get('redirect') || data.redirect || '/';
+      window.location.href = targetUrl;
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
       setLoading(false);
@@ -157,7 +159,11 @@ export default function RegisterPage() {
           <div className="text-center pt-2">
             <span className="text-sm sm:text-base text-slate-600">Already have an account? </span>
             <Link
-              href="/login"
+              href={
+                typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('redirect')
+                  ? `/login?redirect=${encodeURIComponent(new URLSearchParams(window.location.search).get('redirect')!)}`
+                  : '/login'
+              }
               className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
             >
               Sign In

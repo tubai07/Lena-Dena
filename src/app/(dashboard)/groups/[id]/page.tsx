@@ -26,7 +26,12 @@ import {
   Sparkles,
   AlertCircle,
   Settings,
+  UserPlus,
+  Copy,
+  Check,
+  Share2,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { AddExpenseScreen } from '@/components/groups/AddExpenseScreen';
 import { SettleUpModal } from '@/components/groups/SettleUpModal';
 import { TransactionDetailsModal } from '@/components/groups/TransactionDetailsModal';
@@ -196,6 +201,80 @@ export default function GroupDetailPage() {
   const [memberError, setMemberError] = useState('');
   const [addingMember, setAddingMember] = useState(false);
 
+  // Invite friends modal & link sharing
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const inviteLink = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const code = group?.joinCode || id;
+    return `${window.location.origin}/join/${code}`;
+  }, [group?.joinCode, id]);
+
+  const handleCopyLink = async () => {
+    if (!inviteLink) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(inviteLink);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = inviteLink;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch (err) {
+      console.error('Failed to copy invite link', err);
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!inviteLink) return;
+    const groupName = group?.name || 'our group';
+    const message = `Hey! Join our group "${groupName}" on Lena Dena to split expenses and track balances together: ${inviteLink}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleNativeShare = async () => {
+    if (!inviteLink) return;
+    if (navigator?.share) {
+      try {
+        await navigator.share({
+          title: `Join ${group?.name || 'Group'} on Lena Dena`,
+          text: `Join "${group?.name || 'our group'}" on Lena Dena to split expenses and track balances together:`,
+          url: inviteLink,
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          handleCopyLink();
+        }
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  const broadcastGroupChange = () => {
+    try {
+      const channelId = group?.id || id;
+      if (!channelId) return;
+      const channel = supabase.channel(`group-rt-${channelId}`);
+      channel.send({
+        type: 'broadcast',
+        event: 'GROUP_UPDATED',
+        payload: { id: channelId, timestamp: Date.now() },
+      });
+    } catch {
+      // Non-blocking
+    }
+  };
+
   const [isStandingExpanded, setIsStandingExpanded] = useState(true);
   const [isScrolledDown, setIsScrolledDown] = useState(false);
   const lastScrollY = useRef(0);
@@ -360,7 +439,20 @@ export default function GroupDetailPage() {
 
     fetchGroup();
 
-    // Idle-aware smart polling (6s active, pauses after 30s idle)
+    // Subscribe to Supabase Realtime channel for instant sub-second cross-device sync
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel(`group-rt-${targetId}`)
+        .on('broadcast', { event: 'GROUP_UPDATED' }, () => {
+          fetchGroup(true);
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime channel error:', e);
+    }
+
+    // High-responsiveness active polling (2.5s active, pauses after 45s idle)
     let lastActivityTime = Date.now();
     const updateActivity = () => {
       lastActivityTime = Date.now();
@@ -374,7 +466,7 @@ export default function GroupDetailPage() {
       const isIdle = Date.now() - lastActivityTime > 45000;
       if (isIdle) return; // Skip polling when user is idle
       fetchGroup(true);
-    }, 8000);
+    }, 2500);
 
     // Debounced tab focus sync (300ms) to prevent burst storms on resume
     let focusTimeout: any = null;
@@ -393,6 +485,13 @@ export default function GroupDetailPage() {
     return () => {
       clearInterval(interval);
       clearTimeout(focusTimeout);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // ignore
+        }
+      }
       window.removeEventListener('focus', handleSync);
       document.removeEventListener('visibilitychange', handleSync);
       window.removeEventListener('pointerdown', updateActivity);
@@ -535,6 +634,7 @@ export default function GroupDetailPage() {
       });
     }
     setEditingExpense(null);
+    broadcastGroupChange();
   };
 
   // Instant optimistic settlement addition
@@ -600,6 +700,7 @@ export default function GroupDetailPage() {
       });
     }
     setEditingSettlement(null);
+    broadcastGroupChange();
   };
 
   // Instant 0ms optimistic expense deletion
@@ -649,6 +750,7 @@ export default function GroupDetailPage() {
 
     try {
       await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: 'DELETE' });
+      broadcastGroupChange();
     } catch (e) {
       console.error(e);
       deletedExpenseIdsRef.current.delete(expenseId);
@@ -687,6 +789,7 @@ export default function GroupDetailPage() {
 
     try {
       await fetch(`/api/groups/${id}/settlements/${settlementId}`, { method: 'DELETE' });
+      broadcastGroupChange();
     } catch (e) {
       console.error(e);
       deletedSettlementIdsRef.current.delete(settlementId);
@@ -952,6 +1055,7 @@ export default function GroupDetailPage() {
         setMemberError(data.error || 'Failed to add member');
         fetchGroup(true);
       } else {
+        broadcastGroupChange();
         fetchGroup(true);
       }
     } catch (e: any) {
@@ -1379,7 +1483,7 @@ export default function GroupDetailPage() {
           <div className="absolute bottom-8 left-6 w-20 h-5 rounded-full bg-white/20 -rotate-6" />
         </div>
 
-        {/* Top Navigation Row: Back Button on left */}
+        {/* Top Navigation Row: Back Button on left & Invite Pill Button on right */}
         <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/groups"
@@ -1388,6 +1492,16 @@ export default function GroupDetailPage() {
           >
             <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setShowInviteModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-black/25 hover:bg-black/35 backdrop-blur-md text-white text-xs font-bold border border-white/20 shadow-xs active:scale-95 transition-all cursor-pointer"
+            aria-label="Invite to Group"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+            <span>Invite</span>
+          </button>
         </div>
 
         {/* Large Title, People Pill & Total Group Spend on right */}
@@ -2321,6 +2435,102 @@ export default function GroupDetailPage() {
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{isDeletingGroup ? 'Deleting...' : 'Delete Group'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Friends Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-xs">
+                  <UserPlus className="w-6 h-6 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">Invite Friends</h3>
+                  <p className="text-xs text-slate-500 font-medium truncate max-w-[220px]">
+                    to {group?.name || 'this group'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Description */}
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Anyone with this link can instantly join this group to view balances and add expenses.
+            </p>
+
+            {/* Join Code & Link Preview Box */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <span>Group Link</span>
+                {group?.joinCode && (
+                  <span className="font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">
+                    Code: {group.joinCode}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
+                <span className="text-xs text-slate-700 font-mono truncate flex-1 select-all">
+                  {inviteLink}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    copiedLink
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons: WhatsApp & Native Share */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-sm shadow-md shadow-[#25D366]/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+                </svg>
+                <span>Share via WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNativeShare}
+                className="w-full py-3.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Share2 className="w-4 h-4 text-slate-600" />
+                <span>More Share Options</span>
               </button>
             </div>
           </div>

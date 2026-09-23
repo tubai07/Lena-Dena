@@ -52,12 +52,15 @@ export default function LoginPage() {
         // Ignore localStorage restrictions
       }
 
-      // Fast immediate navigation using router with replace and instant refresh
-      router.replace(data.redirect || '/');
+      // Fast immediate navigation honoring ?redirect= parameter if present
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const targetUrl = searchParams?.get('redirect') || data.redirect || '/';
+
+      router.replace(targetUrl);
       router.refresh();
       setTimeout(() => {
         if (window.location.pathname.startsWith('/login')) {
-          window.location.replace(data.redirect || '/');
+          window.location.replace(targetUrl);
         }
       }, 250);
     } catch (err: any) {
@@ -159,7 +162,7 @@ export default function LoginPage() {
           <div className="text-center pt-2">
             <span className="text-sm sm:text-base text-slate-600">Need a new account? </span>
             <Link
-              href="/register"
+              href={typeof window !== 'undefined' && window.location.search.includes('redirect=') ? `/register${window.location.search}` : '/register'}
               className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
             >
               Register
