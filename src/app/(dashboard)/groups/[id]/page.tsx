@@ -134,6 +134,7 @@ interface GroupDetail {
   joinCode: string;
   simplifyDebts: boolean;
   totalSpendPaisa: number;
+  currentUserMemberId?: string | null;
   members: Member[];
   expenses: Expense[];
   settlements: Settlement[];
@@ -204,6 +205,16 @@ export default function GroupDetailPage() {
   // Invite friends modal & link sharing
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showWelcomeJoined, setShowWelcomeJoined] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('joined') === 'true') {
+        setShowWelcomeJoined(true);
+      }
+    }
+  }, []);
 
   const inviteLink = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -1067,7 +1078,13 @@ export default function GroupDetailPage() {
     }
   };
 
+  const sessionMemberId = typeof window !== 'undefined' && group?.id
+    ? sessionStorage.getItem(`lena_dena_member_id_${group.id}`)
+    : null;
+
   const ownerMember =
+    (group?.currentUserMemberId ? (group?.members || []).find((m) => m.id === group.currentUserMemberId) : null) ||
+    (sessionMemberId ? (group?.members || []).find((m) => m.id === sessionMemberId) : null) ||
     (claimedMemberId ? (group?.members || []).find((m) => m.id === claimedMemberId) : null) ||
     (group?.members || []).find((m) => m.isOwner) ||
     (group?.members || [])[0] ||
@@ -1473,6 +1490,24 @@ export default function GroupDetailPage() {
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-900 select-none pb-36 relative">
       <StraightLineLoader isLoading={loading || addingMember || isDeletingGroup || isLeavingGroup} />
+
+      {/* Welcome banner on joining via invite link */}
+      {showWelcomeJoined && (
+        <div className="bg-emerald-800 border-b border-emerald-600 text-white px-4 py-2.5 flex items-center justify-between text-xs font-semibold animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-300 shrink-0" />
+            <span>You joined this group! You can now view balances and split bills.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowWelcomeJoined(false)}
+            className="text-white/80 hover:text-white p-0.5 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Group Header Banner with Emerald Gradient Pattern */}
       <div className="relative bg-gradient-to-b from-teal-700 via-emerald-700 to-emerald-800 text-white px-4 pt-4 pb-5 overflow-hidden">
         {/* Decorative geometric overlay */}
@@ -2022,6 +2057,11 @@ export default function GroupDetailPage() {
                         <span className="font-bold text-slate-900 text-base truncate group-hover:text-emerald-700 transition-colors">
                           {b.name}
                         </span>
+                        {b.memberId === ownerMember?.id && (
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-full">
+                            You
+                          </span>
+                        )}
                         {b.isOwner ? (
                           <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
                             Creator & Admin
@@ -2363,6 +2403,7 @@ export default function GroupDetailPage() {
         groupId={group.id}
         groupName={group?.name || 'Group'}
         members={group?.members || []}
+        defaultPayerId={ownerMember?.id}
         onExpenseAdded={handleExpenseAdded}
         initialExpense={editingExpense}
       />

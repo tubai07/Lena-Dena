@@ -29,6 +29,13 @@ export default function JoinGroupDetailPage() {
     const clean = (code || '').trim().toUpperCase();
     if (!clean) return;
 
+    // Failsafe: record pending join code in localStorage so auth flows never lose track
+    try {
+      localStorage.setItem('lena_dena_pending_join_code', clean);
+    } catch {
+      // ignore
+    }
+
     let isMounted = true;
 
     async function processJoin() {
@@ -56,6 +63,17 @@ export default function JoinGroupDetailPage() {
         }
 
         if (data?.groupId) {
+          // Clear pending code on successful join
+          try {
+            localStorage.removeItem('lena_dena_pending_join_code');
+            if (data.member?.id) {
+              localStorage.setItem(`lena_dena_member_${clean}`, JSON.stringify(data.member));
+              sessionStorage.setItem(`lena_dena_member_id_${data.groupId}`, data.member.id);
+            }
+          } catch {
+            // ignore
+          }
+
           // Invalidate cached group so the new membership reflects immediately
           try {
             sessionStorage.removeItem(`group_${data.groupId}`);

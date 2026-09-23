@@ -144,30 +144,34 @@ export async function POST(
       );
     }
 
-    // Check if the authenticated user is already in this group
+    // Check if the authenticated user is already in this group (phone or name match)
     const cleanSessionPhone = (session.phone || '').replace(/\D/g, '');
     const cleanSessionName = (session.userName || '').trim().toLowerCase();
 
     const existingMember = group.members.find((m) => {
       const memberCleanPhone = (m.phone || '').replace(/\D/g, '');
-      if (cleanSessionPhone && memberCleanPhone && cleanSessionPhone === memberCleanPhone) {
-        return true;
+      if (cleanSessionPhone && cleanSessionPhone.length >= 10 && memberCleanPhone && memberCleanPhone.length >= 10) {
+        if (cleanSessionPhone.slice(-10) === memberCleanPhone.slice(-10)) {
+          return true;
+        }
       }
-      if (m.name.trim().toLowerCase() === cleanSessionName) {
+      if (cleanSessionName && cleanSessionName.length >= 2 && m.name.trim().toLowerCase() === cleanSessionName) {
         return true;
       }
       return false;
     });
 
     if (existingMember) {
-      // Ensure member is APPROVED if they joined via link
-      if (existingMember.status !== 'APPROVED') {
-        await db.groupMember.update({
-          where: { id: existingMember.id },
-          data: { status: 'APPROVED', isActive: true },
-        });
-        invalidateAllGroupServerCaches(group.id, group.businessId);
-      }
+      // Ensure member is APPROVED and active, and update phone if missing
+      await db.groupMember.update({
+        where: { id: existingMember.id },
+        data: {
+          status: 'APPROVED',
+          isActive: true,
+          phone: existingMember.phone || session.phone || null,
+        },
+      });
+      invalidateAllGroupServerCaches(group.id, group.businessId);
 
       return NextResponse.json({
         success: true,

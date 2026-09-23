@@ -13,7 +13,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Pre-fill remembered phone/email and pre-warm dashboard
+  const [registerHref, setRegisterHref] = useState('/register');
+
+  // Pre-fill remembered phone/email, pre-warm dashboard, and resolve register link
   useEffect(() => {
     try {
       router.prefetch('/');
@@ -21,6 +23,14 @@ export default function LoginPage() {
       if (savedIdentifier) {
         setIdentifier(savedIdentifier);
         setRememberMe(true);
+      }
+
+      const search = window.location.search;
+      const pending = localStorage.getItem('lena_dena_pending_join_code');
+      if (search.includes('redirect=')) {
+        setRegisterHref(`/register${search}`);
+      } else if (pending) {
+        setRegisterHref(`/register?redirect=${encodeURIComponent(`/join/${pending}`)}`);
       }
     } catch {
       // Ignore localStorage restrictions
@@ -52,9 +62,20 @@ export default function LoginPage() {
         // Ignore localStorage restrictions
       }
 
-      // Fast immediate navigation honoring ?redirect= parameter if present
+      // Fast immediate navigation honoring ?redirect= parameter or pending join code
+      let pendingJoinCode: string | null = null;
+      try {
+        pendingJoinCode = localStorage.getItem('lena_dena_pending_join_code');
+      } catch {}
+
       const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-      const targetUrl = searchParams?.get('redirect') || data.redirect || '/';
+      let targetUrl = searchParams?.get('redirect') || data.redirect;
+      if (!targetUrl && pendingJoinCode) {
+        targetUrl = `/join/${pendingJoinCode}`;
+      }
+      if (!targetUrl) {
+        targetUrl = '/';
+      }
 
       router.replace(targetUrl);
       router.refresh();
@@ -162,7 +183,7 @@ export default function LoginPage() {
           <div className="text-center pt-2">
             <span className="text-sm sm:text-base text-slate-600">Need a new account? </span>
             <Link
-              href={typeof window !== 'undefined' && window.location.search.includes('redirect=') ? `/register${window.location.search}` : '/register'}
+              href={registerHref}
               className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
             >
               Register

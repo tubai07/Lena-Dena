@@ -14,10 +14,19 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Pre-warm dashboard route immediately on mount so navigation after register is instantaneous
+  const [loginHref, setLoginHref] = useState('/login');
+
+  // Pre-warm dashboard route and resolve login link with pending code
   useEffect(() => {
     try {
       router.prefetch('/');
+      const search = window.location.search;
+      const pending = localStorage.getItem('lena_dena_pending_join_code');
+      if (search.includes('redirect=')) {
+        setLoginHref(`/login${search}`);
+      } else if (pending) {
+        setLoginHref(`/login?redirect=${encodeURIComponent(`/join/${pending}`)}`);
+      }
     } catch {
       // Ignore
     }
@@ -41,9 +50,20 @@ export default function RegisterPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-      // Fast immediate browser navigation honoring ?redirect= parameter if present
+      // Fast immediate browser navigation honoring ?redirect= parameter or pending join code
+      let pendingJoinCode: string | null = null;
+      try {
+        pendingJoinCode = localStorage.getItem('lena_dena_pending_join_code');
+      } catch {}
+
       const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-      const targetUrl = searchParams?.get('redirect') || data.redirect || '/';
+      let targetUrl = searchParams?.get('redirect') || data.redirect;
+      if (!targetUrl && pendingJoinCode) {
+        targetUrl = `/join/${pendingJoinCode}`;
+      }
+      if (!targetUrl) {
+        targetUrl = '/';
+      }
       window.location.href = targetUrl;
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -159,11 +179,7 @@ export default function RegisterPage() {
           <div className="text-center pt-2">
             <span className="text-sm sm:text-base text-slate-600">Already have an account? </span>
             <Link
-              href={
-                typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('redirect')
-                  ? `/login?redirect=${encodeURIComponent(new URLSearchParams(window.location.search).get('redirect')!)}`
-                  : '/login'
-              }
+              href={loginHref}
               className="text-sm sm:text-base font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
             >
               Sign In

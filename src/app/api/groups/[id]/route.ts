@@ -14,6 +14,28 @@ import {
   invalidateAllGroupServerCaches,
 } from '@/lib/serverGroupCache';
 
+function resolveCurrentUserMemberId(members: any[], groupBusinessId: string, session: any): string | null {
+  if (!session || !Array.isArray(members)) return null;
+  const cleanSessionPhone = (session.phone || '').replace(/\D/g, '');
+  const cleanSessionName = (session.userName || '').trim().toLowerCase();
+
+  const found = members.find((m: any) => {
+    if (session.businessId && groupBusinessId === session.businessId && m.isOwner) {
+      return true;
+    }
+    const memberCleanPhone = (m.phone || '').replace(/\D/g, '');
+    if (cleanSessionPhone && cleanSessionPhone.length >= 10 && memberCleanPhone && memberCleanPhone.length >= 10) {
+      if (cleanSessionPhone.slice(-10) === memberCleanPhone.slice(-10)) return true;
+    }
+    if (cleanSessionName && cleanSessionName.length >= 2 && m.name.trim().toLowerCase() === cleanSessionName) {
+      return true;
+    }
+    return false;
+  });
+
+  return found?.id || null;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,8 +47,16 @@ export async function GET(
       return NextResponse.json({ error: 'Group ID is required' }, { status: 400 });
     }
     const cached = getCachedServerDetail(cleanId);
-    if (cached) {
-      return NextResponse.json(cached, {
+    if (cached && cached.group) {
+      const session = await getSession();
+      const currentUserMemberId = resolveCurrentUserMemberId(cached.group.members, cached.group.businessId, session);
+      return NextResponse.json({
+        ...cached,
+        group: {
+          ...cached.group,
+          currentUserMemberId,
+        },
+      }, {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       });
     }
@@ -161,7 +191,15 @@ export async function GET(
       setCachedServerDetail(group.joinCode.toUpperCase(), payload);
     }
 
-    return NextResponse.json(payload, {
+    const session = await getSession();
+    const currentUserMemberId = resolveCurrentUserMemberId(group.members, group.businessId, session);
+
+    return NextResponse.json({
+      group: {
+        ...payload.group,
+        currentUserMemberId,
+      },
+    }, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     });
   } catch (err: any) {
