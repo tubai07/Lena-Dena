@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { getCachedItem, setCachedItem } from '@/lib/groupCache';
 
 export default function JoinGroupDetailPage() {
   const router = useRouter();
@@ -24,10 +25,21 @@ export default function JoinGroupDetailPage() {
     const clean = (code || '').trim();
     if (!clean) return;
 
+    // Fast check if already cached
+    const cached = getCachedItem<any>(`group_${clean}`);
+    if (cached?.id) {
+      setCachedItem(`group_${cached.id}`, cached);
+      router.replace(`/groups/${cached.id}`);
+      return;
+    }
+
     fetch(`/api/groups/${clean}`)
       .then((res) => res.json())
       .then((data) => {
         if (data?.group?.id) {
+          // Pre-warm client cache so /groups/[id] opens in 0ms!
+          setCachedItem(`group_${data.group.id}`, data.group);
+          setCachedItem(`group_${clean}`, data.group);
           router.replace(`/groups/${data.group.id}`);
         } else {
           router.replace('/groups');

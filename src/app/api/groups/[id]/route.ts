@@ -31,62 +31,121 @@ export async function GET(
       });
     }
 
-    const session = await getSession();
-
-    const isDirectId = cleanId.length > 10;
-    const group = await db.group.findFirst({
-      where: isDirectId
-        ? { id: cleanId }
-        : {
-            OR: [
-              { id: cleanId },
-              { joinCode: cleanId.toUpperCase() },
-            ],
+    // Direct indexed query lookup
+    const groupInclude = {
+      members: {
+        orderBy: [{ isOwner: 'desc' as const }, { createdAt: 'asc' as const }],
+      },
+      expenses: {
+        orderBy: [{ date: 'desc' as const }, { createdAt: 'desc' as const }],
+        include: {
+          payers: {
+            select: { id: true, expenseId: true, memberId: true, amountPaisa: true },
           },
-      include: {
-        members: {
-          orderBy: [{ isOwner: 'desc' }, { createdAt: 'asc' }],
-        },
-        expenses: {
-          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-          include: {
-            payers: {
-              include: { member: { select: { id: true, name: true } } },
-            },
-            splits: {
-              include: { member: { select: { id: true, name: true } } },
-            },
-          },
-        },
-        settlements: {
-          orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-          include: {
-            payer: { select: { id: true, name: true } },
-            receiver: { select: { id: true, name: true, upiId: true, phone: true } },
+          splits: {
+            select: { id: true, expenseId: true, memberId: true, amountPaisa: true, shareValue: true },
           },
         },
       },
-    });
+      settlements: {
+        orderBy: [{ date: 'desc' as const }, { createdAt: 'desc' as const }],
+        select: {
+          id: true,
+          groupId: true,
+          payerId: true,
+          receiverId: true,
+          amountPaisa: true,
+          paymentMethod: true,
+          notes: true,
+          date: true,
+          createdAt: true,
+        },
+      },
+    };
+
+    let group = null;
+    if (cleanId.length === 5) {
+      group = await db.group.findUnique({
+        where: { joinCode: cleanId.toUpperCase() },
+        include: groupInclude,
+      });
+    }
+
+    if (!group) {
+      group = await db.group.findUnique({
+        where: { id: cleanId },
+        include: groupInclude,
+      }).catch(() => null);
+    }
+
+    if (!group) {
+      group = await db.group.findFirst({
+        where: {
+          OR: [
+            { id: cleanId },
+            { joinCode: cleanId.toUpperCase() },
+          ],
+        },
+        include: groupInclude,
+      });
+    }
 
     if (!group) {
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     }
 
+    // Fast in-memory member lookup to avoid 6+ redundant SQL sub-queries
+    const memberMap = new Map<string, any>();
+    for (const m of group.members) {
+      memberMap.set(m.id, {
+        id: m.id,
+        name: m.name,
+        upiId: m.upiId,
+        phone: m.phone,
+        isOwner: m.isOwner,
+        isAdmin: m.isAdmin,
+      });
+    }
+
+    const mappedExpenses = group.expenses.map((e) => ({
+      ...e,
+      payers: e.payers.map((p) => ({
+        ...p,
+        member: memberMap.get(p.memberId) || { id: p.memberId, name: 'Unknown' },
+      })),
+      splits: e.splits.map((s) => ({
+        ...s,
+        member: memberMap.get(s.memberId) || { id: s.memberId, name: 'Unknown' },
+      })),
+    }));
+
+    const mappedSettlements = group.settlements.map((s) => {
+      const payer = memberMap.get(s.payerId) || { id: s.payerId, name: 'Unknown' };
+      const receiver = memberMap.get(s.receiverId) || { id: s.receiverId, name: 'Unknown' };
+      return {
+        ...s,
+        payer: { id: payer.id, name: payer.name },
+        receiver: { id: receiver.id, name: receiver.name, upiId: receiver.upiId, phone: receiver.phone },
+      };
+    });
+
     const activeMembers = group.members.filter((m) => m.isActive !== false);
 
-    const balances = calculateMemberNetBalances(activeMembers, group.expenses, group.settlements);
+    const balances = calculateMemberNetBalances(activeMembers, mappedExpenses, mappedSettlements);
     const simplifiedTransfers = simplifyDebts(balances);
     const directTransfers = calculateDirectPairwiseDebts(
       activeMembers,
-      group.expenses,
-      group.settlements
+      mappedExpenses,
+      mappedSettlements
     );
 
-    const totalSpendPaisa = group.expenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
+    const totalSpendPaisa = mappedExpenses.reduce((acc, e) => acc + e.totalAmountPaisa, 0);
 
     const payload = {
       group: {
         ...group,
+        expenses: mappedExpenses,
+        settlements: mappedSettlements,
         members: activeMembers,
         allMembers: group.members,
         totalSpendPaisa,

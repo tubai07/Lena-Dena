@@ -8,8 +8,8 @@ interface CacheEntry<T> {
 const summaryCache = new Map<string, CacheEntry<any>>();
 const detailCache = new Map<string, CacheEntry<any>>();
 
-const SUMMARY_TTL_MS = 4000; // 4 seconds (fresh multi-device sync)
-const DETAIL_TTL_MS = 4000;  // 4 seconds (fresh multi-device sync)
+const SUMMARY_TTL_MS = 30000; // 30 seconds
+const DETAIL_TTL_MS = 60000;  // 60 seconds (instant load with proactive invalidation on write)
 
 export function getCachedServerSummary(businessId: string) {
   const entry = summaryCache.get(businessId);
