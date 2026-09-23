@@ -82,11 +82,12 @@ export default function LoginPage() {
 
       router.replace(targetUrl);
       router.refresh();
+      // Safe fallback only if client navigation is completely stalled after 2.5s
       setTimeout(() => {
         if (window.location.pathname.startsWith('/login')) {
           window.location.replace(targetUrl);
         }
-      }, 250);
+      }, 2500);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
       setLoading(false);

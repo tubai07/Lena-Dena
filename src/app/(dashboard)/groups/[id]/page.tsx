@@ -316,6 +316,22 @@ export default function GroupDetailPage() {
           }
         });
       }
+
+      // Also broadcast on joinCode channel if known and different from channelId
+      if (group?.joinCode && group.joinCode.toUpperCase() !== channelId.toUpperCase()) {
+        const alt = supabase.channel(`group-rt-${group.joinCode.toUpperCase()}`, {
+          config: { broadcast: { self: false } },
+        });
+        alt.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            alt.send({
+              type: 'broadcast',
+              event: 'GROUP_UPDATED',
+              payload,
+            });
+          }
+        });
+      }
     } catch {
       // Non-blocking
     }
@@ -392,20 +408,13 @@ export default function GroupDetailPage() {
 
           // 2. Recent confirmed expenses retention (guards against stale in-flight GET responses)
           recentSavedExpensesRef.current.forEach((val, key) => {
-            if (now - val.timestamp > 20000 || deletedExpenseIdsRef.current.has(key)) {
+            if (serverExpenseIds.has(key)) {
+              // Server has caught up and contains this item!
               recentSavedExpensesRef.current.delete(key);
-            } else if (serverExpenseIds.has(key)) {
-              const serverItem = (data.group.expenses || []).find((e: any) => e.id === key);
-              const serverTime = serverItem?.updatedAt
-                ? new Date(serverItem.updatedAt).getTime()
-                : (serverItem?.createdAt ? new Date(serverItem.createdAt).getTime() : 0);
-              if (serverTime >= val.timestamp || now - val.timestamp > 5000) {
-                recentSavedExpensesRef.current.delete(key);
-              } else {
-                pendingExpenseMap.set(key, val.expense);
-              }
+            } else if (now - val.timestamp > 60000 || deletedExpenseIdsRef.current.has(key)) {
+              recentSavedExpensesRef.current.delete(key);
             } else {
-              // Server response is stale and does not yet contain this recently saved expense
+              // Server response does not yet contain this recently saved expense -> RETAIN IT!
               pendingExpenseMap.set(key, val.expense);
             }
           });
@@ -428,18 +437,11 @@ export default function GroupDetailPage() {
 
           // 4. Recent confirmed settlements retention
           recentSavedSettlementsRef.current.forEach((val, key) => {
-            if (now - val.timestamp > 20000 || deletedSettlementIdsRef.current.has(key)) {
+            if (serverSettlementIds.has(key)) {
+              // Server has caught up and contains this settlement!
               recentSavedSettlementsRef.current.delete(key);
-            } else if (serverSettlementIds.has(key)) {
-              const serverItem = (data.group.settlements || []).find((s: any) => s.id === key);
-              const serverTime = serverItem?.updatedAt
-                ? new Date(serverItem.updatedAt).getTime()
-                : (serverItem?.createdAt ? new Date(serverItem.createdAt).getTime() : 0);
-              if (serverTime >= val.timestamp || now - val.timestamp > 5000) {
-                recentSavedSettlementsRef.current.delete(key);
-              } else {
-                pendingSettlementMap.set(key, val.settlement);
-              }
+            } else if (now - val.timestamp > 60000 || deletedSettlementIdsRef.current.has(key)) {
+              recentSavedSettlementsRef.current.delete(key);
             } else {
               pendingSettlementMap.set(key, val.settlement);
             }
@@ -531,6 +533,8 @@ export default function GroupDetailPage() {
     if (!channelGroupId) return;
 
     let channel: any = null;
+    let altChannel: any = null;
+
     try {
       channel = supabase
         .channel(`group-rt-${channelGroupId}`, {
@@ -544,6 +548,17 @@ export default function GroupDetailPage() {
             activeChannelRef.current = channel;
           }
         });
+
+      if (group?.joinCode && group.joinCode.toUpperCase() !== channelGroupId.toUpperCase()) {
+        altChannel = supabase
+          .channel(`group-rt-${group.joinCode.toUpperCase()}`, {
+          config: { broadcast: { self: false } },
+          })
+          .on('broadcast', { event: 'GROUP_UPDATED' }, () => {
+            fetchGroup(true);
+          })
+          .subscribe();
+      }
     } catch (e) {
       console.warn('Realtime channel error:', e);
     }
@@ -559,8 +574,15 @@ export default function GroupDetailPage() {
           // ignore
         }
       }
+      if (altChannel) {
+        try {
+          supabase.removeChannel(altChannel);
+        } catch {
+          // ignore
+        }
+      }
     };
-  }, [channelGroupId]);
+  }, [channelGroupId, group?.joinCode]);
 
   useEffect(() => {
     setIsMounted(true);

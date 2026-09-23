@@ -51,25 +51,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const cached = getCachedServerDetail(cleanId);
-    if (cached && cached.group) {
-      const isOwner = cached.group.businessId === session.businessId;
-      const currentUserMemberId = resolveCurrentUserMemberId(cached.group.members, cached.group.businessId, session);
-      if (!isOwner && !currentUserMemberId) {
-        return NextResponse.json({ error: 'You do not have access to this group' }, { status: 403 });
-      }
-      return NextResponse.json({
-        ...cached,
-        group: {
-          ...cached.group,
-          currentUserMemberId,
-        },
-      }, {
-        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-      });
-    }
-
-    // Direct indexed query lookup
+    // Direct indexed query lookup on PostgreSQL (authoritative, consistent across serverless instances)
     const groupInclude = {
       members: {
         orderBy: [{ isOwner: 'desc' as const }, { createdAt: 'asc' as const }],
@@ -174,11 +156,6 @@ export async function GET(
         activeTransfers: group.simplifyDebts ? simplifiedTransfers : directTransfers,
       },
     };
-
-    setCachedServerDetail(group.id, payload);
-    if (group.joinCode) {
-      setCachedServerDetail(group.joinCode.toUpperCase(), payload);
-    }
 
     const isOwner = group.businessId === session.businessId;
     const currentUserMemberId = resolveCurrentUserMemberId(group.members, group.businessId, session);

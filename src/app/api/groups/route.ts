@@ -21,18 +21,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const url = new URL(req.url);
-    const forceFresh = url.searchParams.get('fresh') === '1' || url.searchParams.get('fresh') === 'true';
-
-    if (!forceFresh) {
-      const cached = getCachedServerSummary(session.businessId);
-      if (cached) {
-        return NextResponse.json(cached, {
-          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
-        });
-      }
-    }
-
     const cleanPhone = session.phone ? session.phone.replace(/\D/g, '') : '';
     const cleanName = session.userName?.trim() || '';
 
@@ -152,7 +140,6 @@ export async function GET(req: Request) {
     });
 
     const responsePayload = { groups: formatted };
-    setCachedServerSummary(session.businessId, responsePayload);
 
     return NextResponse.json(responsePayload, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },

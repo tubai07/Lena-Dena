@@ -39,11 +39,6 @@ export default async function DashboardLayout({
       db.customer.findMany({
         where: { businessId: session.businessId },
         orderBy: { currentBalancePaisa: 'desc' },
-        include: {
-          transactions: {
-            orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-          },
-        },
       }),
       db.transaction.findMany({
         where: { businessId: session.businessId },
@@ -53,7 +48,7 @@ export default async function DashboardLayout({
             select: { id: true, name: true, phone: true, currentBalancePaisa: true },
           },
         },
-        take: 100,
+        take: 50,
       }),
     ]);
     business = results[0];
