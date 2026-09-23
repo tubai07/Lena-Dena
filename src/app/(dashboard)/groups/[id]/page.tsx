@@ -415,6 +415,8 @@ export default function GroupDetailPage() {
   const handleToggleSimplify = async (enabled: boolean) => {
     setIsTogglingSimplify(true);
     inFlightSimplifyRef.current = enabled;
+    const previousSetting = group?.simplifyDebts ?? true;
+
     setGroup((prev) => {
       if (!prev) return null;
       const updated = {
@@ -429,14 +431,39 @@ export default function GroupDetailPage() {
       const res = await fetch(`/api/groups/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ simplifyDebts: enabled }),
+        body: JSON.stringify({
+          simplifyDebts: enabled,
+          memberId: claimedMemberId || ownerMember?.id,
+        }),
       });
       if (res.ok) {
         // Confirm server persisted the new setting
         inFlightSimplifyRef.current = null;
+      } else {
+        // Server rejected, revert to previous setting
+        inFlightSimplifyRef.current = null;
+        setGroup((prev) => {
+          if (!prev) return null;
+          const reverted = {
+            ...prev,
+            simplifyDebts: previousSetting,
+          };
+          setCachedItem(`group_${id}`, reverted);
+          return reverted;
+        });
       }
     } catch (e) {
       console.error('Error updating simplifyDebts:', e);
+      inFlightSimplifyRef.current = null;
+      setGroup((prev) => {
+        if (!prev) return null;
+        const reverted = {
+          ...prev,
+          simplifyDebts: previousSetting,
+        };
+        setCachedItem(`group_${id}`, reverted);
+        return reverted;
+      });
     } finally {
       setTimeout(() => {
         setIsTogglingSimplify(false);

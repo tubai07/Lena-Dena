@@ -197,15 +197,17 @@ export async function PUT(
     const body = await req.json();
     const { name, category, simplifyDebts, memberId } = body;
 
+    const isUpdatingMetadata = typeof name === 'string' || typeof category === 'string';
     const isBusinessOwner = Boolean(session?.businessId && existing.businessId === session.businessId);
     const requestingMember = memberId
       ? existing.members.find((m) => m.id === memberId && m.isActive !== false)
       : null;
     const isMemberAdmin = Boolean(requestingMember?.isAdmin || requestingMember?.isOwner);
 
-    if (!isBusinessOwner && !isMemberAdmin) {
+    // Only group admins or business owner can rename or change group category
+    if (isUpdatingMetadata && !isBusinessOwner && !isMemberAdmin) {
       return NextResponse.json(
-        { error: 'Only group admins can update the group' },
+        { error: 'Only group admins can update the group details' },
         { status: 403 }
       );
     }
