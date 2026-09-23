@@ -90,7 +90,7 @@ export default function LoginPage() {
                 Mobile Number or Email
               </label>
               <div className="relative">
-                <User className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <User className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   required
@@ -107,7 +107,7 @@ export default function LoginPage() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="password"
                   required

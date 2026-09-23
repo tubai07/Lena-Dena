@@ -141,7 +141,7 @@ export default function ForgotPasswordPage() {
                   Registered Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="email"
                     required
@@ -194,7 +194,7 @@ export default function ForgotPasswordPage() {
                   </button>
                 </div>
                 <div className="relative">
-                  <KeyRound className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <KeyRound className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     required
@@ -212,7 +212,7 @@ export default function ForgotPasswordPage() {
                   New Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="password"
                     required
@@ -230,7 +230,7 @@ export default function ForgotPasswordPage() {
                   Confirm New Password
                 </label>
                 <div className="relative">
-                  <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="password"
                     required

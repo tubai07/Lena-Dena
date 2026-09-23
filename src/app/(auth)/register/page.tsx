@@ -79,7 +79,7 @@ export default function RegisterPage() {
                 Your Full Name *
               </label>
               <div className="relative">
-                <User className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <User className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   required
@@ -95,8 +95,8 @@ export default function RegisterPage() {
               <label className="block text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-2">
                 Mobile Number *
               </label>
-              <div className="relative flex items-center">
-                <span className="absolute left-4 text-sm sm:text-base font-bold text-slate-400">+91</span>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-sm sm:text-base font-bold text-slate-400">+91</span>
                 <input
                   type="tel"
                   required
@@ -113,7 +113,7 @@ export default function RegisterPage() {
                 Email Address *
               </label>
               <div className="relative">
-                <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <Mail className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="email"
                   required
@@ -130,7 +130,7 @@ export default function RegisterPage() {
                 Password *
               </label>
               <div className="relative">
-                <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="password"
                   required
