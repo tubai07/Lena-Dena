@@ -532,6 +532,63 @@ export default function PersonalSettingsPage() {
                     <span>Verify & Save</span>
                   </button>
                 </div>
+
+                <div className="pt-2 border-t border-slate-100 text-center">
+                  <p className="text-[11px] text-slate-500 mb-1.5">
+                    Received a confirmation link in your email instead of an OTP?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setEmailLoading(true);
+                        setEmailError('');
+                        const res = await fetch('/api/settings/email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'check-confirmed',
+                            newEmail: newEmail.trim(),
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                          throw new Error(
+                            data.error ||
+                              'Email confirmation not detected yet. Please click the link in your email first.'
+                          );
+                        }
+                        setEmail(data.email || newEmail.trim());
+                        if (business && setBusiness) {
+                          setBusiness({
+                            ...business,
+                            owner: { ...business.owner, email: data.email || newEmail.trim() },
+                          });
+                        }
+                        setEmailSuccess('Email confirmed and updated successfully!');
+                        setTimeout(() => {
+                          setShowEmailModal(false);
+                          setEmailStep('input');
+                          setNewEmail('');
+                          setEmailOtp('');
+                          setEmailSuccess('');
+                        }, 1500);
+                      } catch (err: any) {
+                        setEmailError(
+                          err.message ||
+                            'Confirmation not detected yet. Please click the link in your email first.'
+                        );
+                      } finally {
+                        setEmailLoading(false);
+                      }
+                    }}
+                    disabled={emailLoading}
+                    className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {emailLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>I Clicked the Link in Email — Confirm Now</span>
+                  </button>
+                </div>
               </form>
             )}
           </div>

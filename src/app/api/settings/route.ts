@@ -15,6 +15,14 @@ export async function GET() {
       include: { owner: true, settings: true },
     });
 
+    // If owner has an email in DB but session cookie didn't have it, refresh session
+    if (business?.owner?.email && session.email !== business.owner.email) {
+      await setSession({
+        ...session,
+        email: business.owner.email,
+      });
+    }
+
     return NextResponse.json({ business });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Failed to fetch settings' }, { status: 500 });

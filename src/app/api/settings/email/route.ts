@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getSession, setSession } from '@/lib/auth';
 import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit';
-import { sendEmailOtp, verifyEmailOtp } from '@/lib/supabase';
+import { sendEmailOtp, verifyEmailOtp, getSupabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
@@ -12,7 +12,55 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, newEmail, otp } = body;
+    const { action, newEmail, otp, accessToken } = body;
+
+    // 0. Confirm via access token from URL hash (when clicking confirmation link in email)
+    if (action === 'confirm-token') {
+      if (!accessToken || typeof accessToken !== 'string') {
+        return NextResponse.json({ error: 'Access token is required' }, { status: 400 });
+      }
+
+      const client = getSupabaseAdmin();
+      const { data: userData, error: userError } = await client.auth.getUser(accessToken);
+      if (userError || !userData?.user?.email) {
+        return NextResponse.json({ error: 'Invalid or expired confirmation link' }, { status: 400 });
+      }
+
+      const verifiedEmail = userData.user.email.toLowerCase();
+
+      // Check uniqueness
+      const existing = await db.user.findFirst({
+        where: {
+          email: verifiedEmail,
+          id: { not: session.userId },
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        return NextResponse.json(
+          { error: 'This email address is already in use by another account' },
+          { status: 400 }
+        );
+      }
+
+      const updatedUser = await db.user.update({
+        where: { id: session.userId },
+        data: { email: verifiedEmail },
+        select: { id: true, email: true },
+      });
+
+      await setSession({
+        ...session,
+        email: verifiedEmail,
+      });
+
+      return NextResponse.json({
+        success: true,
+        email: updatedUser.email,
+        message: 'Email confirmed and updated successfully!',
+      });
+    }
 
     if (!newEmail || typeof newEmail !== 'string') {
       return NextResponse.json({ error: 'Valid email address is required' }, { status: 400 });
@@ -24,7 +72,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 });
     }
 
-    // 1. Send OTP to new email
+    // 1. Send OTP / Confirmation link to new email
     if (action === 'send-otp') {
       const rateLimitKey = `email-change-send:${session.userId}`;
       const rateLimit = checkRateLimit(rateLimitKey, 3, 10 * 60 * 1000);
@@ -53,7 +101,7 @@ export async function POST(req: Request) {
         );
       }
 
-      // Send 6-digit OTP using Supabase Auth Email OTP
+      // Send 6-digit OTP / Confirmation link using Supabase Auth
       const otpRes = await sendEmailOtp(cleanEmail);
       if (!otpRes.success) {
         return NextResponse.json(
@@ -64,7 +112,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `6-digit verification code sent to ${cleanEmail}`,
+        message: `Verification code or link sent to ${cleanEmail}`,
       });
     }
 
@@ -113,6 +161,65 @@ export async function POST(req: Request) {
         success: true,
         email: updatedUser.email,
         message: 'Email address updated successfully!',
+      });
+    }
+
+    // 3. Check if user already clicked the confirmation link in their email
+    if (action === 'check-confirmed') {
+      const client = getSupabaseAdmin();
+      const { data: usersData, error: listError } = await client.auth.admin.listUsers();
+      if (listError) {
+        return NextResponse.json({ error: 'Failed to verify confirmation status' }, { status: 500 });
+      }
+
+      const authUser = usersData?.users?.find(
+        (u: any) => u.email?.toLowerCase() === cleanEmail
+      );
+
+      if (!authUser || !authUser.email_confirmed_at) {
+        return NextResponse.json(
+          {
+            confirmed: false,
+            error: 'Email has not been confirmed yet. Please click the confirmation link in your email or enter the 6-digit OTP.',
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check if new email is already taken by someone else
+      const existing = await db.user.findFirst({
+        where: {
+          email: cleanEmail,
+          id: { not: session.userId },
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        return NextResponse.json(
+          { error: 'This email address is already in use by another account' },
+          { status: 400 }
+        );
+      }
+
+      // Update user in database
+      const updatedUser = await db.user.update({
+        where: { id: session.userId },
+        data: { email: cleanEmail },
+        select: { id: true, email: true },
+      });
+
+      // Update active session with the new email
+      await setSession({
+        ...session,
+        email: cleanEmail,
+      });
+
+      return NextResponse.json({
+        success: true,
+        confirmed: true,
+        email: updatedUser.email,
+        message: 'Email address confirmed and updated successfully!',
       });
     }
 

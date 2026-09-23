@@ -26,6 +26,41 @@ export function ClientLayoutShell({
     return () => clearTimeout(timer);
   }, []);
 
+  // Listen for Supabase confirmation link returns (#access_token=... or ?token_hash=...)
+  useEffect(() => {
+    try {
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      let accessToken = '';
+
+      if (hash && hash.includes('access_token=')) {
+        const params = new URLSearchParams(hash.replace(/^#/, ''));
+        accessToken = params.get('access_token') || '';
+      }
+
+      if (accessToken) {
+        fetch('/api/settings/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'confirm-token',
+            accessToken,
+            newEmail: 'auto', // Placeholder to satisfy validator
+          }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              window.history.replaceState(null, '', window.location.pathname);
+              window.location.href = '/settings?confirmed=true';
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-100/70 sm:py-6 flex justify-center">
       {/* Centered Mobile Canvas Frame */}

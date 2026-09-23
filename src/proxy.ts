@@ -65,7 +65,8 @@ export function proxy(request: NextRequest) {
 
   const isPublicPage =
     pathname.startsWith('/join') ||
-    pathname.startsWith('/groups');
+    pathname.startsWith('/groups') ||
+    pathname.startsWith('/auth/callback');
 
   const isPublicApi =
     pathname.startsWith('/api/auth') ||
