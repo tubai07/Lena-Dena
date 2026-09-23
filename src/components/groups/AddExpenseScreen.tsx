@@ -402,9 +402,15 @@ export function AddExpenseScreen({
       finalSplitType = 'EXACT';
     }
 
-    // Parse date (ensures no timezone offset)
-    const [y, m, d] = expenseDate.split('-').map(Number);
-    const selectedDateObj = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date();
+    // Parse date (ensures today is current time, not noon in the future)
+    const todayStr = getLocalDateString();
+    let selectedDateObj = new Date();
+    if (expenseDate && expenseDate !== todayStr) {
+      const [y, m, d] = expenseDate.split('-').map(Number);
+      if (y && m && d) {
+        selectedDateObj = new Date(y, m - 1, d, 12, 0, 0);
+      }
+    }
 
     // ⚡ Optimistic expense
     const tempId = isEditing
@@ -474,12 +480,16 @@ export function AddExpenseScreen({
         if (!isEditing) {
           onExpenseAdded(null, tempId);
         }
+        if (data.error) {
+          alert(`Failed to save expense: ${data.error}`);
+        }
       }
     } catch (err: any) {
       console.error('Error saving expense:', err);
       if (!isEditing) {
         onExpenseAdded(null, tempId);
       }
+      alert(`Network error saving expense: ${err.message || 'Please try again'}`);
     } finally {
       setLoading(false);
     }

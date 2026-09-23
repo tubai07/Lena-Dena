@@ -96,7 +96,7 @@ export async function PUT(
       if (isNaN(expDate.getTime())) {
         return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
       }
-      if (expDate.getTime() > Date.now() + 5 * 60 * 1000) {
+      if (expDate.getTime() > Date.now() + 36 * 60 * 60 * 1000) {
         return NextResponse.json({ error: 'Expense date cannot be in the future' }, { status: 400 });
       }
     }

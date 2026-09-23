@@ -645,7 +645,9 @@ export default function GroupDetailPage() {
       });
     }
     setEditingExpense(null);
-    broadcastGroupChange();
+    if (newExpense && !newExpense.id.startsWith('temp_')) {
+      broadcastGroupChange();
+    }
   };
 
   // Instant optimistic settlement addition
@@ -711,7 +713,9 @@ export default function GroupDetailPage() {
       });
     }
     setEditingSettlement(null);
-    broadcastGroupChange();
+    if (newSettlement && !newSettlement.id.startsWith('temp_')) {
+      broadcastGroupChange();
+    }
   };
 
   // Instant 0ms optimistic expense deletion

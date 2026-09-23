@@ -92,9 +92,9 @@ export async function POST(
       if (!isNaN(d.getTime())) {
         parsedDate = d;
       }
-      const now = new Date();
-      now.setHours(23, 59, 59, 999);
-      if (parsedDate > now) {
+      // Allow up to 36 hours ahead to account for international timezone offsets (e.g. IST +5:30)
+      const maxAllowed = new Date(Date.now() + 36 * 60 * 60 * 1000);
+      if (parsedDate > maxAllowed) {
         return NextResponse.json({ error: 'Expense date cannot be in the future' }, { status: 400 });
       }
     }
