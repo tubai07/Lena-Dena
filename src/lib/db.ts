@@ -3,9 +3,8 @@ import { PrismaClient } from '@prisma/client';
 function getOptimizedDatabaseUrl(): string {
   let url = process.env.DATABASE_URL || process.env.DIRECT_URL;
   if (!url) {
-    throw new Error(
-      'DATABASE_URL or DIRECT_URL environment variable is required. Please set it in your .env file.'
-    );
+    // Graceful placeholder during Next.js build static analysis to prevent build-time crashes
+    return 'postgresql://placeholder:placeholder@localhost:5432/postgres';
   }
   if (url.includes('pgbouncer=true')) {
     if (!url.includes('connection_limit=')) {
@@ -21,8 +20,6 @@ function getOptimizedDatabaseUrl(): string {
   return url;
 }
 
-const dbUrl = getOptimizedDatabaseUrl();
-
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
@@ -32,7 +29,7 @@ export const db =
   new PrismaClient({
     datasources: {
       db: {
-        url: dbUrl,
+        url: getOptimizedDatabaseUrl(),
       },
     },
     log: ['error'],
@@ -41,4 +38,5 @@ export const db =
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = db;
 }
+
 
