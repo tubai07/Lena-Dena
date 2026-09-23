@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { db } from '@/lib/db';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendMagicLink, sendEmailOtp, verifyEmailOtp } from '@/lib/supabase';
@@ -54,14 +54,15 @@ export async function POST(req: Request) {
       const callbackBase = `${origin.replace(/\/$/, '')}/auth/callback`;
       const redirectTo = redirect ? `${callbackBase}?redirect=${encodeURIComponent(redirect)}` : callbackBase;
 
-      // Dispatch 1-click magic link via Supabase Auth
-      const linkRes = await sendMagicLink(cleanEmail, redirectTo);
-      if (!linkRes.success) {
-        return NextResponse.json(
-          { error: linkRes.error || 'Failed to send sign-in link. Please try again.' },
-          { status: 500 }
-        );
-      }
+      // Dispatch 1-click magic link asynchronously via Next.js after()
+      // This sends the email via Supabase while responding to the client in <50ms!
+      after(async () => {
+        try {
+          await sendMagicLink(cleanEmail, redirectTo);
+        } catch (err) {
+          console.error('Background magic link dispatch error:', err);
+        }
+      });
 
       return NextResponse.json({
         success: true,

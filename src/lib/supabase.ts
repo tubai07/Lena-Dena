@@ -56,49 +56,15 @@ export async function sendEmailOtp(email: string): Promise<{ success: boolean; e
     const cleanEmail = email.trim().toLowerCase();
     const client = getSupabaseAdmin();
 
-    // 1. Ensure user exists in Supabase auth and is marked as email-confirmed.
-    // This prevents Supabase from sending a "Confirm your signup" confirmation link email.
-    try {
-      await client.auth.admin.createUser({
-        email: cleanEmail,
-        email_confirm: true,
-      });
-    } catch {
-      // User might already exist in auth.users; ensure email is confirmed
-      try {
-        const { data: usersData } = await client.auth.admin.listUsers();
-        const existingAuthUser = usersData?.users?.find(
-          (u) => u.email?.toLowerCase() === cleanEmail
-        );
-        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
-          await client.auth.admin.updateUserById(existingAuthUser.id, {
-            email_confirm: true,
-          });
-        }
-      } catch {
-        // Ignore lookup errors
-      }
-    }
-
-    // 2. Dispatch OTP via signInWithOtp
-    let { error } = await client.auth.signInWithOtp({
+    const { error } = await client.auth.signInWithOtp({
       email: cleanEmail,
       options: {
-        shouldCreateUser: false,
+        shouldCreateUser: true,
       },
     });
 
     if (error) {
-      // Fallback with shouldCreateUser: true if user was not found
-      const fallback = await client.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          shouldCreateUser: true,
-        },
-      });
-      if (fallback.error) {
-        return { success: false, error: fallback.error.message };
-      }
+      return { success: false, error: error.message };
     }
 
     return { success: true };
@@ -187,48 +153,17 @@ export async function sendMagicLink(
     const cleanEmail = email.trim().toLowerCase();
     const client = getSupabaseAdmin();
 
-    // Ensure user exists and is confirmed in Supabase auth
-    try {
-      await client.auth.admin.createUser({
-        email: cleanEmail,
-        email_confirm: true,
-      });
-    } catch {
-      try {
-        const { data: usersData } = await client.auth.admin.listUsers();
-        const existingAuthUser = usersData?.users?.find(
-          (u) => u.email?.toLowerCase() === cleanEmail
-        );
-        if (existingAuthUser && !existingAuthUser.email_confirmed_at) {
-          await client.auth.admin.updateUserById(existingAuthUser.id, {
-            email_confirm: true,
-          });
-        }
-      } catch {
-        // Ignore lookup errors
-      }
-    }
-
-    // Send magic link with custom redirect target
+    // Fast, direct 1-step magic link dispatch via Supabase Auth
     const { error } = await client.auth.signInWithOtp({
       email: cleanEmail,
       options: {
         emailRedirectTo: redirectTo,
-        shouldCreateUser: false,
+        shouldCreateUser: true,
       },
     });
 
     if (error) {
-      const fallback = await client.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          emailRedirectTo: redirectTo,
-          shouldCreateUser: true,
-        },
-      });
-      if (fallback.error) {
-        return { success: false, error: fallback.error.message };
-      }
+      return { success: false, error: error.message };
     }
 
     return { success: true };
