@@ -219,7 +219,21 @@ export default function GroupDetailPage() {
   const inviteLink = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const code = group?.joinCode || id;
-    return `${window.location.origin}/join/${code}`;
+
+    // Use official public domain to avoid Vercel preview deployment login gates
+    let baseOrigin = 'https://lenadena.vercel.app';
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      baseOrigin = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+    } else if (typeof window !== 'undefined') {
+      const curOrigin = window.location.origin;
+      if (curOrigin.includes('localhost') || curOrigin.includes('127.0.0.1')) {
+        baseOrigin = curOrigin;
+      } else if (!curOrigin.includes('-projects.vercel.app') && !curOrigin.includes('-git-') && curOrigin.includes('vercel.app')) {
+        baseOrigin = curOrigin;
+      }
+    }
+
+    return `${baseOrigin}/join/${code}`;
   }, [group?.joinCode, id]);
 
   const handleCopyLink = async () => {
